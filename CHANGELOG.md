@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a14] - 2026-10-24
+
+### Changed
+
+- feat: construct plan 023-sandbox-browser-render-hardening.md (agent dev loop)
+- docs(planning): add plan 023 sandbox browser render hardening
+- fix(dev-dotnet): add fontconfig and fonts
+- feat: enforce the em dash ban at test time and commit time
+- chore: scrub em dash characters from all tracked files
+- fix: pin explicit UTF-8 I/O for Windows CI and ban em dashes
+- Uncommitted changes: planning-docs/024-qa-unverifiable-verdict.md
+
 ## [1.0.0a13] - 2026-10-23
 
 ### Changed
