@@ -28,6 +28,7 @@ Two mechanisms:
 - **plan 018/021** - the restore step's egress allowlist target set is exactly the package registries; coordinated with 021's locked dial.
 - **plan 019** - egress allowlists bound the rogue-secret-holder residual; mount granularity removes the workspace-wide read a rogue secret-holder would otherwise have.
 - **plan 020** - the run-start git-clean integrity check stays valid; narrower mounts reduce what an agent can modify at all.
+- **plan 023** - shipped the bundled chromium seccomp profile + `--cap-add SYS_CHROOT`; its follow-up 5 (read-only workspace) is closed by this unit's mount granularity.
 
 ## Findings (exploratory; live-sourced)
 
@@ -36,6 +37,40 @@ Two mechanisms:
 - The provision container (setup hooks) also mounts `{workspace}` rw with full network at startup.
 - `--cap-drop ALL` means the engine **cannot hand `NET_ADMIN` to a container** for in-container iptables - egress enforcement must live outside the container.
 - Docker has no native per-container egress firewall for bridge networks; enforcement options are engine-managed netns + nftables before container start, an egress proxy, or Docker's newer network-policy features (version support TBD).
+
+## Findings (post-intent, live-sourced during plan 023, 2026-10-24)
+
+The Chromium sandbox work (plans 023-025) exercised exactly the surfaces this
+unit touches. Live-verified facts:
+
+- **ro mounts are feasible for render/QA steps.** The browser probe writes
+  its results to a tmpfs path (`/tmp`), never into the workspace; a
+  read-only workspace mount would not have blocked the render-check flow.
+  Supports pillar 3 and favours strict defaults (open question 4).
+- **Browser steps carry hard-to-allowlist egress.** The page under test
+  fetched live third-party assets (theme CSS, Google Fonts) from arbitrary
+  domains while rendering; a render-check step's egress target set is
+  effectively "any page dependency". The egress-policy design must handle
+  browser steps explicitly (proxy-based, or broad-but-logged egress for
+  that step class) rather than assume registries-style allowlists cover
+  everything.
+- **Custom seccomp profiles work under `--cap-drop ALL`, with selective
+  cap re-adds.** Plan 023 shipped a bundled chromium profile (userns
+  syscalls allowed) plus `--cap-add SYS_CHROOT`; Chromium's namespace
+  sandbox then engages fully (renderers show `Seccomp: 2`,
+  `NoNewPrivs: 1`). The same `DockerBackend` that assembles mounts already
+  shapes per-container syscall/cap policy, so the two knobs are neighbours,
+  not separate mechanisms.
+- **Workspace caches stay rw and large.** The consumer's `qa/.browsers`
+  (chromium binary + syslibs) and `qa/node_modules` live inside the
+  workspace mount and must remain readable/rw for browser steps; live
+  confirmation of open question 6's STAY conclusion.
+- **The rw workspace mount is the residual write/exfil channel after the
+  browser sandbox engages.** Plan 023's review called it out explicitly:
+  with renderers sandboxed, the last vector for a compromised page is
+  writing into the repo through the rw mount. This unit's mount-granularity
+  work is the direct close of that vector (plan 023 follow-up 5 points
+  here).
 
 ## Recommended architecture (direction only - Functional Design resolves)
 
@@ -53,10 +88,11 @@ Two mechanisms:
 5. `.git` removal: mount-exclusion (multiple submounts of repo-minus-`.git`) vs worktree-export (`git archive` to a temp dir) - freshness vs simplicity.
 6. Caches (`.nuget-packages`, `.venv-sandbox`, `node_modules`, `qa/.browsers`): stay rw in-workspace (already part of the model - 020 analysis said STAY); confirm no relocation needed here.
 7. Testability: docker-marked tests asserting mount/egress behavior - how much runs without root on the host (nftables needs root; CI implications)?
+8. Browser steps: how do egress allowlists apply when the page under test may fetch arbitrary third-party assets (plan 023 finding)? Proxy-based vs broad-but-logged for that step class.
 
 ## Sources
 
-- planning-docs/018, 019, 020, 021
+- planning-docs/018, 019, 020, 021, 023, 024, 025
 - Security-surface + severity discussion (this session, 2026-10-23)
 - `src/agentic_dev_loop/engine/isolation.py` (DockerBackend, mount assembly)
 - unit-3 functional design (kernel-level sandboxing)

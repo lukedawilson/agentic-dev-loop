@@ -151,9 +151,11 @@ renderers `NoNewPrivs: 1`. Containers and temp workspace cleaned up.
    check as UNVERIFIABLE instead.
 4. **Engine**: a first-class "browser-ready sandbox" config surface and docs
    (network access, seccomp profile, `--cap-add SYS_CHROOT`) so consumer loops
-   do not rediscover the incantation.
+   do not rediscover the incantation. (Planned: see 025.)
 5. **Engine**: Phase B read-only-workspace payload support (defense in depth,
-   deferred from this plan).
+   deferred from this plan). (Covered by the unit 5 intent:
+   aidlc-docs/unit-5-intent-workspace-egress-isolation.md, per-step mount
+   granularity with ro modes.)
 
 ## Open questions
 
