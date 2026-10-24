@@ -87,11 +87,15 @@ class IsolationConfig(BaseModel):
     # the workspace - validated at startup, not load (the workspace is unknown
     # here).
     sandbox_venv_dir: str | None = None
-    # 023: optional host path to a Docker seccomp profile JSON. When set, the
-    # exec container runs with ``--security-opt seccomp=<path>`` in place of
-    # Docker's default profile. Used to allow Chromium's namespace sandbox
-    # (userns syscalls) under --cap-drop ALL. The path is validated by Docker
-    # at container-create time, not at load.
+    # 023/025: optional host path to a Docker seccomp profile JSON, or a
+    # ``bundled:<name>`` sentinel resolved at load to a packaged profile
+    # (e.g. ``bundled:chromium-userns``). When set, the exec container runs
+    # with ``--security-opt seccomp=<path>`` in place of Docker's default
+    # profile, plus ``--cap-add SYS_CHROOT`` (the profile gates chroot(2) on
+    # exactly that capability). Used to allow Chromium's namespace sandbox
+    # (userns syscalls) under --cap-drop ALL. An unknown sentinel name fails
+    # at load naming the known bundled profiles; a raw path is validated by
+    # Docker at container-create time, not at load.
     seccomp_profile: str | None = None
 
     @field_validator("memory")

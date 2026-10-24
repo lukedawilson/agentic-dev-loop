@@ -16,7 +16,7 @@ from agentic_dev_loop.core.config import PipelineConfig, StepConfig, load_config
 from .hostboundary import check_orchestrator_install, check_tooling_integrity
 from .loaders import resolve_docs
 from .isolation import (isolation_state_dir, resolve_effective_profile,
-                        resolve_image_ref)
+                        resolve_image_ref, resolved_seccomp_profile)
 from .registry import (Registry, default_registry, load_extensions,
                        validate_action_network)
 from .secrets import scan_env_files
@@ -134,6 +134,7 @@ def dry_run(cfg_path, args, registry: Registry | None = None) -> int:
 
     _validate_agents(cfg, base / cfg.agents_dir)
     _validate_actions(cfg, registry)
+    resolved_seccomp_profile(cfg)  # fails loud on an unknown bundled:<name>
 
     loader, docs, subject = resolve_docs(cfg, base, registry, args)
     image, memory, cpus = _resolved_image(cfg)

@@ -1097,6 +1097,54 @@ class TestStartupSandbox:
         finally:
             sandbox.close()
 
+    def test_bundled_seccomp_sentinel_resolved_and_plumbed(self, tmp_path, monkeypatch):
+        """025: a ``bundled:chromium-userns`` sentinel is expanded to the real
+        packaged path before the exec payload is built, so the payload sees a
+        plain path and emits the profile plus the cap-gated SYS_CHROOT add."""
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+        from agentic_dev_loop.engine.seccomp import chromium_userns_profile_path
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path, with_setup=False)
+        cfg.isolation.seccomp_profile = "bundled:chromium-userns"
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(
+            ok("1.54"),   # probe version
+            ok("linux"),  # probe ostype
+            ok(""),       # image inspect
+            ok(""),       # docker run -d --rm (exec container)
+        )
+        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        try:
+            run_argv = [c for c in runner.calls if c[:2] == ["docker", "run"]][0]
+            resolved = chromium_userns_profile_path()
+            assert "--security-opt" in run_argv
+            assert run_argv[run_argv.index("--security-opt") + 1] == f"seccomp={resolved}"
+            assert "--cap-add" in run_argv
+            assert run_argv[run_argv.index("--cap-add") + 1] == "SYS_CHROOT"
+        finally:
+            sandbox.close()
+
+    def test_unknown_bundled_seccomp_name_fails_before_docker_probe(self, tmp_path, monkeypatch):
+        """025: an unknown bundled:<name> fails loud at startup, before any
+        Docker probe runs."""
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path, with_setup=False)
+        cfg.isolation.seccomp_profile = "bundled:unknown-name"
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner()
+        with pytest.raises(ValueError, match="bundled:chromium-userns"):
+            startup_sandbox(cfg, workspace=ws, runner=runner)
+        assert runner.calls == []
+
     def test_in_workspace_sandbox_venv_dir_fails_loud(self, tmp_path, monkeypatch):
         from agentic_dev_loop.engine.isolation import startup_sandbox
 
@@ -1155,3 +1203,60 @@ class TestBundledSeccompProfile:
         path = Path(chromium_userns_profile_path())
         assert path.is_file()
         assert json.loads(path.read_text(encoding="utf-8"))["defaultAction"]             == "SCMP_ACT_ERRNO"
+
+
+class TestResolveSeccompProfile:
+    """025: the ``bundled:<name>`` sentinel resolves to a packaged profile
+    path; raw host paths pass through unchanged; unknown names fail loud with
+    every known bundled name."""
+
+    def test_bundled_sentinel_resolves_to_real_path(self):
+        from agentic_dev_loop.engine.seccomp import (chromium_userns_profile_path,
+                                                     resolve_seccomp_profile)
+
+        resolved = resolve_seccomp_profile("bundled:chromium-userns")
+        assert resolved == chromium_userns_profile_path()
+        assert Path(resolved).is_file()
+
+    def test_unknown_bundled_name_lists_known(self):
+        from agentic_dev_loop.engine.seccomp import resolve_seccomp_profile
+
+        with pytest.raises(ValueError, match="bundled:chromium-userns"):
+            resolve_seccomp_profile("bundled:unknown-name")
+
+    def test_empty_bundled_name_lists_known(self):
+        from agentic_dev_loop.engine.seccomp import resolve_seccomp_profile
+
+        with pytest.raises(ValueError, match="bundled:chromium-userns"):
+            resolve_seccomp_profile("bundled:")
+
+    def test_none_passes_through(self):
+        from agentic_dev_loop.engine.seccomp import resolve_seccomp_profile
+
+        assert resolve_seccomp_profile(None) is None
+
+    def test_raw_path_passes_through(self):
+        from agentic_dev_loop.engine.seccomp import resolve_seccomp_profile
+
+        assert resolve_seccomp_profile(
+            "/host/chromium-userns.json") == "/host/chromium-userns.json"
+
+    def test_bundled_profile_path_unknown_name(self):
+        from agentic_dev_loop.engine.seccomp import bundled_profile_path
+
+        with pytest.raises(ValueError, match="bundled:chromium-userns"):
+            bundled_profile_path("nope")
+
+    def test_sentinel_resolves_into_payload(self):
+        """025: the resolved sentinel path reaches ``docker_create_payload``
+        unchanged, producing the profile security-opt and the cap-add."""
+        from agentic_dev_loop.engine.seccomp import resolve_seccomp_profile
+
+        resolved = resolve_seccomp_profile("bundled:chromium-userns")
+        payload = docker_create_payload(
+            run_id="r1", image="img",
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img", "4g", 2.0),
+            workspace="/ws", seccomp_profile=resolved)
+        assert payload[payload.index("--security-opt") + 1] == f"seccomp={resolved}"
+        assert payload[payload.index("--cap-add") + 1] == "SYS_CHROOT"

@@ -37,6 +37,7 @@ from typing import Protocol
 
 from agentic_dev_loop.core.config import IsolationConfig, PipelineConfig
 from .proc import needs_shell, split_command
+from .seccomp import resolve_seccomp_profile
 
 # ---------------------------------------------------------------------------
 # Constants (KD-2 / ID-4)
@@ -480,7 +481,9 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
     CAP_SYS_CHROOT; the profile gates chroot(2) on exactly that capability,
     so the payload adds it back (the bounding set is otherwise empty under
     --cap-drop ALL). Without the cap the zygote dies even with the profile
-    (023 host-side gate 2)."""
+    (023 host-side gate 2). The ``--cap-add SYS_CHROOT`` applies to any
+    seccomp profile by design: the bundled profile requires it, and custom
+    profiles are expected to follow the same cap-gated pattern."""
     payload = [
         "docker", "run", "--detach", "--rm", "--name",
         exec_container_name(run_id, network),
@@ -956,6 +959,14 @@ def isolation_state_dir(cfg: PipelineConfig) -> Path:
     return Path(iso.state_dir).expanduser()
 
 
+def resolved_seccomp_profile(cfg: PipelineConfig) -> str | None:
+    """The pipeline's seccomp profile with any ``bundled:<name>`` sentinel
+    expanded to a real host path (025). A raw path passes through unchanged
+    and is still validated by Docker at container-create time."""
+    return resolve_seccomp_profile(
+        cfg.isolation.seccomp_profile if cfg.isolation else None)
+
+
 def resolve_image_ref(image: str, environ: Mapping[str, str] | None = None) -> str:
     """AGENTIC_DEV_LOOP_DEV_IMAGE override (tag OR digest) → else the profile
     image (digest-pinned) → if empty, fail fast AE-SBX-005."""
@@ -976,6 +987,7 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
                     refresh: bool | None = None) -> Sandbox:
     """Eager startup sequence (Q2): probe → image → backend → ensure_image →
     create+start → pre-provision every declared setup (stamp-cached)."""
+    seccomp_profile = resolved_seccomp_profile(cfg)
     probe_docker(runner)
     profile = resolve_effective_profile(cfg.isolation)
     image = resolve_image_ref(profile.image)
@@ -983,7 +995,6 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     needs_network = any(step.network for step in cfg.steps)
     sandbox_venv_dir = resolve_sandbox_venv_dir(
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
-    seccomp_profile = cfg.isolation.seccomp_profile if cfg.isolation else None
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),
         profile=profile, runner=runner, network=needs_network,
