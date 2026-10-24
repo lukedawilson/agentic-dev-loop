@@ -66,10 +66,14 @@ steps:
   - name: qa
     agent: qa
     artifact: qa-report.md
-    verdicts: { pass: PASS, fail: FAIL }
+    verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
     max_iterations: 200
     on_pass: commit
     on_fail: { goto: dev, retry: true }
+    # UNVERIFIABLE moves on like pass (never rewinds, never retries): the run
+    # advances while the record (qa-report.md in the run state) carries the
+    # list of checks that could not be verified in the sandbox.
+    on_unverifiable: commit
 
   - name: commit
     action: commit
