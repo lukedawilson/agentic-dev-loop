@@ -3,10 +3,11 @@ Result API (BR-2): decisions route as `Result.ok(Verdict)`; verdict lines
 without a decision, or conflicting decisions, are typed errors that feed
 the attempt-bounded retry path - never exceptions, never silent routing."""
 
-from agentic_dev_loop.core.verdict import Verdict, VerdictError
+from agentic_dev_loop.core.verdict import Verdict, VerdictError, parse_verdict
 
 REVIEW_VERDICTS = {"APPROVED": "approved", "NEEDS CHANGES": "needs_changes"}
 TEST_VERDICTS = {"PASS": "pass", "FAIL": "fail"}
+QA_VERDICTS = {"PASS": "pass", "FAIL": "fail", "UNVERIFIABLE": "unverifiable"}
 
 
 def _parse(text, verdicts):
@@ -168,6 +169,24 @@ class TestVerdictParsing:
 
     def test_not_unknown_keyword_rejected(self):
         _err("VERDICT: NOT MAYBE", REVIEW_VERDICTS, VerdictError.AMBIGUOUS)
+
+    def test_parse_unverifiable(self):
+        _ok("VERDICT: UNVERIFIABLE", QA_VERDICTS, "unverifiable")
+        _ok("VERDICT: UNVERIFIABLE - no docker in the sandbox",
+            QA_VERDICTS, "unverifiable")
+        _ok("verdict: unverifiable", QA_VERDICTS, "unverifiable")
+
+    def test_parse_verdict_unverifiable_returns_canonical_value(self):
+        assert parse_verdict("VERDICT: UNVERIFIABLE", QA_VERDICTS) == "unverifiable"
+
+    def test_negated_unverifiable_stays_ambiguous_on_three_key_sets(self):
+        _err("VERDICT: NOT UNVERIFIABLE", QA_VERDICTS, VerdictError.AMBIGUOUS)
+
+    def test_conflicting_pass_and_unverifiable_is_ambiguous(self):
+        _err("VERDICT: PASS\nVERDICT: UNVERIFIABLE", QA_VERDICTS,
+             VerdictError.AMBIGUOUS)
+        assert parse_verdict("VERDICT: PASS\nVERDICT: UNVERIFIABLE",
+                             QA_VERDICTS) == "retry"
 
 
 class TestConflictingDecisions:

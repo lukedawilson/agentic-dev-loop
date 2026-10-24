@@ -19,6 +19,7 @@ class VerdictSpec(BaseModel):
 
     pass_: str = Field(alias="pass")
     fail: str = Field(alias="fail")
+    unverifiable: str | None = None
 
 
 class Route(BaseModel):
@@ -131,6 +132,7 @@ class StepConfig(BaseModel):
     secrets: list[str] = []  # declared ref names; action steps reject
     on_pass: RouteTarget | None = None
     on_fail: RouteTarget | None = None
+    on_unverifiable: RouteTarget | None = None
 
     @property
     def kind(self) -> str:
@@ -286,7 +288,7 @@ class PipelineConfig(BaseModel):
                 raise ValueError(f"step name {n!r} collides with a reserved terminal")
         valid = set(names) | TERMINALS
         for step in self.steps:
-            for route in (step.on_pass, step.on_fail):
+            for route in (step.on_pass, step.on_fail, step.on_unverifiable):
                 target = route_target(route)
                 if target is not None and target not in valid:
                     raise ValueError(

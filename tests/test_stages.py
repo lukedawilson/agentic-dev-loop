@@ -251,6 +251,36 @@ class TestAgentNode:
         make_agent_node(runtime, step)(make_state())
         assert fake_agents.calls[0]["max_iterations"] == 200
 
+    def test_unverifiable_verdict_records_and_moves_on(self, runtime,
+                                                       fake_agents, capsys):
+        step = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE"},
+             "on_pass": "commit", "on_fail": {"goto": "dev", "retry": True},
+             "on_unverifiable": "commit"},
+            {"name": "commit", "action": "commit", "on_pass": "success"}]).steps[1]
+        fake_agents.set("qa", [("write", "qa-report.md", "VERDICT: UNVERIFIABLE")])
+        update = make_agent_node(runtime, step)(make_state())
+        assert update["step_verdicts"] == {"qa": "unverifiable"}
+        assert update["failed"] is False
+        assert "notes" not in update
+        assert "UNVERIFIABLE (moves on)" in capsys.readouterr().out
+
+    def test_unclear_note_mentions_third_keyword(self, runtime, fake_agents):
+        step = make_cfg([
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE"},
+             "on_pass": "success"}]).steps[0]
+        fake_agents.set("qa", [("write", "qa-report.md", "undecided")])
+        update = make_agent_node(runtime, step)(make_state())
+        (note,) = update["notes"]
+        assert "VERDICT: PASS" in note
+        assert "VERDICT: FAIL" in note
+        assert "VERDICT: UNVERIFIABLE" in note
+
 
 class TestCommandNode:
     def _node(self, runtime, steps, idx=0):
@@ -463,6 +493,35 @@ class TestRouter:
         runtime = dataclasses.replace(runtime, cfg=cfg)
         router = make_router(runtime, cfg.steps[1])
         assert router(make_state(step_verdicts={"c": "fail"})) == "a"
+
+    def test_unverifiable_routes_on_unverifiable(self, runtime):
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE"},
+             "on_pass": "commit", "on_fail": {"goto": "dev", "retry": True},
+             "on_unverifiable": "commit"},
+            {"name": "commit", "action": "commit", "on_pass": "success"},
+        ])
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        router = make_router(runtime, cfg.steps[1])
+        assert router(make_state(step_verdicts={"qa": "unverifiable"})) == "commit"
+
+    def test_unverifiable_falls_back_to_on_pass_and_never_retries(self, runtime):
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE"},
+             "on_pass": "commit", "on_fail": {"goto": "dev", "retry": True}},
+            {"name": "commit", "action": "commit", "on_pass": "success"},
+        ])
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        router = make_router(runtime, cfg.steps[1])
+        # unset on_unverifiable -> on_pass; never on_fail's bump retry
+        assert router(make_state(attempt=1,
+                                 step_verdicts={"qa": "unverifiable"})) == "commit"
 
 
 class TestBumpNode:

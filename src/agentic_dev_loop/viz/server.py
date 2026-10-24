@@ -472,6 +472,7 @@ PAGE = """<!doctype html>
            background: #f0f0f0; color: #333; }
   .badge-pass { background: #e8f5e9; color: #2e7d32; }
   .badge-fail { background: #ffebee; color: #c62828; }
+  .badge-unverifiable { background: #ede7f6; color: #4527a0; }
   .badge-unclear { background: #fff8e1; color: #f57f17; }
   #stages { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex;
             flex-direction: column; gap: 8px; }
@@ -487,6 +488,7 @@ PAGE = """<!doctype html>
   .status-pass { color: #2e7d32; }
   .status-fail { color: #b26a00; }
   .status-fatal { color: #c62828; }
+  .status-unverifiable { color: #7e57c2; }
   .console-wrap { max-height: 240px; overflow-y: auto; background: #1e1e1e; }
   .stage-console { margin: 0; padding: 8px 10px; background: #1e1e1e;
                    color: #e0e0e0; font: 12px/1.5 ui-monospace, SFMono-Regular,
@@ -543,6 +545,7 @@ PAGE = """<!doctype html>
   var currentVerdicts = {};
   var verdictFail = new Set();
   var verdictPass = new Set();
+  var verdictUnverifiable = new Set();
   var fatalNodes = new Set();
   var maxAttempts = null;
   var attempt = null;
@@ -610,6 +613,7 @@ PAGE = """<!doctype html>
     if (nodeStatus[n] === "fatal") { return "fatal"; }
     if (verdictFail.has(n)) { return "fail"; }
     if (verdictPass.has(n)) { return "pass"; }
+    if (verdictUnverifiable.has(n)) { return "unverifiable"; }
     return nodeStatus[n] || "pending";
   }
 
@@ -622,6 +626,7 @@ PAGE = """<!doctype html>
       b.className = "badge";
       if (v === "pass") { b.className += " badge-pass"; }
       else if (v === "fail") { b.className += " badge-fail"; }
+      else if (v === "unverifiable") { b.className += " badge-unverifiable"; }
       else { b.className += " badge-unclear"; }
       b.textContent = step + ": " + (v === null || v === undefined ? "no verdict" : v);
       box.appendChild(b);
@@ -632,6 +637,7 @@ PAGE = """<!doctype html>
     verdictSteps.clear();
     verdictPass.clear();
     verdictFail.clear();
+    verdictUnverifiable.clear();
     currentVerdicts = {};
     nodeStatus = {};
     stageWord = {};
@@ -653,6 +659,7 @@ PAGE = """<!doctype html>
       "classDef pass fill:#2e7d32,stroke:#2e7d32,color:#fff",
       "classDef fail fill:#ffb300,stroke:#ffb300,color:#fff",
       "classDef fatal fill:#c62828,stroke:#c62828,color:#fff",
+      "classDef unverifiable fill:#7e57c2,stroke:#7e57c2,color:#fff",
       "classDef pending fill:#f2f0ff,stroke:#555,color:#000"
     ];
     var classLines = Object.keys(nodeStatus).filter(function (n) {
@@ -748,6 +755,7 @@ PAGE = """<!doctype html>
       var v = currentVerdicts[node];
       if (v === "pass") { suffix = " (verdict: PASS)"; }
       else if (v === "fail") { suffix = " (verdict: FAIL)"; }
+      else if (v === "unverifiable") { suffix = " (verdict: UNVERIFIABLE)"; }
     }
     status.textContent = (word ? " " + word : "") + suffix;
     header.className = "stage-header status-" + statusOf(node);
@@ -1064,9 +1072,10 @@ PAGE = """<!doctype html>
           Object.keys(ev.step_verdicts).forEach(function (k) {
             verdictSteps.add(k);
             var v = ev.step_verdicts[k];
-            if (v === "pass") { verdictPass.add(k); verdictFail.delete(k); }
-            else if (v === "fail") { verdictFail.add(k); verdictPass.delete(k); }
-            else { verdictPass.delete(k); verdictFail.delete(k); }
+            if (v === "pass") { verdictPass.add(k); verdictFail.delete(k); verdictUnverifiable.delete(k); }
+            else if (v === "fail") { verdictFail.add(k); verdictPass.delete(k); verdictUnverifiable.delete(k); }
+            else if (v === "unverifiable") { verdictUnverifiable.add(k); verdictPass.delete(k); verdictFail.delete(k); }
+            else { verdictPass.delete(k); verdictFail.delete(k); verdictUnverifiable.delete(k); }
             currentVerdicts[k] = v;
           });
           updateBadges();

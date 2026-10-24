@@ -195,6 +195,28 @@ def test_unknown_verdicts_key_rejected(tmp_path):
         _load(tmp_path, data)
 
 
+def test_three_keyword_verdict_and_on_unverifiable_load(tmp_path):
+    data = _base()
+    data["steps"][0] = {
+        "name": "qa", "agent": "qa", "artifact": "qa-report.md",
+        "verdicts": {"pass": "PASS", "fail": "FAIL",
+                     "unverifiable": "UNVERIFIABLE"},
+        "on_pass": "success", "on_unverifiable": "success",
+    }
+    step = _load(tmp_path, data).steps[0]
+    assert step.verdicts.pass_ == "PASS"
+    assert step.verdicts.fail == "FAIL"
+    assert step.verdicts.unverifiable == "UNVERIFIABLE"
+    assert step.on_unverifiable == "success"
+
+
+def test_dangling_on_unverifiable_rejected(tmp_path):
+    data = _base()
+    data["steps"][0]["on_unverifiable"] = "nope"
+    with pytest.raises(ValidationError, match="unknown route target 'nope'"):
+        _load(tmp_path, data)
+
+
 def test_dangling_on_pass_rejected(tmp_path):
     data = _base()
     data["steps"][0]["on_pass"] = "nope"

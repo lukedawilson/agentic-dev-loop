@@ -254,8 +254,13 @@ def _unclear_note(runtime: Runtime, step: StepConfig, attempt: int,
     captured response when it exists, so real findings are never swallowed."""
     expected = ""
     if step.verdicts is not None:
-        expected = (f" (expected `VERDICT: {step.verdicts.pass_}` or "
-                    f"`VERDICT: {step.verdicts.fail}` on its own line)")
+        if step.verdicts.unverifiable is not None:
+            expected = (f" (expected `VERDICT: {step.verdicts.pass_}`, "
+                        f"`VERDICT: {step.verdicts.fail}`, or "
+                        f"`VERDICT: {step.verdicts.unverifiable}` on its own line)")
+        else:
+            expected = (f" (expected `VERDICT: {step.verdicts.pass_}` or "
+                        f"`VERDICT: {step.verdicts.fail}` on its own line)")
     if truncated:
         lead = (f"{step.name} agent was cut short on attempt {attempt} "
                 f"(hit the {max_iterations}-turn limit or was stopped "
@@ -282,6 +287,8 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
     verdicts_map = None
     if step.verdicts is not None:
         verdicts_map = {step.verdicts.pass_: "pass", step.verdicts.fail: "fail"}
+        if step.verdicts.unverifiable is not None:
+            verdicts_map[step.verdicts.unverifiable] = "unverifiable"
     captures = step.artifact is not None or bool(step.produces)
 
     def node(state: dict) -> dict:
@@ -333,6 +340,10 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
             if verdict == "pass":
                 print(f"[{subject}] {step.name} VERDICT: PASS on attempt {attempt}.",
                       flush=True)
+                return {"step_verdicts": merged, "failed": False}
+            if verdict == "unverifiable":
+                print(f"[{subject}] {step.name} qa verdict: UNVERIFIABLE "
+                      f"(moves on).", flush=True)
                 return {"step_verdicts": merged, "failed": False}
             print(f"[{subject}] {step.name} verdict: fail on attempt {attempt}.",
                   flush=True)
@@ -518,6 +529,10 @@ def make_router(runtime: Runtime, step: StepConfig):
             return resolve(step.on_pass)
         verdict = state["step_verdicts"].get(step.name)
         if verdict == "pass":
+            return resolve(step.on_pass)
+        if verdict == "unverifiable":
+            if step.on_unverifiable is not None:
+                return resolve(step.on_unverifiable)
             return resolve(step.on_pass)
         if verdict == "fail":
             if step.on_fail is None:
