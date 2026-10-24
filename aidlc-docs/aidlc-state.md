@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Unit 3 COMPLETE (2026-10-21 - validated end-to-end in yosk-cms); Unit 4 Requirements Analysis in progress
+- **Current Stage**: CONSTRUCTION - Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 intent drafted (2026-10-24)
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -24,7 +24,7 @@
 - **Total Stages**: 12 planned
 - **Stages to Execute**: Application Design, Units Generation, Functional Design, NFR Requirements, Infrastructure Design, Code Generation, Build and Test
 - **Stages to Skip**: User Stories (user confirmed), NFR Design (no perf/HA work; container infra covered by Infrastructure Design)
-- **Unit Order**: Unit 1 output-passing fix + file-tool removal → Unit 2 SDK hardening → Unit 3 kernel-level sandboxing (vertical slices) → Unit 4 Claude Dynamic Workflows driver (pipeline model + viz; no Docker sandboxing from Claude Code)
+- **Unit Order**: Unit 1 output-passing fix + file-tool removal → Unit 2 SDK hardening → Unit 3 kernel-level sandboxing (vertical slices) → Unit 4 Claude Dynamic Workflows driver (pipeline model + viz; no Docker sandboxing from Claude Code) → Unit 5 workspace egress isolation (per-step mount granularity + egress allowlists; intent drafted 2026-10-24)
 
 ## Extension Configuration
 - **Domain Standards**: Yes - enabled (Requirements Analysis, 2026-10-17)
@@ -41,6 +41,33 @@
 - [x] Application Design - approved 2026-10-17T13:20:00Z (DDD amendments applied; domain diagrams approved)
 - [x] Units Generation - approved 2026-10-17 (numeric unit names unit-1/2/3; story-map maps FR/NFR IDs; artifacts in aidlc-docs/inception/application-design/)
 - [ ] NFR Design - SKIP (no perf/HA; infra in Infrastructure Design)
+
+### 🟢 CONSTRUCTION PHASE
+
+Per-unit construction stages (5 stages per unit: Functional Design, NFR Requirements, NFR Design, Infrastructure Design, Code Generation; Build and Test is the global final step).
+
+- Unit 1: output-passing fix + file-tool removal - Functional Design [x]
+- Unit 1: output-passing fix + file-tool removal - NFR Requirements [x]
+- Unit 1: output-passing fix + file-tool removal - NFR Design [x] (global SKIP)
+- Unit 1: output-passing fix + file-tool removal - Infrastructure Design [x]
+- Unit 1: output-passing fix + file-tool removal - Code Generation [x]
+- Unit 2: SDK hardening - Functional Design [x]
+- Unit 2: SDK hardening - NFR Requirements [x]
+- Unit 2: SDK hardening - NFR Design [x] (global SKIP)
+- Unit 2: SDK hardening - Infrastructure Design [x]
+- Unit 2: SDK hardening - Code Generation [x]
+- Unit 3: kernel-level sandboxing (always-on) - Functional Design [x]
+- Unit 3: kernel-level sandboxing (always-on) - NFR Requirements [x]
+- Unit 3: kernel-level sandboxing (always-on) - NFR Design [x] (global SKIP)
+- Unit 3: kernel-level sandboxing (always-on) - Infrastructure Design [x]
+- Unit 3: kernel-level sandboxing (always-on) - Code Generation [x]
+- Unit 4: Claude Dynamic Workflows driver - WONTSHIP/WONTDO (withdrawn 2026-10-22; excluded from construction progress)
+- Unit 5: workspace egress isolation - Functional Design [ ]
+- Unit 5: workspace egress isolation - NFR Requirements [ ]
+- Unit 5: workspace egress isolation - NFR Design [ ] (global SKIP)
+- Unit 5: workspace egress isolation - Infrastructure Design [ ]
+- Unit 5: workspace egress isolation - Code Generation [ ]
+- Build and Test: green at unit-3 close (2026-10-21, full suite incl. docker-marked tests); re-run at unit-5 close
 
 ## Unit Progress
 
@@ -72,3 +99,9 @@ Scope FR-2.1–FR-2.6 (always-on sandbox; Docker backend on ALL platforms - nati
 ### unit-4 (Claude Dynamic Workflows driver) - WONTSHIP/WONTDO (2026-10-22)
 
 Withdrawn by user directive 2026-10-22 ("Let's rip it out and mark unit 4 as wontship/wontdo"). Rationale: the Claude Workflow tool's no-filesystem/no-shell sandbox makes the adapter agent-mediated at every seam (command gates, viz events, prompts) - not worth the divergence from engine-mode guarantees. NO Claude adapter ships (not even viz-only). The core/engine/viz module split IS KEPT (independent value: dependency contracts, guard tests, light installs). Adapter-surface removal = planning-docs/017-remove-unit-4-adapter.md → release 1.0.0a7 (renumbered 2026-10-22; setup-stamp/venv hardening split out to planning-docs/016-sandbox-venv-hardening.md). Historical docs (requirements FR-4.x, unit-4 construction artifacts, intent doc) remain as history.
+
+### unit-5 (workspace egress isolation) - INTENT ONLY (draft, 2026-10-24)
+
+- Intent document: aidlc-docs/unit-5-intent-workspace-egress-isolation.md (drafted 2026-10-23; extended 2026-10-24 with live-sourced findings from plan 023 browser hardening)
+- Scope: per-step mount granularity (rw / ro / absent) + egress allowlists + .git blindness; closes plan 023 follow-up 5 (read-only workspace, the residual write/exfil channel after the browser sandbox engages) and supersedes the narrow plan 023 Phase B
+- No functional design stage yet; unit is next in order after the dependency plans land (018-021)

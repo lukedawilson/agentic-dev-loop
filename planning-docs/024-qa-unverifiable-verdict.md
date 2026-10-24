@@ -1,6 +1,6 @@
 # 024-qa-unverifiable-verdict.md
 
-> **Status: Ready**
+> **Status: COMPLETED**
 
 ## Scope
 
