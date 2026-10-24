@@ -1,6 +1,6 @@
 # 025-browser-ready-sandbox-config.md
 
-> **Status: Ready**
+> **Status: COMPLETED**
 
 ## Scope
 

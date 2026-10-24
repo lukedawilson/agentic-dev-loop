@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a16] - 2026-10-24
+
+### Changed
+
+- feat: construct plan 025-browser-ready-sandbox-config.md (agent dev loop)
+- release: v1.0.0a15
+- feat(024): ship tooling changes for UNVERIFIABLE verdict
+- docs(aidlc): add construction-phase block for /unit-status, flip plan 024 to in progress
+- feat: construct plan 024-qa-unverifiable-verdict.md (agent dev loop)
+- docs: add plan 025, unit 5 post-intent findings, plan 023 follow-up pointers
+- Uncommitted changes: README.md, planning-docs/025-browser-ready-sandbox-config.md
+
 ## [1.0.0a15] - 2026-10-24
 
 ### Changed
