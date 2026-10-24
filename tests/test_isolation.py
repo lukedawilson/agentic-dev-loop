@@ -449,6 +449,45 @@ class TestPayloads:
             assert payload.index(target) > payload.index(f"{ws}:{ws}")
 
 
+    def test_create_payload_emits_seccomp_profile(self, tmp_path):
+        """023: a configured seccomp profile is emitted as a security-opt so
+        Docker replaces its default profile (which blocks the userns syscalls
+        Chromium's namespace sandbox needs)."""
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws,
+                                  seccomp_profile="/host/chromium-userns.json")
+        assert "--security-opt" in p
+        assert p[p.index("--security-opt") + 1] == "seccomp=/host/chromium-userns.json"
+        # 023 gate 2: chromium's zygote chroots /proc/self/fdinfo at startup;
+        # under --cap-drop ALL that dies without CAP_SYS_CHROOT. The profile
+        # gates chroot(2) on exactly that capability, so the payload adds it.
+        assert "--cap-add" in p
+        assert p[p.index("--cap-add") + 1] == "SYS_CHROOT"
+
+    def test_create_payload_omits_seccomp_by_default(self, tmp_path):
+        """023: without a profile, Docker's own default seccomp stays in force
+        (no --security-opt flag is emitted)."""
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws)
+        assert "--security-opt" not in p
+        assert "--cap-add" not in p
+
+    def test_networked_create_payload_emits_seccomp_profile(self, tmp_path):
+        """023: the networked exec container (used by render_check, which
+        fetches live assets) gets the same profile as the network-none one."""
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws,
+                                  network=True,
+                                  seccomp_profile="/host/chromium-userns.json")
+        assert "--security-opt" in p
+        assert p[p.index("--security-opt") + 1] == "seccomp=/host/chromium-userns.json"
+        assert "--cap-add" in p
+        assert p[p.index("--cap-add") + 1] == "SYS_CHROOT"
+
+
 class TestResolveSandboxVenvDir:
     def test_none_returns_none(self, tmp_path):
         assert resolve_sandbox_venv_dir(None, tmp_path) is None
@@ -561,14 +600,15 @@ class TestResolveImageRef:
 
 
 def _backend(tmp_path, runner, *, image="img@sha256:abc", git_blocked=True,
-              network=False, sandbox_venv_dir=None):
+              network=False, sandbox_venv_dir=None, seccomp_profile=None):
     return DockerBackend(
         image=image, workspace=str(tmp_path / "ws"),
         iso_state_dir=str(tmp_path / "state"),
         profile=EffectiveProfile(True, True, True, True, git_blocked,
                                  image, "4g", 2.0),
         runner=runner, network=network,
-        sandbox_venv_dir=sandbox_venv_dir)
+        sandbox_venv_dir=sandbox_venv_dir,
+        seccomp_profile=seccomp_profile)
 
 
 class TestRelocatedVenvDirCreation:
@@ -664,6 +704,20 @@ class TestCreateExecutionContainer:
         # the already-started network-none container is reclaimed, never leaked
         rm = [c for c in runner.calls if c[1] == "rm"]
         assert rm and backend._container in rm[-1]
+
+
+    def test_seccomp_profile_plumbed_through_backend(self, tmp_path):
+        """023: the isolation config's seccomp_profile reaches the exec
+        container argv (both network modes use the same payload builder)."""
+        runner = FakeRunner(ok("cid"))
+        backend = _backend(tmp_path, runner,
+                           seccomp_profile="/host/chromium-userns.json")
+        backend.create_execution_container()
+        argv = runner.calls[0]
+        assert "--security-opt" in argv
+        assert argv[argv.index("--security-opt") + 1] == "seccomp=/host/chromium-userns.json"
+        assert "--cap-add" in argv
+        assert argv[argv.index("--cap-add") + 1] == "SYS_CHROOT"
 
 
 class TestRun:
@@ -1056,3 +1110,48 @@ class TestStartupSandbox:
         runner = FakeRunner(ok("1.54"), ok("linux"))
         with pytest.raises(SandboxError, match="AE-SBX-015"):
             startup_sandbox(cfg, workspace=ws, runner=runner)
+
+
+class TestBundledSeccompProfile:
+    """023: the bundled chromium-userns.json must be valid JSON, deny-by-
+    default (hardening preserved), allow the userns syscalls Chrome's
+    namespace sandbox needs, and keep the privileged mount/admin syscalls
+    cap-gated (never unconditionally allowed)."""
+
+    @staticmethod
+    def _doc():
+        from importlib.resources import files
+        traversable = files("agentic_dev_loop.engine.seccomp").joinpath(
+            "chromium-userns.json")
+        return json.loads(traversable.read_text(encoding="utf-8"))
+
+    def _unconditional_allow(self):
+        doc = self._doc()
+        names = set()
+        for entry in doc["syscalls"]:
+            if (entry.get("action") == "SCMP_ACT_ALLOW"
+                    and not entry.get("args")
+                    and not entry.get("includes")):
+                names.update(entry["names"])
+        return names
+
+    def test_deny_by_default(self):
+        assert self._doc()["defaultAction"] == "SCMP_ACT_ERRNO"
+
+    def test_userns_syscalls_allowed(self):
+        assert {"clone", "clone3", "unshare"} <= self._unconditional_allow()
+
+    def test_privileged_syscalls_stay_gated(self):
+        privileged = {"mount", "umount", "umount2", "setns", "reboot",
+                      "kexec_load", "bpf", "ptrace", "chroot"}
+        assert privileged.isdisjoint(self._unconditional_allow())
+
+    def test_profile_path_helper_resolves_to_bundled_json(self):
+        """023: the public helper returns a real, readable host path to the
+        bundled profile (what a consumer passes as
+        ``isolation.seccomp_profile``)."""
+        from agentic_dev_loop.engine.seccomp import chromium_userns_profile_path
+
+        path = Path(chromium_userns_profile_path())
+        assert path.is_file()
+        assert json.loads(path.read_text(encoding="utf-8"))["defaultAction"]             == "SCMP_ACT_ERRNO"

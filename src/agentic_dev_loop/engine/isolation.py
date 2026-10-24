@@ -463,22 +463,39 @@ def _sandbox_mounts(workspace: str, sandbox_venv_dir: str | None) -> list[str]:
 
 def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           workspace: str, network: bool = False,
-                          sandbox_venv_dir: str | None = None) -> list[str]:
+                          sandbox_venv_dir: str | None = None,
+                          seccomp_profile: str | None = None) -> list[str]:
     """Exact ``docker run -d --rm`` argv for the execution container (§3.3, KD-8).
     Mount set {workspace} + host-only masks (022); ``--network none`` (bridge
     when ``network`` is true - 014 per-stage networking), --read-only,
     --cap-drop ALL; --user host uid:gid (host-owned bind mounts, AE-SBX-009
     root cause) with HOME=/tmp (the rootfs is read-only; /tmp is a 1777 tmpfs).
     ``--rm`` lets the daemon auto-remove the container the instant it exits,
-    however it exits (D1) - a SIGKILLed CLI never reaches close()."""
+    however it exits (D1) - a SIGKILLed CLI never reaches close().
+
+    ``seccomp_profile`` (023) is a host path to a seccomp profile JSON; when
+    set it replaces Docker's default profile (which blocks the userns syscalls
+    Chromium's namespace sandbox needs under --cap-drop ALL). Chromium's
+    zygote also chroots /proc/self/fdinfo at startup, which needs
+    CAP_SYS_CHROOT; the profile gates chroot(2) on exactly that capability,
+    so the payload adds it back (the bounding set is otherwise empty under
+    --cap-drop ALL). Without the cap the zygote dies even with the profile
+    (023 host-side gate 2)."""
     payload = [
         "docker", "run", "--detach", "--rm", "--name",
         exec_container_name(run_id, network),
         "--network", "bridge" if network else "none",
         "--read-only", "--cap-drop", "ALL",
+    ]
+    if seccomp_profile is not None:
+        payload.extend([
+            "--security-opt", f"seccomp={seccomp_profile}",
+            "--cap-add", "SYS_CHROOT",
+        ])
+    payload.extend([
         "--memory", profile.memory, "--cpus", str(profile.cpus),
         "--tmpfs", "/tmp", "--tmpfs", "/root",
-    ]
+    ])
     user = host_user_flag()
     if user is not None:
         payload.extend(["--user", user, "--env", "HOME=/tmp"])
@@ -606,7 +623,8 @@ class DockerBackend(Sandbox):
 
     def __init__(self, *, image: str, workspace: str, iso_state_dir: str,
                  profile: EffectiveProfile, runner: CommandRunner | None = None,
-                 network: bool = False, sandbox_venv_dir: str | None = None):
+                 network: bool = False, sandbox_venv_dir: str | None = None,
+                 seccomp_profile: str | None = None):
         self._image = image
         self._workspace = workspace
         self._iso_state_dir = Path(iso_state_dir)  # host-only (audit)
@@ -617,6 +635,7 @@ class DockerBackend(Sandbox):
         self._network_container = exec_container_name(self._run_id, network=True)
         self._network_enabled = network
         self._sandbox_venv_dir = sandbox_venv_dir  # 022 relocated venv (opt-in)
+        self._seccomp_profile = seccomp_profile  # 023 userns allowlist (opt-in)
         if sandbox_venv_dir is not None:
             # 022: the relocated venv dir is a bind-mount source. On native
             # Linux, Docker auto-creates a missing source as root, which the
@@ -663,7 +682,8 @@ class DockerBackend(Sandbox):
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=False,
-            sandbox_venv_dir=self._sandbox_venv_dir)
+            sandbox_venv_dir=self._sandbox_venv_dir,
+            seccomp_profile=self._seccomp_profile)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             raise SandboxError(
@@ -675,7 +695,8 @@ class DockerBackend(Sandbox):
         net_payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=True,
-            sandbox_venv_dir=self._sandbox_venv_dir)
+            sandbox_venv_dir=self._sandbox_venv_dir,
+            seccomp_profile=self._seccomp_profile)
         net_res = self._runner.run(net_payload, timeout=60)
         if net_res.exit_code != 0:
             # reclaim the already-started network-none container - never leak it.
@@ -962,10 +983,11 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     needs_network = any(step.network for step in cfg.steps)
     sandbox_venv_dir = resolve_sandbox_venv_dir(
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
+    seccomp_profile = cfg.isolation.seccomp_profile if cfg.isolation else None
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),
         profile=profile, runner=runner, network=needs_network,
-        sandbox_venv_dir=sandbox_venv_dir)
+        sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile)
     backend.ensure_image()
     backend.create_execution_container()
     if refresh is None:

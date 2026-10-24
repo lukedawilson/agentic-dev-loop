@@ -413,6 +413,17 @@ class TestIsolationConfig:
         roundtripped = type(iso).model_validate(iso.model_dump())
         assert roundtripped.sandbox_venv_dir == iso.sandbox_venv_dir
 
+    def test_seccomp_profile_round_trips(self, tmp_path):
+        """023: `seccomp_profile` is an optional host path to a seccomp
+        profile JSON (Docker --security-opt seccomp=<path>). It loads verbatim;
+        Docker validates the path at container-create time."""
+        data = _base() | {"isolation": {"seccomp_profile":
+                                        "/host/chromium-userns.json"}}
+        iso = _load(tmp_path, data).isolation
+        assert iso.seccomp_profile == "/host/chromium-userns.json"
+        roundtripped = type(iso).model_validate(iso.model_dump())
+        assert roundtripped.seccomp_profile == iso.seccomp_profile
+
     @pytest.mark.parametrize("memory", ["8", "g", "8G", "8 g", ""])
     def test_invalid_memory_rejected(self, tmp_path, memory):
         data = _base() | {"isolation": {"memory": memory}}

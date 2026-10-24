@@ -43,6 +43,10 @@ dependencies = [
     "agent-client-protocol<1.0.0",
     "langgraph>=1.2",
     "langgraph-checkpoint-sqlite>=3.0",
+    # filelock is a transitive dep (openhands-sdk, litellm, virtualenv).
+    # 3.32.7 carries CVE-2026-112907/-112913/-112940 (fixed in 4.2.1); pin a
+    # floor so the restore step's pip-audit stays green.
+    "filelock>=4.2.1",
 ]
 
 [project.urls]
@@ -64,6 +68,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 agentic_dev_loop = ["py.typed"]
+"agentic_dev_loop.engine.seccomp" = ["*.json"]
 
 [tool.pytest.ini_options]
 markers = [
