@@ -18,7 +18,7 @@ from .loaders import resolve_docs
 from .isolation import (isolation_state_dir, resolve_effective_profile,
                         resolve_image_ref, resolved_seccomp_profile)
 from .registry import (Registry, default_registry, load_extensions,
-                       validate_action_network)
+                       validate_action_mounts_egress, validate_action_network)
 from .secrets import scan_env_files
 
 
@@ -46,6 +46,8 @@ def _validate_actions(cfg: PipelineConfig, registry: Registry) -> None:
                 f"step {step.name!r}: unknown action {step.action!r} "
                 f"(registered: {sorted(known)})")
         validate_action_network(step.name, step.action, step.network, registry)
+        validate_action_mounts_egress(step.name, step.action, step.mounts,
+                                      step.egress, registry)
 
 
 def _resolved_image(cfg: PipelineConfig) -> tuple[str, str, float]:

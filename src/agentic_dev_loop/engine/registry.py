@@ -289,3 +289,18 @@ def validate_action_network(step_name: str, action: str, network: bool,
             "declare 'network: true' - host-side actions run in the host "
             "process; only sandbox (consumer) actions may take network, like "
             "command steps")
+
+
+def validate_action_mounts_egress(step_name: str, action: str,
+                                  mounts: list, egress, registry: "Registry") -> None:
+    """Reject ``mounts:``/``egress:`` on a host-side built-in action (unit-5).
+
+    Host-side actions run in the host process and are never sandbox-mounted or
+    egress-routed; sandbox (consumer) actions may declare both, exactly like
+    command steps. Mirrors ``validate_action_network`` (020)."""
+    if action in registry.actions and (mounts or egress is not None):
+        raise ValueError(
+            f"step {step_name!r}: action {action!r} is host-side and cannot "
+            "declare 'mounts' or 'egress' - host-side actions run in the host "
+            "process; only sandbox (consumer) actions may declare mounts or "
+            "egress, like command steps")

@@ -26,6 +26,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -36,8 +37,14 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from agentic_dev_loop.core.config import IsolationConfig, PipelineConfig
+from .egress_policy import EgressPolicy
+from .egress_proxy import EgressProxy
+from .mounts import Mount, MountSet
+from .presets import CACHE_DIRS
 from .proc import needs_shell, split_command
 from .seccomp import resolve_seccomp_profile
+from .step_workspace import StepWorkspace
+from .sync_back import SyncBackReport, _snapshot, sync_back
 
 # ---------------------------------------------------------------------------
 # Constants (KD-2 / ID-4)
@@ -102,7 +109,11 @@ class SandboxExecutionRequest:
     cwd: str  # absolute container-side path (== host mount path)
     env: dict[str, str]  # resolved sandbox env (already scrubbed)
     timeout: float | None = None  # seconds; None = no limit
-    network: bool = False  # route to the bridge-network exec container when True
+    network: bool = False  # route to a network-enabled container when True
+    # unit-5: the resolved per-step mount set + egress policy (BR-1/BR-5).
+    # None keeps the legacy two-container model (workspace mount, no proxy).
+    mount_set: MountSet | None = None
+    egress_policy: EgressPolicy | None = None
     # Host-side audit metadata (BR-11) - never sent into the container.
     pipeline: str | None = None
     step: str | None = None
@@ -188,6 +199,95 @@ def resolve_effective_profile(isolation: IsolationConfig | None) -> EffectivePro
         memory=memory,
         cpus=cpus,
     )
+
+
+def container_profile_key(mount_set: MountSet, policy: EgressPolicy) -> str:
+    """Stable pool key (D-1/BR-10): equal (mount set, egress policy) pairs
+    hash to the same key, every time. Pure (PBT-03)."""
+    canonical = {
+        "mounts": mount_set.to_dict(),
+        "egress": {
+            "class": policy.policy_class,
+            "targets": [{"host": t.host, "port": t.port}
+                         for t in policy.targets],
+        },
+    }
+    return hashlib.sha256(
+        json.dumps(canonical, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+@dataclass(frozen=True)
+class ContainerProfile:
+    """The profile-keyed pool identity (D-1/BR-10): resolved mount set +
+    resolved egress policy + seccomp/cap policy. Equal profiles share one
+    container."""
+
+    mount_set: MountSet
+    egress_policy: EgressPolicy
+    seccomp_caps: str | None = None
+
+    def key(self) -> str:
+        return container_profile_key(self.mount_set, self.egress_policy)
+
+
+def discover_cache_paths(workspace: str | Path,
+                         sandbox_venv_dir: str | None = None) -> list[str]:
+    """The in-workspace cache dirs to bind-mount into the export (BR-3/F2).
+
+    Only dirs that actually exist are caches - an absent cache dir is simply
+    not a cache (the toolchain is unused), so materialisation never fails on
+    a repo that does not use, say, node. The relocated sandbox venv (022) is
+    never a cache: it bind-mounts from outside the workspace instead."""
+    ws = Path(workspace)
+    paths = [d for d in CACHE_DIRS if (ws / d).is_dir()]
+    if sandbox_venv_dir is not None:
+        paths = [d for d in paths if d != SANDBOX_VENV_DIR]
+    return paths
+
+
+@dataclass
+class _ProfileContainer:
+    """One pooled execution container (D-1/BR-10): its resolved profile plus
+    the running state. ``proxy`` is the per-policy egress proxy (network-on
+    profiles only); ``started`` is True once ``docker run`` returned 0."""
+
+    name: str
+    mount_set: MountSet
+    egress_policy: EgressPolicy
+    proxy: EgressProxy | None = None
+    started: bool = False
+
+
+def _proxy_url(port: int) -> str:
+    """The container-reachable URL for a host-loopback proxy (ID-2): the
+    host-gateway mapping, never 127.0.0.1 (which is the container itself)."""
+    return f"http://host.docker.internal:{port}"
+
+
+def mount_set_docker_flags(export_root: str, mount_set: MountSet) -> list[str]:
+    """Translate a resolved MountSet into Docker ``-v`` flags over the
+    export (ID-4/BR-1). Strict-by-default: an empty mount set mounts nothing
+    (BR-1.1). A ``.`` entry mounts the whole export with its mode; a set of
+    subpath entries (or a ``ro`` whole-tree entry plus ``rw`` subpaths) mounts
+    the export root read-only and adds a writable submount for each
+    declared-rw path (declared-writes, BR-1.2)."""
+    if not mount_set.mounts:
+        return []
+    base_mode = next((m.mode for m in mount_set.mounts if m.path in (".", "")),
+                     None)
+    if base_mode is not None:
+        flags = ["-v", f"{export_root}:{export_root}"
+                 f"{':ro' if base_mode == 'ro' else ''}"]
+        if base_mode == "ro":
+            for m in mount_set.mounts:
+                if m.path not in (".", "") and m.mode == "rw":
+                    flags += ["-v", f"{export_root}/{m.path}:{export_root}/{m.path}"]
+        return flags
+    flags = ["-v", f"{export_root}:{export_root}:ro"]
+    for m in mount_set.mounts:
+        if m.mode == "rw":
+            flags += ["-v", f"{export_root}/{m.path}:{export_root}/{m.path}"]
+    return flags
 
 
 def resolve_sandbox_env(step_env: dict[str, str | None] | None, *,
@@ -465,7 +565,12 @@ def _sandbox_mounts(workspace: str, sandbox_venv_dir: str | None) -> list[str]:
 def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           workspace: str, network: bool = False,
                           sandbox_venv_dir: str | None = None,
-                          seccomp_profile: str | None = None) -> list[str]:
+                          seccomp_profile: str | None = None,
+                          mount_set: MountSet | None = None,
+                          export_root: str | None = None,
+                          cache_mounts: list[tuple[str, str, str]] | None = None,
+                          egress_proxy: str | None = None,
+                          name: str | None = None) -> list[str]:
     """Exact ``docker run -d --rm`` argv for the execution container (§3.3, KD-8).
     Mount set {workspace} + host-only masks (022); ``--network none`` (bridge
     when ``network`` is true - 014 per-stage networking), --read-only,
@@ -486,10 +591,14 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
     profiles are expected to follow the same cap-gated pattern."""
     payload = [
         "docker", "run", "--detach", "--rm", "--name",
-        exec_container_name(run_id, network),
+        name or exec_container_name(run_id, network),
         "--network", "bridge" if network else "none",
-        "--read-only", "--cap-drop", "ALL",
     ]
+    if network:
+        # unit-5 (ID-2): network-on containers reach the engine-run egress
+        # proxy via the host-gateway mapping - one mechanism on every platform.
+        payload += ["--add-host", "host.docker.internal:host-gateway"]
+    payload += ["--read-only", "--cap-drop", "ALL"]
     if seccomp_profile is not None:
         payload.extend([
             "--security-opt", f"seccomp={seccomp_profile}",
@@ -499,12 +608,33 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
         "--memory", profile.memory, "--cpus", str(profile.cpus),
         "--tmpfs", "/tmp", "--tmpfs", "/root",
     ])
+    if egress_proxy is not None:
+        # unit-5 (BR-5): force container HTTP(S) through the per-policy proxy.
+        payload += [
+            "--env", f"HTTP_PROXY={egress_proxy}",
+            "--env", f"HTTPS_PROXY={egress_proxy}",
+            "--env", "NO_PROXY=localhost,127.0.0.1",
+        ]
     user = host_user_flag()
     if user is not None:
         payload.extend(["--user", user, "--env", "HOME=/tmp"])
-    payload.extend(_sandbox_mounts(workspace, sandbox_venv_dir))
+    if export_root is not None:
+        root = export_root
+        payload.extend(mount_set_docker_flags(root, mount_set or MountSet()))
+        # Declared cache paths bind-mount rw from the real workspace at the
+        # same relative paths inside the export (BR-3/F2); the relocated
+        # sandbox venv (022) maps into the export's `.venv-sandbox`.
+        for source, target, _mode in (cache_mounts or []):
+            payload += ["-v", f"{source}:{target}"]
+        if sandbox_venv_dir is not None:
+            payload += ["-v", f"{sandbox_venv_dir}:{root}/{SANDBOX_VENV_DIR}"]
+        workdir = root
+    else:
+        root = workspace
+        payload.extend(_sandbox_mounts(workspace, sandbox_venv_dir))
+        workdir = workspace
     payload.extend([
-        "--workdir", workspace,
+        "--workdir", workdir,
         image, "sleep", "infinity",
     ])
     return payload
@@ -627,7 +757,9 @@ class DockerBackend(Sandbox):
     def __init__(self, *, image: str, workspace: str, iso_state_dir: str,
                  profile: EffectiveProfile, runner: CommandRunner | None = None,
                  network: bool = False, sandbox_venv_dir: str | None = None,
-                 seccomp_profile: str | None = None):
+                 seccomp_profile: str | None = None,
+                 export_root: str | None = None,
+                 cache_mounts: list[tuple[str, str, str]] | None = None):
         self._image = image
         self._workspace = workspace
         self._iso_state_dir = Path(iso_state_dir)  # host-only (audit)
@@ -639,6 +771,21 @@ class DockerBackend(Sandbox):
         self._network_enabled = network
         self._sandbox_venv_dir = sandbox_venv_dir  # 022 relocated venv (opt-in)
         self._seccomp_profile = seccomp_profile  # 023 userns allowlist (opt-in)
+        # unit-5: the .git-free export + its cache bind-mounts (BR-2/BR-3).
+        # None keeps the legacy workspace-mount model (integration tests).
+        self._export_root = export_root
+        self._cache_mounts = cache_mounts or []
+        # The repo-relative cache paths (BR-3.1), derived from the mount
+        # targets for sync-back exclusion: caches are bind-mounted, never
+        # copied, so their contents are never a sync-back change.
+        self._cache_paths: list[str] = []
+        if export_root is not None:
+            for _source, target, _mode in self._cache_mounts:
+                self._cache_paths.append(
+                    os.path.relpath(target, export_root).replace("\\", "/"))
+        self._baseline: dict[str, str] = {}
+        # The profile-keyed pool (D-1/BR-10): profile key -> running container.
+        self._pool: dict[tuple[str, bool], _ProfileContainer] = {}
         if sandbox_venv_dir is not None:
             # 022: the relocated venv dir is a bind-mount source. On native
             # Linux, Docker auto-creates a missing source as root, which the
@@ -647,6 +794,12 @@ class DockerBackend(Sandbox):
             Path(sandbox_venv_dir).mkdir(parents=True, exist_ok=True)
         self._started = False
         self._network_started = False
+
+    @property
+    def export_root(self) -> str | None:
+        """The materialised .git-free export root (BR-2); None when no export
+        was materialised (the legacy workspace model)."""
+        return self._export_root
 
     # -- infrastructure (startup) -------------------------------------------
 
@@ -679,9 +832,16 @@ class DockerBackend(Sandbox):
     def create_execution_container(self) -> None:
         """Eager create + start via ``docker run -d --rm`` (Q2, D1) - never
         lazy; ``run -d`` is create + start in one call, so there is no
-        separate ``docker start``. When any step declares ``network: true`` a
-        second, otherwise-identical bridge-network container is started so no
-        infrastructure work happens mid-run (014 per-stage networking)."""
+        separate ``docker start``.
+
+        With an export (unit-5) this creates only the base network-none
+        container (the .git-free export, whole-tree rw) that serves the venv
+        probe (016) and the legacy default path; step execution then uses the
+        profile-keyed pool (D-1). Without an export the legacy two-container
+        model is retained (integration tests, no enforcement)."""
+        if self._export_root is not None:
+            self._create_base_export_container()
+            return
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=False,
@@ -709,6 +869,27 @@ class DockerBackend(Sandbox):
                 f"AE-SBX-013: networked container run failed: "
                 f"{net_res.stderr.strip() or net_res.stdout.strip()}")
         self._network_started = True
+
+    def _create_base_export_container(self) -> None:
+        """Create the base export container (network-none, whole-tree rw) and
+        snapshot the export baseline for sync-back conflict detection (BR-4)."""
+        base = MountSet(mounts=(Mount(path=".", mode="rw"),))
+        payload = docker_create_payload(
+            run_id=self._run_id, image=self._image, profile=self._profile,
+            workspace=self._workspace, network=False,
+            sandbox_venv_dir=self._sandbox_venv_dir,
+            seccomp_profile=self._seccomp_profile,
+            mount_set=base, export_root=self._export_root,
+            cache_mounts=self._cache_mounts)
+        res = self._runner.run(payload, timeout=60)
+        if res.exit_code != 0:
+            raise SandboxError(
+                f"AE-SBX-010: container run failed: "
+                f"{res.stderr.strip() or res.stdout.strip()}")
+        self._started = True
+        if not self._baseline:
+            self._baseline = _snapshot(Path(self._export_root),
+                                       self._cache_paths)
 
     def provision(self, setup_cmd: str, stamp_key: str, stamp_dir: str,
                   force: bool) -> None:
@@ -740,26 +921,67 @@ class DockerBackend(Sandbox):
         write_stamp(Path(stamp_dir), stamp_key)
 
     def _probe_venv(self) -> str:
-        """Run the in-container venv probe and classify it (016 self-heal)."""
+        """Run the in-container venv probe and classify it (016 self-heal).
+        With an export the venv is mounted at ``{export}/.venv-sandbox``, so
+        the probe workdir follows the export root."""
+        workdir = self._export_root or self._workspace
         res = self._runner.run(
-            venv_probe_argv(self._container, self._workspace), timeout=30)
+            venv_probe_argv(self._container, workdir), timeout=30)
         return venv_probe_state(res.stdout, res.exit_code)
 
     # -- execution ----------------------------------------------------------
 
     def run(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:
         _guard_git(request, self._profile.git_mutations_blocked)
+        if request.mount_set is None:
+            return self._run_legacy(request)
+        return self._run_profile(request)
+
+    def _run_legacy(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:
+        """The pre-unit-5 path: a request without a resolved mount set routes
+        to the legacy two-container model (integration tests only - the
+        runtime always resolves a mount set)."""
         container = self._network_container if request.network else self._container
         if request.network and not self._network_started:
             raise SandboxError(
                 "AE-SBX-013: networked execution requested but no networked "
                 "container is running - declare `network: true` on the step "
                 "(docs/setup.md §3)")
+        return self._exec(request, container)
+
+    def _run_profile(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:
+        """The unit-5 path (D-1): resolve the step's mount set + egress policy
+        into a pool key, create the profile container lazily, exec into it,
+        then sync declared-rw changes back to the real repo (BR-4)."""
+        mount_set = request.mount_set or MountSet()
+        policy = request.egress_policy or EgressPolicy()
+        if self._export_root is None:
+            raise SandboxError(
+                "AE-SBX-017: a resolved mount set / egress policy needs the "
+                ".git-free export, which was not materialised - the runtime "
+                "must materialise an export before enforcement (BR-2)")
+        key = (container_profile_key(mount_set, policy), bool(request.network))
+        prof = self._pool.get(key)
+        if prof is None:
+            prof = self._start_profile(key, mount_set, policy, request.network)
+            self._pool[key] = prof
+        if request.network and not prof.started:
+            raise SandboxError(
+                "AE-SBX-013: networked execution requested but no networked "
+                "container is running - declare `network: true` on the step "
+                "(docs/setup.md §3)")
+        result = self._exec(request, prof.name)
+        if mount_set.rw_paths() and self._export_root is not None:
+            self._sync_back(mount_set)
+        return result
+
+    def _exec(self, request: SandboxExecutionRequest,
+              container: str) -> SandboxExecutionResult:
         start = time.monotonic()
         exec_argv = ["docker", "exec"]
         for key, value in request.env.items():
             exec_argv += ["-e", f"{key}={value}"]
-        exec_argv += ["-w", self._workspace, container]
+        exec_argv += ["-w", request.cwd, container]
         runner_timeout = None
         if request.timeout is not None:
             exec_argv += ["/usr/bin/timeout", str(math.ceil(request.timeout))]
@@ -778,11 +1000,64 @@ class DockerBackend(Sandbox):
                 f"{res.stderr.strip() or res.stdout.strip()}")
         return result
 
+    def _start_profile(self, key: tuple[str, bool], mount_set: MountSet,
+                       policy: EgressPolicy, network: bool) -> _ProfileContainer:
+        """Create one profile container (D-1). A network-enabled profile gets
+        its per-policy egress proxy and is pointed at it via the host-gateway
+        mapping (ID-2); the proxy enforces the allowlist (BR-5/BR-6)."""
+        name = f"{self._run_id}-exec-{key[0][:16]}"
+        if network:
+            name += "-net"
+        proxy: EgressProxy | None = None
+        proxy_url: str | None = None
+        if network and self._export_root is not None:
+            proxy = EgressProxy(policy=policy)
+            proxy_url = _proxy_url(proxy.start())
+        payload = docker_create_payload(
+            run_id=self._run_id, image=self._image, profile=self._profile,
+            workspace=self._workspace, network=network,
+            sandbox_venv_dir=self._sandbox_venv_dir,
+            seccomp_profile=self._seccomp_profile,
+            mount_set=mount_set, export_root=self._export_root,
+            cache_mounts=self._cache_mounts, egress_proxy=proxy_url, name=name)
+        res = self._runner.run(payload, timeout=60)
+        if res.exit_code != 0:
+            if proxy is not None:
+                proxy.stop()
+            raise SandboxError(
+                f"AE-SBX-010: container run failed: "
+                f"{res.stderr.strip() or res.stdout.strip()}")
+        return _ProfileContainer(name=name, mount_set=mount_set,
+                                 egress_policy=policy, proxy=proxy,
+                                 started=True)
+
+    def _sync_back(self, mount_set: MountSet) -> None:
+        """Sync declared-rw export changes back to the real repo (BR-4/F1),
+        git-aware, host-side, with the sandbox step already complete. A
+        conflict (the real repo changed underneath) is a loud failure."""
+        report: SyncBackReport = sync_back(
+            self._export_root, self._workspace, list(mount_set.rw_paths()),
+            baseline=self._baseline, step_id=None,
+            cache_paths=self._cache_paths)
+        if report.conflicts:
+            raise SandboxError(
+                f"AE-SBX-016: sync-back conflict in "
+                f"{', '.join(report.conflicts)} - the real repo changed "
+                f"underneath; resolve before retrying (BR-4.4)")
+        self._baseline = _snapshot(Path(self._export_root),
+                                   self._cache_paths)
+        append_audit_record(self._iso_state_dir, {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "event": "sync_back",
+            "synced_paths": list(report.synced_paths),
+        })
+
     def close(self) -> None:
         """Best-effort stop + rm; idempotent (BR-8.3). With ``--rm`` the
         daemon may already have auto-removed the container by the time close()
         runs, so a nonzero stop/rm exit code ("no such container") is treated
-        as success, never raised (D2)."""
+        as success, never raised (D2). Every pooled profile container and its
+        egress proxy are destroyed too (BR-10.2/BR-11.3)."""
         if self._started:
             self._runner.run(["docker", "stop", "-t", "5", self._container],
                              timeout=60)
@@ -795,6 +1070,14 @@ class DockerBackend(Sandbox):
             self._runner.run(["docker", "rm", "-f", self._network_container],
                              timeout=60)
             self._network_started = False
+        for prof in self._pool.values():
+            if prof.started:
+                self._runner.run(["docker", "stop", "-t", "5", prof.name],
+                                 timeout=60)
+                self._runner.run(["docker", "rm", "-f", prof.name], timeout=60)
+            if prof.proxy is not None:
+                prof.proxy.stop()
+        self._pool.clear()
 
     # -- internal -----------------------------------------------------------
 
@@ -984,9 +1267,15 @@ def resolve_image_ref(image: str, environ: Mapping[str, str] | None = None) -> s
 
 def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
                     runner: CommandRunner | None = None,
-                    refresh: bool | None = None) -> Sandbox:
-    """Eager startup sequence (Q2): probe → image → backend → ensure_image →
-    create+start → pre-provision every declared setup (stamp-cached)."""
+                    refresh: bool | None = None,
+                    state_dir: str | Path | None = None) -> Sandbox:
+    """Eager startup sequence (Q2): probe → image → materialise export →
+    backend → ensure_image → create+start → pre-provision every declared setup
+    (stamp-cached).
+
+    ``state_dir`` (the run state dir) hosts the .git-free export under
+    ``exports/<run-id>/``, materialised here (BR-2/BR-3); when omitted the
+    legacy workspace model applies (integration tests, programmatic calls)."""
     seccomp_profile = resolved_seccomp_profile(cfg)
     probe_docker(runner)
     profile = resolve_effective_profile(cfg.isolation)
@@ -995,10 +1284,23 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     needs_network = any(step.network for step in cfg.steps)
     sandbox_venv_dir = resolve_sandbox_venv_dir(
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
+
+    export_root: str | None = None
+    cache_mounts: list[tuple[str, str, str]] | None = None
+    if state_dir is not None:
+        export_root = str(Path(state_dir) / "exports" / uuid.uuid4().hex)
+        cache_paths = discover_cache_paths(workspace, sandbox_venv_dir)
+        ws = StepWorkspace.materialise(
+            workspace, cache_paths, sys.platform, export_root,
+            state_dir=str(state_dir))
+        export_root = str(ws.export_root)
+        cache_mounts = ws.mount_points()[1:]  # skip the export root itself
+
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),
         profile=profile, runner=runner, network=needs_network,
-        sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile)
+        sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
+        export_root=export_root, cache_mounts=cache_mounts)
     backend.ensure_image()
     backend.create_execution_container()
     if refresh is None:

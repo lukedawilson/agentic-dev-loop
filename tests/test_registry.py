@@ -4,7 +4,8 @@ import pytest
 
 from agentic_dev_loop.engine import actions
 from agentic_dev_loop.engine.registry import (
-    Registry, default_registry, load_extensions, validate_action_network,
+    Registry, default_registry, load_extensions,
+    validate_action_mounts_egress, validate_action_network,
 )
 from sample_ext import SampleTool
 
@@ -241,3 +242,23 @@ class TestValidateActionNetwork:
     def test_unknown_action_is_not_this_guard(self):
         reg = default_registry()
         validate_action_network("x", "nope", True, reg)  # must not raise
+
+
+class TestValidateActionMountsEgress:
+    def test_host_side_action_rejects_mounts(self):
+        reg = default_registry()
+        with pytest.raises(ValueError, match="host-side"):
+            validate_action_mounts_egress("commit", "commit", [{"path": "src"}],
+                                          None, reg)
+
+    def test_host_side_action_rejects_egress(self):
+        reg = default_registry()
+        with pytest.raises(ValueError, match="host-side"):
+            validate_action_mounts_egress("commit", "commit", [],
+                                          {"class": "browser"}, reg)
+
+    def test_sandbox_action_allows_both(self):
+        reg = default_registry()
+        reg.add_sandbox_action("lint", "make lint")
+        validate_action_mounts_egress("lint", "lint", [{"path": "src"}],
+                                      {"class": "browser"}, reg)

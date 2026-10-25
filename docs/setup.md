@@ -72,11 +72,11 @@ isolation:
   any step executes. Outputs land in the bind-mounted workspace. Agent and
   action steps reject `setup:` at load.
 - **`network:` (command, agent, and sandbox-action steps)** - `network: true`
-  grants the step egress by running it in a second, otherwise-identical
-  bridge-network container (`--read-only`, `--cap-drop ALL`, single workspace
-  mount). Default is `false` - every step stays network-off unless it opts
-  in. The host-side built-in `commit` action rejects `network:` (refused once
-  the registry is known).
+  runs the step in a bridge-network container whose traffic is forced through
+  the engine-run per-policy egress proxy and reaches only the step's `egress:`
+  allowlist (`--read-only`, `--cap-drop ALL`). Default is `false` - every step
+  stays network-off unless it opts in. The host-side built-in `commit` action
+  rejects `network:` (refused once the registry is known).
 - **Git mutations** are blocked by default inside the sandbox (commit, push,
   branch/tag create/delete, rebase, …); reads (`status`/`log`/`diff`) always
   work. `allow_git_mutations: true` re-allows them per-pipeline.
@@ -105,6 +105,50 @@ isolation:
   ci`, or `dotnet restore --locked-mode`) and fails on known-CVE findings
   at a per-toolchain threshold (`pip-audit`, `npm audit --audit-level=high`,
   NuGetAudit at `error`).
+
+### Mounts and egress (unit-5)
+
+Per-step workspace isolation: a step mounts only what its `mounts:` declares
+(strict-by-default - empty/missing `mounts:` mounts nothing), and a
+`network: true` step reaches only the hosts its `egress:` allowlist names.
+
+```yaml
+steps:
+  - name: dev
+    agent: dev
+    mounts: [{path: ".", mode: rw}]          # source + tests rw for this step
+
+  - name: restore
+    command: .venv-sandbox/bin/pip install -e ".[dev]"
+    network: true
+    mounts: [{path: ".venv-sandbox", mode: rw}]
+    egress: { presets: [package-registries] }   # pypi/npm/NuGet/cargo + VCS
+
+  - name: review
+    agent: review
+    mounts: [{path: ".", mode: ro}]          # read-only review
+```
+
+- **`mounts:`** - a list of `{path, mode}` entries. `path` is repo-relative
+  (no absolute paths, no `..` traversal, never `.git` or a host-only dir, and
+  never `state_dir`); `mode` is `rw` or `ro` (default `ro`). Strict-by-default:
+  an empty/missing `mounts:` mounts nothing. A `.` entry mounts the whole
+  export with its mode; subpath entries mount the export root read-only and add
+  a writable submount for each declared-`rw` path (declared-writes). Only
+  declared-rw paths sync back to the real repo after the step. A malformed
+  declaration fails loudly at load, naming the step.
+- **`egress:`** - `{class, presets, targets}`. `class: browser` is the
+  explicit broad-but-logged browser class (every connection logged, nothing
+  filtered); the default is a strict allowlist. `presets:` references an
+  engine-shipped preset (`package-registries` today); `targets:` adds explicit
+  `host`/`host:port` entries. An allowlist miss denies the connection at the
+  engine-run egress proxy and logs an enforcement event. The engine never adds
+  an undeclared target, and an unknown preset or malformed target fails load.
+- **`network:`** now routes through a per-policy egress proxy (the container
+  is pointed at it via `HTTP_PROXY`/`HTTPS_PROXY` and reaches it through the
+  `host.docker.internal` host-gateway mapping); it no longer means
+  unrestricted egress. The host-side built-in `commit` action rejects
+  `mounts:`/`egress:`/`network:` (refused once the registry is known).
 
 ## 4. Caching
 
@@ -164,13 +208,14 @@ bind-mounted writes can land root-owned in your workspace. Recover with
 This is **kernel-level sandboxing** - the host kernel enforces the boundary via
 namespaces, cgroups, capability checks and seccomp-BPF syscall filters. The
 execution container runs `--network none` (no egress) by default, `--read-only`
-rootfs, `--cap-drop ALL`, with writes only on the single bind-mounted
-workspace. A step that declares `network: true` runs in a second,
-otherwise-identical bridge-network container; network access otherwise exists
-only in the trusted provision phase. The Docker socket is never mounted.
-The host-side `commit` action, the LangGraph runtime, LLM calls, and the viz
-server stay host-side; consumer actions run inside the sandbox like command
-steps.
+rootfs, `--cap-drop ALL`, and mounts a fresh `.git`-free export of the
+workspace - writes land only in the step's declared-`rw` `mounts:`. A step that
+declares `network: true` runs in a bridge-network container whose traffic is
+forced through an engine-run per-policy egress proxy and reaches only its
+`egress:` allowlist; network access otherwise exists only in the trusted
+provision phase. The Docker socket is never mounted. The host-side `commit`
+action, the LangGraph runtime, LLM calls, and the viz server stay host-side;
+consumer actions run inside the sandbox like command steps.
 
 Git hooks during the commit action are **mitigated**, not a residual risk: the
 commit action runs `git -c core.hooksPath=<trusted dir>`, so repo hooks in

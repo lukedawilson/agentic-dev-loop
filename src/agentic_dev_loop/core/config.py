@@ -12,6 +12,99 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 TERMINALS = frozenset({"success", "failure"})
 KNOWN_SECRET_PROVIDERS = frozenset({"env"})
+MOUNT_MODES = frozenset({"rw", "ro"})
+# Host-only dirs a mount path may never name (022): they are masked in
+# the sandbox with a read-only tmpfs, so declaring them would be a decoy.
+HOST_ONLY_MOUNT_DIRS = frozenset({".venv"})
+# The egress preset names the engine ships (BR-9). Config validates the
+# name here; the target data lives in engine/presets.py (preset data,
+# never mechanism - D-2).
+KNOWN_EGRESS_PRESETS = frozenset({"package-registries"})
+EGRESS_CLASSES = frozenset({"allowlist", "browser"})
+
+
+def _validate_mount_path(path: str) -> str:
+    """Validate one repo-relative mount path (BR-1.3).
+
+    Rejects (loudly) an empty path, an absolute path, ``..`` traversal,
+    any ``.git`` component, and any host-only dir (``.venv``). The path
+    is normalised to forward-slash form and returned.
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("mount path must be a non-empty string")
+    p = path.strip()
+    if p.startswith(("/", "\\")) or (len(p) > 1 and p[1] == ":"):
+        raise ValueError(
+            f"mount path {path!r} must be repo-relative (no absolute paths)")
+    parts = [seg for seg in p.replace("\\", "/").split("/")
+             if seg not in ("", ".")]
+    for seg in parts:
+        if seg == "..":
+            raise ValueError(
+                f"mount path {path!r} escapes the repo (no '..' traversal)")
+        if seg == ".git":
+            raise ValueError(
+                f"mount path {path!r} must never name '.git'")
+        if seg in HOST_ONLY_MOUNT_DIRS:
+            raise ValueError(
+                f"mount path {path!r} names the host-only dir {seg!r}")
+    return "/".join(parts) if parts else "."
+
+
+def parse_egress_target(spec: str) -> tuple[str, int | None]:
+    """Parse ``host``, ``host:port``, or ``scheme://host[:port]`` into
+    ``(host, port)``. Malformed entries that can never match fail loud
+    (BR-6.3)."""
+    value = spec.strip()
+    if "://" in value:
+        value = value.split("://", 1)[1]
+    if "/" in value or value == "":
+        raise ValueError(
+            f"malformed egress target {spec!r}: expected host or host:port")
+    # IPv6 literal: [::1]:443
+    if value.startswith("["):
+        end = value.find("]")
+        if end == -1:
+            raise ValueError(f"malformed egress target {spec!r}: bad IPv6 literal")
+        host = value[1:end]
+        rest = value[end + 1:]
+        if rest.startswith(":"):
+            return host, parse_egress_port(spec, rest[1:])
+        if rest:
+            raise ValueError(f"malformed egress target {spec!r}")
+        return host, None
+    if value.count(":") == 1:
+        host, port = value.rsplit(":", 1)
+        return host, parse_egress_port(spec, port)
+    if value.count(":") > 1:
+        raise ValueError(f"malformed egress target {spec!r}: ambiguous port")
+    return value, None
+
+
+def parse_egress_port(spec: str, port: str) -> int | None:
+    """Validate a target port: numeric and within 1-65535 (BR-6.3)."""
+    if port == "":
+        raise ValueError(f"malformed egress target {spec!r}: empty port")
+    if not port.isdigit():
+        raise ValueError(f"malformed egress target {spec!r}: port {port!r} not numeric")
+    n = int(port)
+    if not 1 <= n <= 65535:
+        raise ValueError(f"malformed egress target {spec!r}: port {n} out of range")
+    return n
+
+
+def _validate_egress_target(target: str) -> str:
+    """Validate and canonicalise one egress target (BR-6.3/BR-8.4): non-empty,
+    scheme stripped, host or host:port shape, port 1-65535. Malformed entries
+    fail loud at load, so ``--dry-run`` is a true load-and-validate pass."""
+    if not isinstance(target, str) or not target.strip():
+        raise ValueError("egress target must be a non-empty string")
+    host, port = parse_egress_target(target)
+    if port is None:
+        return host
+    if ":" in host:  # IPv6 literal needs brackets before a port
+        return f"[{host}]:{port}"
+    return f"{host}:{port}"
 
 
 class VerdictSpec(BaseModel):
@@ -113,6 +206,70 @@ class IsolationConfig(BaseModel):
         return v
 
 
+class MountSpec(BaseModel):
+    """One declared mount entry (unit-5): a repo-relative path plus its
+    mode. ``ro`` is the default (BR-1.2: only declared outputs and caches
+    are ``rw``); validation at construction rejects traversal, ``.git``,
+    and host-only dirs (BR-1.3)."""
+    model_config = ConfigDict(extra="forbid")
+
+    path: str
+    mode: str = "ro"
+
+    @field_validator("path")
+    @classmethod
+    def _valid_path(cls, v: str) -> str:
+        return _validate_mount_path(v)
+
+    @field_validator("mode")
+    @classmethod
+    def _valid_mode(cls, v: str) -> str:
+        if v not in MOUNT_MODES:
+            raise ValueError(
+                f"mount mode must be 'rw' or 'ro', got {v!r}")
+        return v
+
+
+class EgressSpec(BaseModel):
+    """One declared egress policy (unit-5): an explicit class plus preset
+    references and/or explicit targets. ``class: browser`` is the explicit
+    broad-but-logged browser class (BR-7); the default is a strict
+    allowlist (BR-8). Unknown preset names fail at load (BR-8.4)."""
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    class_: str | None = Field(default=None, alias="class")
+    presets: list[str] = []
+    targets: list[str] = []
+
+    @field_validator("presets", "targets", mode="before")
+    @classmethod
+    def _coerce_list(cls, v: Any) -> Any:
+        return [v] if isinstance(v, str) else v
+
+    @field_validator("class_")
+    @classmethod
+    def _known_class(cls, v: str | None) -> str | None:
+        if v is not None and v not in EGRESS_CLASSES:
+            raise ValueError(
+                f"egress class must be 'allowlist' or 'browser', got {v!r}")
+        return v
+
+    @field_validator("presets")
+    @classmethod
+    def _known_presets(cls, v: list[str]) -> list[str]:
+        for name in v:
+            if name not in KNOWN_EGRESS_PRESETS:
+                raise ValueError(
+                    f"unknown egress preset {name!r} (known: "
+                    f"{sorted(KNOWN_EGRESS_PRESETS)})")
+        return v
+
+    @field_validator("targets")
+    @classmethod
+    def _valid_targets(cls, v: list[str]) -> list[str]:
+        return [_validate_egress_target(t) for t in v]
+
+
 class StepConfig(BaseModel):
     """One pipeline step. Its type IS the key it carries: exactly one of
     `agent`, `action`, or `command` - empty values do not count, anything
@@ -133,6 +290,12 @@ class StepConfig(BaseModel):
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
     network: bool = False  # per-stage egress (command/agent + sandbox actions; host-side actions reject at registry time)
+    # unit-5: per-step mount granularity + egress policy. Empty mounts =
+    # strict-by-default (BR-1.1); egress None = strict empty allowlist
+    # (BR-8.3). Host-side built-in actions are refused these at registry
+    # time (the schema cannot tell host-side from sandbox actions).
+    mounts: list[MountSpec] = []
+    egress: EgressSpec | None = None
     secrets: list[str] = []  # declared ref names; action steps reject
     on_pass: RouteTarget | None = None
     on_fail: RouteTarget | None = None
@@ -279,6 +442,26 @@ class PipelineConfig(BaseModel):
                 "deps_policy 'locked' requires at least one entry in "
                 "'lockfiles:' - name the lockfile(s) the locked boundary "
                 "enforces, or set 'deps_policy: open'")
+        return self
+
+    @model_validator(mode="after")
+    def _mounts_avoid_state_dir(self) -> "PipelineConfig":
+        """BR-1.3: the host-only run-state dir is never a mount path.
+        A relative ``state_dir`` (e.g. ``.pr``) lives inside the
+        workspace and must be refused as a mount; the default relocated
+        state_dir is absolute/outside the workspace, so relative mount
+        paths can never collide with it.
+        """
+        sd = self.state_dir.strip().rstrip("/\\")
+        if not sd or sd in ("/", "."):
+            return self
+        for step in self.steps:
+            for m in step.mounts:
+                mp = m.path.rstrip("/")
+                if mp == sd or mp.startswith(sd + "/"):
+                    raise ValueError(
+                        f"step {step.name!r}: mount path {m.path!r} names "
+                        f"the host-only state_dir {self.state_dir!r}")
         return self
 
     @model_validator(mode="after")

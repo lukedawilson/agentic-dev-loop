@@ -19,7 +19,7 @@ from agentic_dev_loop.engine.registry import Registry, default_registry
 from agentic_dev_loop.engine.stages import (
     ARTIFACT_CONTEXT_CAP, Runtime, _run_command, build_context,
     make_action_node, make_agent_node, make_bump_node, make_command_node,
-    make_router, run_agent,
+    make_router,
 )
 
 
@@ -417,6 +417,42 @@ class TestCommandNode:
         monkeypatch.setattr("agentic_dev_loop.engine.stages._run_command", boom)
         assert node(make_state()) == {"failed": True, "failed_step": "test"}
 
+    def test_command_step_passes_resolved_mount_and_egress(self, runtime):
+        """unit-5: the command node resolves the step's mounts + egress into a
+        MountSet + EgressPolicy and threads them through the sandbox request."""
+        node = self._node(runtime, [
+            {"name": "test", "command": "true", "network": True,
+             "mounts": [{"path": "src", "mode": "rw"}],
+             "egress": {"targets": ["pypi.org"]},
+             "on_pass": "success"}])
+        node(make_state())
+        req = runtime.sandbox.requests[-1]
+        assert req.mount_set.rw_paths() == ("src",)
+        assert [t.host for t in req.egress_policy.targets] == ["pypi.org"]
+        assert req.network is True
+
+    def test_command_step_cwd_follows_export_root(self, runtime, tmp_path):
+        """BR-2: with an export, the sandbox cwd is the export root (not the
+        real workspace), and a `.` rw mount resolves to the whole tree."""
+        export = tmp_path / "export"
+        export.mkdir()
+        rt = dataclasses.replace(runtime, sandbox_cwd=export)
+        node = self._node(rt, [{"name": "test", "command": "true",
+                                "mounts": [{"path": ".", "mode": "rw"}],
+                                "on_pass": "success"}])
+        node(make_state())
+        req = rt.sandbox.requests[-1]
+        assert req.cwd == str(export)
+        assert req.mount_set.rw_paths() == (".",)
+
+    def test_command_step_default_strict_empty_mount(self, runtime):
+        """BR-1.1: a step with no mounts resolves to an empty mount set."""
+        node = self._node(runtime, [{"name": "test", "command": "true",
+                                     "on_pass": "success"}])
+        node(make_state())
+        req = runtime.sandbox.requests[-1]
+        assert req.mount_set is not None and req.mount_set.mounts == ()
+
     def test_plain_fail_route_has_no_retry_target(self, runtime):
         node = self._node(runtime, [
             {"name": "dev", "agent": "dev", "on_pass": "test"},
@@ -663,7 +699,7 @@ class FakeConversation:
 
 class TestRunAgent:
     def test_missing_agent_file_reports_last_error(self, runtime):
-        result = run_agent("ghost", "msg", runtime)
+        result = runtime.run_agent("ghost", "msg")
         assert result.ok is False
         err = (runtime.state_dir / "last-error.md").read_text()
         assert "Agent run failed" in err and "ghost.agent.md" in err
@@ -679,7 +715,7 @@ class TestRunAgent:
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.Conversation",
             lambda **kw: convs.append(FakeConversation(ConversationExecutionStatus.FINISHED, **kw)) or convs[-1])
-        result = run_agent("dev", "the task", runtime, max_iterations=200)
+        result = runtime.run_agent("dev", "the task", max_iterations=200)
         assert result.ok and not result.truncated
         (conv,) = convs
         assert conv.messages == ["the task"]
@@ -692,7 +728,7 @@ class TestRunAgent:
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.Conversation",
             lambda **kw: FakeConversation(ConversationExecutionStatus.ERROR, **kw))
-        result = run_agent("dev", "msg", runtime)
+        result = runtime.run_agent("dev", "msg")
         assert result.ok and result.truncated
 
 

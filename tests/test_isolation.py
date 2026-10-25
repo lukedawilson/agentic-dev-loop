@@ -14,16 +14,20 @@ from pathlib import Path
 import pytest
 
 from agentic_dev_loop.core.config import IsolationConfig
+from agentic_dev_loop.core.config import MountSpec
+from agentic_dev_loop.engine.egress_policy import EgressPolicy, TargetEntry
+from agentic_dev_loop.engine.mounts import MountSet, resolve_mount_set
 from agentic_dev_loop.engine.isolation import (
     AUDIT_MAX_BYTES, CmdResult, DEFAULT_DEV_IMAGE, DEFAULT_DEV_IMAGE_REF,
     DockerBackend, EffectiveProfile, ProbeResult, SandboxError,
     SandboxExecutionRequest, SandboxExecutionResult, append_audit_record,
-    clean_stamps, docker_create_payload, docker_provision_payload,
-    exec_container_name, is_git_mutation, probe_docker, read_stamp,
-    remove_sandbox_venv, resolve_effective_profile, resolve_image_ref,
-    resolve_sandbox_env, resolve_sandbox_venv_dir, select_backend,
-    setup_stamp_key, translate_mount_path,
-    venv_probe_argv, venv_probe_command, venv_probe_state, write_stamp,
+    clean_stamps, container_profile_key, docker_create_payload,
+    docker_provision_payload, exec_container_name, is_git_mutation,
+    mount_set_docker_flags, probe_docker, read_stamp, remove_sandbox_venv,
+    resolve_effective_profile, resolve_image_ref, resolve_sandbox_env,
+    resolve_sandbox_venv_dir, select_backend, setup_stamp_key,
+    translate_mount_path, venv_probe_argv, venv_probe_command,
+    venv_probe_state, write_stamp,
 )
 
 
@@ -1260,3 +1264,260 @@ class TestResolveSeccompProfile:
             workspace="/ws", seccomp_profile=resolved)
         assert payload[payload.index("--security-opt") + 1] == f"seccomp={resolved}"
         assert payload[payload.index("--cap-add") + 1] == "SYS_CHROOT"
+
+
+class TestUnit5PayloadAdditions:
+    """Unit-5 (step 9): host-gateway reachability, proxy env injection, and
+    mount-set/export-cwd assembly - the profile-keyed payload building blocks."""
+
+    def _profile(self):
+        return EffectiveProfile(True, True, True, True, True, "img", "4g", 2.0)
+
+    def test_networked_payload_adds_host_gateway(self, tmp_path):
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws,
+                                  network=True)
+        assert "--add-host" in p
+        assert p[p.index("--add-host") + 1] == "host.docker.internal:host-gateway"
+
+    def test_network_none_payload_omits_host_gateway(self, tmp_path):
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws)
+        assert "--add-host" not in p
+
+    def test_egress_proxy_env_injected(self, tmp_path):
+        ws = str(tmp_path)
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws,
+                                  egress_proxy="http://127.0.0.1:4321")
+        assert "--env" in p and "HTTP_PROXY=http://127.0.0.1:4321" in p
+        assert "HTTPS_PROXY=http://127.0.0.1:4321" in p
+
+    def test_mount_set_overrides_workspace_mount(self, tmp_path):
+        """Declared-writes model (BR-1.2): the export root is mounted ro and
+        only declared-rw subpaths get a writable submount; declared-ro paths
+        are covered by the ro root. The cwd becomes the export root."""
+        ws = str(tmp_path)
+        export = str(tmp_path / "export")
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro"),
+                                MountSpec(path="target", mode="rw")])
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(), workspace=ws,
+                                  mount_set=ms, export_root=export)
+        mounts = [p[i + 1] for i, a in enumerate(p) if a == "-v"]
+        assert mounts == [
+            f"{export}:{export}:ro",
+            f"{export}/target:{export}/target",
+        ]
+        assert p[p.index("--workdir") + 1] == export
+
+    def test_mount_set_whole_tree_mode(self, tmp_path):
+        """A `.` entry mounts the whole export with its declared mode (the
+        dogfood's dev/restore/test use rw, review/qa use ro)."""
+        ws = str(tmp_path)
+        export = str(tmp_path / "export")
+        rw = docker_create_payload(run_id="r1", image="img",
+                                   profile=self._profile(), workspace=ws,
+                                   mount_set=resolve_mount_set(
+                                       [MountSpec(path=".", mode="rw")]),
+                                   export_root=export)
+        assert f"{export}:{export}" in rw
+        assert f"{export}:{export}:ro" not in rw
+        ro = docker_create_payload(run_id="r1", image="img",
+                                   profile=self._profile(), workspace=ws,
+                                   mount_set=resolve_mount_set(
+                                       [MountSpec(path=".", mode="ro")]),
+                                   export_root=export)
+        assert f"{export}:{export}:ro" in ro
+
+
+class TestContainerProfileKey:
+    def test_stable_and_ordered(self):
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        p = EgressPolicy(targets=(TargetEntry(host="a.com"),))
+        assert container_profile_key(ms, p) == container_profile_key(ms, p)
+
+    def test_mount_flags_empty_mounts_nothing(self, tmp_path):
+        """Strict-by-default (BR-1.1): an empty mount set mounts nothing."""
+        export = str(tmp_path / "export")
+        flags = mount_set_docker_flags(export, resolve_mount_set([]))
+        assert flags == []
+
+
+class TestUnit5RuntimeEnforcement:
+    """The unit-5 enforcement path: export materialisation, the profile-keyed
+    pool, proxy env injection, and sync-back - all through the fake runner."""
+
+    def _cfg(self, tmp_path, steps=None):
+        from agentic_dev_loop.core.config import PipelineConfig
+        steps = steps or [{"name": "dev", "agent": "dev", "on_pass": "test"},
+                          {"name": "test", "command": "make", "on_pass": "success"}]
+        return PipelineConfig.model_validate({
+            "name": "p", "llm": {"model": "m", "api_key_env": "K"},
+            "agents_dir": "agents", "steps": steps,
+            "lockfiles": ["uv.lock"],
+            "isolation": {"state_dir": str(tmp_path / "iso-state")},
+        })
+
+    def test_startup_materialises_gitfree_export(self, tmp_path, monkeypatch):
+        """BR-2: startup materialises the export under state_dir/exports and
+        the .git dir is absent by construction."""
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("x")
+        (ws / ".git").mkdir()
+        (ws / ".git" / "HEAD").write_text("ref")
+        state_dir = tmp_path / "run-state"
+        cfg = self._cfg(tmp_path)
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""))
+        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner,
+                                  state_dir=state_dir)
+        try:
+            assert sandbox.export_root is not None
+            export = Path(sandbox.export_root)
+            assert export.is_relative_to(state_dir / "exports")
+            assert (export / "src" / "a.py").read_text() == "x"
+            assert not (export / ".git").exists()
+        finally:
+            sandbox.close()
+
+    def test_profile_container_mounts_and_proxy_env(self, tmp_path):
+        """D-1 + BR-5: a step's mount set + egress policy key a pooled
+        container; the proxy env points at the host-gateway (never
+        127.0.0.1), and the exec cwd is the export root."""
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("x")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        try:
+            backend.run(req)
+            run_argv = runner.calls[0]
+            assert run_argv[:2] == ["docker", "run"]
+            assert f"{export}:{export}:ro" in run_argv
+            assert f"{export}/src:{export}/src" not in run_argv
+            proxy_envs = [a for a in run_argv
+                          if a.startswith("HTTP_PROXY=")
+                          or a.startswith("HTTPS_PROXY=")]
+            assert proxy_envs and all("host.docker.internal" in a
+                                      for a in proxy_envs)
+            assert run_argv[run_argv.index("--workdir") + 1] == str(export)
+            exec_argv = runner.calls[1]
+            assert exec_argv[:2] == ["docker", "exec"]
+            assert exec_argv[exec_argv.index("-w") + 1] == str(export)
+            # the profile container is pooled: a second run reuses it
+            backend.run(req)
+            assert len([c for c in runner.calls if c[:2] == ["docker", "run"]]) == 1
+        finally:
+            backend.close()
+
+    def test_rw_step_syncs_back(self, tmp_path):
+        """BR-4: after a declared-rw step, the export changes sync back to the
+        real repo and a sync-back audit record is written host-side."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("orig")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("orig")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        backend._baseline = {"src/a.py": hashlib.sha256(b"orig").hexdigest()}
+        (export / "src" / "a.py").write_text("changed")
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            backend.run(req)
+            assert (ws / "src" / "a.py").read_text() == "changed"
+            audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text()
+            assert "sync_back" in audit
+            assert "src/a.py" in audit
+        finally:
+            backend.close()
+
+    def test_whole_tree_rw_syncs_back_and_cache_untouched(self, tmp_path):
+        """BR-4 + BR-3/F2: a ``.``-rw step (the shipped pipeline's shape)
+        syncs its edits back, while the bind-mounted cache is never classified
+        as a deletion - the real workspace cache survives."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("orig")
+        (ws / "node_modules").mkdir()
+        (ws / "node_modules" / "dep.js").write_text("cache")
+
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("orig")
+        (export / "node_modules").mkdir()  # empty cache mount target
+
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False,
+            export_root=str(export),
+            cache_mounts=[(str(ws / "node_modules"),
+                           f"{export}/node_modules", "rw")])
+        backend._baseline = {"src/a.py": hashlib.sha256(b"orig").hexdigest()}
+        (export / "src" / "a.py").write_text("changed")
+        ms = resolve_mount_set([MountSpec(path=".", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            backend.run(req)
+            assert (ws / "src" / "a.py").read_text() == "changed"
+            assert (ws / "node_modules" / "dep.js").read_text() == "cache"
+            audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text()
+            assert "src/a.py" in audit
+            assert "node_modules" not in audit
+        finally:
+            backend.close()
+
+    def test_sync_back_conflict_is_loud(self, tmp_path):
+        """BR-4.4: a declared-rw path changed in both the export and the real
+        repo since materialisation is a loud failure, never an overwrite."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("external")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("agent")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        backend._baseline = {"src/a.py": hashlib.sha256(b"orig").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            with pytest.raises(SandboxError, match="AE-SBX-016"):
+                backend.run(req)
+            assert (ws / "src" / "a.py").read_text() == "external"
+        finally:
+            backend.close()

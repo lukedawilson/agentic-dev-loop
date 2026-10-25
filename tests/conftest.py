@@ -54,7 +54,12 @@ class FakeAgents:
     def __init__(self, monkeypatch: pytest.MonkeyPatch):
         self.calls: list[dict] = []
         self.script: dict[str, list[tuple]] = {}
-        monkeypatch.setattr("agentic_dev_loop.engine.stages.run_agent", self)
+
+        def _fake(runtime, agent, message, max_iterations=500, step=None):
+            return self._invoke(agent, message, runtime, max_iterations, step)
+
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.Runtime.run_agent", _fake)
 
     def set(self, agent: str, behaviors: list[tuple]) -> None:
         self.script[agent] = list(behaviors)
@@ -65,7 +70,7 @@ class FakeAgents:
     def messages_for(self, agent: str) -> list[str]:
         return [c["message"] for c in self.calls if c["agent"] == agent]
 
-    def __call__(self, agent, message, runtime, max_iterations=500, step=None):
+    def _invoke(self, agent, message, runtime, max_iterations, step):
         self.calls.append({"agent": agent, "message": message,
                            "max_iterations": max_iterations})
         n = sum(1 for c in self.calls if c["agent"] == agent)

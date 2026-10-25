@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- unit-5 workspace egress isolation: per-step mount granularity (strict-by-default
+  `mounts:` with `rw`/`ro`), per-policy egress allowlists via an engine-managed
+  asyncio proxy, `.git`-free copy-based StepWorkspace, git-aware sync-back, and
+  the `package-registries` preset (pypi/npm/NuGet/cargo + VCS)
+
+### Changed
+
+- `StepConfig` gains `mounts` + `egress` (validated at load); `network: true` now
+  routes through a per-policy egress proxy (host-gateway + `HTTP(S)_PROXY` env)
+- `run_agent` moved onto `Runtime` as a method (no module-level shim)
+- dogfood `pipeline.yaml` declares `mounts`/`egress` per step; restore references
+  the `package-registries` preset
+
+### Breaking
+
+- strict-by-default mounts (NFR-5.3): a step with no `mounts:` mounts nothing.
+  Add explicit `mounts:` to each step - old default `{workspace}` rw +
+  unrestricted `network: true` maps to `mounts: [{path: ".", mode: rw}]` plus an
+  `egress:` declaration. The shipped dogfood pipeline is updated as the
+  migration example.
+
 ## [1.0.0a17] - 2026-10-25
 
 ### Changed

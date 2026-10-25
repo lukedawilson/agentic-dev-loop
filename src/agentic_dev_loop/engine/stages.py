@@ -33,7 +33,9 @@ from openhands.sdk import Conversation
 from .agents import load_agent, register_sandbox_terminal
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
 from .deps import extension_message, parse_missing_dependencies, policy_injection
+from .egress_policy import assemble_egress_policy
 from .isolation import SandboxExecutionRequest, command_argv, resolve_sandbox_env
+from .mounts import resolve_mount_set
 from .outputs import CapturedOutput
 from .secrets import redact_values, step_secret_env
 from agentic_dev_loop.core.verdict import Verdict
@@ -63,7 +65,78 @@ class Runtime:
     state_dir: Path
     workspace: Path
     sandbox: Sandbox | None = None
+    # unit-5: the .git-free export root sandboxed steps run in (BR-2); None =
+    # the real workspace (no export materialised - fake/legacy paths).
+    sandbox_cwd: Path | None = None
     secrets: dict[str, str] = field(default_factory=dict)
+
+    def run_agent(self, agent_name: str, message: str,
+                  max_iterations: int = DEFAULT_MAX_ITERATIONS,
+                  step: StepConfig | None = None) -> AgentResult:
+        """Run one agent stage. The agent file's body is delivered as a system
+        message suffix (AgentContext); the user turn carries only the task.
+        Any failure - setup or run - is reported to <state_dir>/last-error.md.
+
+        For steps declaring outputs (produces/artifact), the final response is
+        captured from conv.state.events (before conv.close()) and written by the
+        pipeline to the declared artifact path - the agent never files its own
+        report."""
+        conv = None
+        try:
+            from openhands.sdk.conversation.state import ConversationExecutionStatus
+
+            if self.sandbox is not None:
+                if step is not None:
+                    cwd, mount_set, egress_policy = _step_sandbox(self, step)
+                else:
+                    cwd, mount_set, egress_policy = (self.workspace, None, None)
+                register_sandbox_terminal(
+                    self.sandbox,
+                    env=step.env if step is not None else None,
+                    workspace=str(cwd),
+                    pipeline=self.cfg.name,
+                    step=step.name if step is not None else None,
+                    network=step.network if step is not None else False,
+                    mount_set=mount_set,
+                    egress_policy=egress_policy,
+                    secrets=(step_secret_env(self.cfg, step, self.secrets)
+                             if step is not None else None))
+            agent = load_agent(self.agents_dir, agent_name, self.llm)
+            conv = Conversation(agent=agent, workspace=str(self.workspace),
+                                max_iteration_per_run=max_iterations)
+            conv.send_message(message)
+            conv.run()
+
+            truncated = conv.state.execution_status != ConversationExecutionStatus.FINISHED
+
+            if step is not None and (step.artifact is not None or step.produces):
+                artifact = step.artifact if step.artifact is not None else step.produces[0]
+                captured = CapturedOutput.from_agent_result(
+                    conv, artifact, self.state_dir,
+                    redactions=tuple(self.secrets.values()))
+                if captured.is_err():
+                    return AgentResult(ok=True, truncated=truncated,
+                                       capture_error=captured.error.value)
+                write_result = captured.unwrap().write()
+                if write_result.is_err():
+                    raise RuntimeError(
+                        f"captured output write failed: {write_result.error.value}")
+                return AgentResult(ok=True, truncated=truncated,
+                                   response=captured.unwrap().raw_text)
+            return AgentResult(ok=True, truncated=truncated)
+        except Exception:
+            err = redact_values(traceback.format_exc(), self.secrets.values())
+            print(err[-4000:], file=sys.stderr, flush=True)
+            self.state_dir.mkdir(parents=True, exist_ok=True)
+            error_path = self.state_dir / LAST_ERROR
+            error_path.write_text(
+                f"# Agent run failed\n\n```\n{err[-4000:]}\n```",
+                encoding="utf-8")
+            print(f"Agent run failed - error details written to {error_path}", flush=True)
+            return AgentResult(ok=False, truncated=False)
+        finally:
+            if conv is not None:
+                conv.close()
 
 
 def prompt_dir(runtime: Runtime) -> str:
@@ -77,6 +150,16 @@ def prompt_dir(runtime: Runtime) -> str:
         return runtime.state_dir.relative_to(runtime.workspace).as_posix()
     except ValueError:
         return runtime.state_dir.as_posix()
+
+
+def _step_sandbox(runtime: Runtime, step: StepConfig):
+    """Resolve a step's sandbox execution context (unit-5): the cwd inside the
+    export (or the workspace when no export exists), plus the resolved mount
+    set (BR-1) and egress policy (BR-5/BR-8). Pure resolution - no I/O."""
+    cwd = runtime.sandbox_cwd or runtime.workspace
+    mount_set = resolve_mount_set(step.mounts)
+    egress_policy = assemble_egress_policy(step.egress)
+    return cwd, mount_set, egress_policy
 
 
 @dataclass
@@ -94,81 +177,22 @@ class AgentResult:
     capture_error: str | None = None
 
 
-def run_agent(agent_name: str, message: str, runtime: Runtime,
-              max_iterations: int = DEFAULT_MAX_ITERATIONS,
-              step: StepConfig | None = None) -> AgentResult:
-    """Run one agent stage. The agent file's body is delivered as a system
-    message suffix (AgentContext); the user turn carries only the task.
-    Any failure - setup or run - is reported to <state_dir>/last-error.md.
-
-    For steps declaring outputs (produces/artifact), the final response is
-    captured from conv.state.events (before conv.close()) and written by the
-    pipeline to the declared artifact path - the agent never files its own
-    report."""
-    conv = None
-    try:
-        from openhands.sdk.conversation.state import ConversationExecutionStatus
-
-        if runtime.sandbox is not None:
-            register_sandbox_terminal(
-                runtime.sandbox,
-                env=step.env if step is not None else None,
-                workspace=str(runtime.workspace),
-                pipeline=runtime.cfg.name,
-                step=step.name if step is not None else None,
-                network=step.network if step is not None else False,
-                secrets=(step_secret_env(runtime.cfg, step, runtime.secrets)
-                         if step is not None else None))
-        agent = load_agent(runtime.agents_dir, agent_name, runtime.llm)
-        conv = Conversation(agent=agent, workspace=str(runtime.workspace),
-                            max_iteration_per_run=max_iterations)
-        conv.send_message(message)
-        conv.run()
-
-        truncated = conv.state.execution_status != ConversationExecutionStatus.FINISHED
-
-        if step is not None and (step.artifact is not None or step.produces):
-            artifact = step.artifact if step.artifact is not None else step.produces[0]
-            captured = CapturedOutput.from_agent_result(
-                conv, artifact, runtime.state_dir,
-                redactions=tuple(runtime.secrets.values()))
-            if captured.is_err():
-                return AgentResult(ok=True, truncated=truncated,
-                                   capture_error=captured.error.value)
-            write_result = captured.unwrap().write()
-            if write_result.is_err():
-                raise RuntimeError(
-                    f"captured output write failed: {write_result.error.value}")
-            return AgentResult(ok=True, truncated=truncated,
-                               response=captured.unwrap().raw_text)
-        return AgentResult(ok=True, truncated=truncated)
-    except Exception:
-        err = redact_values(traceback.format_exc(), runtime.secrets.values())
-        print(err[-4000:], file=sys.stderr, flush=True)
-        runtime.state_dir.mkdir(parents=True, exist_ok=True)
-        error_path = runtime.state_dir / LAST_ERROR
-        error_path.write_text(
-            f"# Agent run failed\n\n```\n{err[-4000:]}\n```",
-            encoding="utf-8")
-        print(f"Agent run failed - error details written to {error_path}", flush=True)
-        return AgentResult(ok=False, truncated=False)
-    finally:
-        if conv is not None:
-            conv.close()
-
-
 def _run_command(command: str, workspace: Path, timeout: float,
                  env: dict[str, str] | None = None,
                  sandbox: Sandbox | None = None,
                  pipeline: str | None = None,
                  step: str | None = None,
-                 network: bool = False) -> tuple[int | None, str, bool]:
+                 network: bool = False,
+                 mount_set=None,
+                 egress_policy=None,
+                 cwd: Path | None = None) -> tuple[int | None, str, bool]:
     """Run a command step in the workspace, capturing combined stdout/stderr.
 
     With a ``Sandbox`` the command routes through the isolation boundary: git
-    guard (inside ``Sandbox.run``) → ``SandboxExecutionRequest`` → exec. Without
-    one the unit-2 host-subprocess path runs unchanged (backward compatible):
-    no shell metacharacters → argv-style (``shell=False``); metacharacters →
+    guard (inside ``Sandbox.run``) → ``SandboxExecutionRequest`` (carrying the
+    resolved mount set + egress policy, unit-5) → exec. Without one the unit-2
+    host-subprocess path runs unchanged (backward compatible): no shell
+    metacharacters → argv-style (``shell=False``); metacharacters →
     ``shell=True``; both under the scrubbed ``child_env`` (BR-4).
 
     Returns ``(exit_code, output, timed_out)``. ``exit_code`` is None when the
@@ -176,8 +200,9 @@ def _run_command(command: str, workspace: Path, timeout: float,
     ``timeout(1)`` exit 124)."""
     if sandbox is not None:
         request = SandboxExecutionRequest(
-            argv=command_argv(command), cwd=str(workspace), env=env or {},
-            timeout=timeout, pipeline=pipeline, step=step, network=network)
+            argv=command_argv(command), cwd=str(cwd or workspace), env=env or {},
+            timeout=timeout, pipeline=pipeline, step=step, network=network,
+            mount_set=mount_set, egress_policy=egress_policy)
         result = sandbox.run(request)
         return result.exit_code, result.stdout + result.stderr, result.timed_out
     if needs_shell(command):
@@ -326,8 +351,8 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                                 state["notes"],
                                 artifacts=state.get("artifacts", {}))
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
-        result = run_agent(step.agent, message, runtime,
-                           max_iterations=max_iterations, step=step)
+        result = runtime.run_agent(step.agent, message,
+                                    max_iterations=max_iterations, step=step)
         if not result.ok:
             print(f"[{subject}] {step.name} agent failed on attempt {attempt}.", flush=True)
             return {"failed": True, "failed_step": step.name}
@@ -414,6 +439,7 @@ def make_command_node(runtime: Runtime, step: StepConfig):
     agent sees exactly what the gate emitted."""
     timeout = step.timeout if step.timeout is not None else DEFAULT_COMMAND_TIMEOUT
     sandbox = runtime.sandbox
+    cwd, mount_set, egress_policy = _step_sandbox(runtime, step)
     if sandbox is not None:
         env = resolve_sandbox_env(
             step.env, secrets=step_secret_env(runtime.cfg, step, runtime.secrets))
@@ -428,7 +454,8 @@ def make_command_node(runtime: Runtime, step: StepConfig):
             exit_code, output, timed_out = _run_command(
                 step.command, runtime.workspace, timeout, env,
                 sandbox=sandbox, pipeline=runtime.cfg.name, step=step.name,
-                network=step.network)
+                network=step.network, mount_set=mount_set,
+                egress_policy=egress_policy, cwd=cwd)
         except Exception:
             print(redact_values(traceback.format_exc(),
                                 runtime.secrets.values())[-4000:],
@@ -493,6 +520,7 @@ def make_action_node(runtime: Runtime, step: StepConfig):
             "actions must execute inside the sandbox, never the host")
     timeout = DEFAULT_COMMAND_TIMEOUT
     env = resolve_sandbox_env(step.env)
+    cwd, mount_set, egress_policy = _step_sandbox(runtime, step)
 
     def node(state: dict) -> dict:
         attempt = state["attempt"]
@@ -508,7 +536,8 @@ def make_action_node(runtime: Runtime, step: StepConfig):
         try:
             exit_code, output, timed_out = _run_command(
                 command, runtime.workspace, timeout, env, sandbox=runtime.sandbox,
-                pipeline=runtime.cfg.name, step=step.name, network=step.network)
+                pipeline=runtime.cfg.name, step=step.name, network=step.network,
+                mount_set=mount_set, egress_policy=egress_policy, cwd=cwd)
         except Exception:
             print(redact_values(traceback.format_exc(),
                                 runtime.secrets.values())[-4000:],

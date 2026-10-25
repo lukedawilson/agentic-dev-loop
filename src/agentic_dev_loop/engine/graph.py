@@ -26,7 +26,7 @@ from .llm import build_llm
 from .loaders import resolve_docs
 from .secrets import resolve_secrets, scan_env_files
 from .registry import (Registry, default_registry, load_extensions,
-                       validate_action_network)
+                       validate_action_mounts_egress, validate_action_network)
 from .stages import (Runtime, clear_attempt_artifacts,
                      make_action_node, make_agent_node, make_bump_node,
                      make_command_node, make_router, success_node)
@@ -78,6 +78,8 @@ def build_graph(runtime: Runtime, checkpointer=None):
                 f"(registered: {sorted(known_actions)})")
         validate_action_network(step.name, step.action, step.network,
                                 runtime.registry)
+        validate_action_mounts_egress(step.name, step.action, step.mounts,
+                                      step.egress, runtime.registry)
     graph = StateGraph(LoopState)
     for step in runtime.cfg.steps:
         if step.kind == "agent":
@@ -149,7 +151,8 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
     # pre-provision all declared setups, BEFORE the graph builds. Zero infra
     # operations mid-run; the only sandbox call during steps is run(request).
     sandbox = startup_sandbox(cfg, workspace=Path.cwd(),
-                               refresh=getattr(args, "refresh", False))
+                               refresh=getattr(args, "refresh", False),
+                               state_dir=state_dir)
     try:
         return _run_pipeline(cfg, base, registry, state_dir, max_attempts,
                              args, viz_bus, sandbox, resolved_secrets,
@@ -160,9 +163,11 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
 
 def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                   sandbox, resolved_secrets, tooling_paths) -> tuple[bool, int]:
+    export_root = getattr(sandbox, "export_root", None)
     runtime = Runtime(cfg=cfg, registry=registry, llm=build_llm(cfg.llm),
                       agents_dir=base / cfg.agents_dir, state_dir=state_dir,
                       workspace=Path.cwd(), sandbox=sandbox,
+                      sandbox_cwd=Path(export_root) if export_root else None,
                       secrets=resolved_secrets)
     state_dir.mkdir(parents=True, exist_ok=True)
 

@@ -65,13 +65,15 @@ class SandboxTerminalExecutor(ToolExecutor):
     def __init__(self, sandbox: "Sandbox", *, workspace: str = "",
                  env: dict[str, str] | None = None,
                  pipeline: str | None = None, step: str | None = None,
-                 network: bool = False):
+                 network: bool = False, mount_set=None, egress_policy=None):
         self._sandbox = sandbox
         self._workspace = workspace
         self._env = env or {}
         self._pipeline = pipeline
         self._step = step
         self._network = network
+        self._mount_set = mount_set
+        self._egress_policy = egress_policy
 
     def __call__(self, action, conversation=None):
         from openhands.tools.terminal import TerminalObservation
@@ -92,7 +94,8 @@ class SandboxTerminalExecutor(ToolExecutor):
         request = SandboxExecutionRequest(
             argv=command_argv(action.command), cwd=self._workspace,
             env=self._env, timeout=action.timeout,
-            pipeline=self._pipeline, step=self._step, network=self._network)
+            pipeline=self._pipeline, step=self._step, network=self._network,
+            mount_set=self._mount_set, egress_policy=self._egress_policy)
         result = self._sandbox.run(request)
         output = result.stdout + result.stderr
         return TerminalObservation.from_text(
@@ -111,6 +114,7 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
                               workspace: str = "", pipeline: str | None = None,
                               step: str | None = None,
                               network: bool = False,
+                              mount_set=None, egress_policy=None,
                               secrets: dict[str, str] | None = None) -> None:
     """Per-run re-registration of the `terminal` name (KD-4): a callable
     factory that builds the SDK terminal with a `SandboxTerminalExecutor`.
@@ -127,6 +131,7 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
             conv_state,
             executor=SandboxTerminalExecutor(
                 sandbox, workspace=workspace, env=resolved_env,
-                pipeline=pipeline, step=step, network=network))
+                pipeline=pipeline, step=step, network=network,
+                mount_set=mount_set, egress_policy=egress_policy))
 
     register_tool("terminal", factory)

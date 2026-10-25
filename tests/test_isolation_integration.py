@@ -8,12 +8,15 @@ import shutil
 
 import pytest
 
-from agentic_dev_loop.core.config import IsolationConfig
+from agentic_dev_loop.core.config import IsolationConfig, MountSpec
+from agentic_dev_loop.engine.egress_policy import EgressPolicy
 from agentic_dev_loop.engine.isolation import (
     DockerBackend, SandboxExecutionRequest, SandboxError,
     SubprocessRunner, probe_docker, read_stamp, resolve_effective_profile,
     write_stamp,
 )
+from agentic_dev_loop.engine.mounts import resolve_mount_set
+from agentic_dev_loop.engine.step_workspace import StepWorkspace
 
 pytestmark = pytest.mark.docker
 
@@ -292,5 +295,64 @@ class TestRelocatedVenvE2E:
             assert result.exit_code == 0, result.stderr
             assert "ok" in result.stdout
             assert read_stamp(stamp_dir, key)
+        finally:
+            b.close()
+
+
+class TestExportAndMountsE2E:
+    """unit-5: the profile-keyed pool over a real export. A step mounts only
+    its declared `mounts:` (ro paths reject writes; rw paths land and sync
+    back to the real repo)."""
+
+    def _export_backend(self, tmp_path):
+        reason = _docker_available()
+        if reason is not None:
+            pytest.skip(reason)
+        inspect = SubprocessRunner().run(
+            ["docker", "image", "inspect", TEST_IMAGE, "--format", "{{.Id}}"],
+            timeout=30)
+        if inspect.exit_code != 0:
+            pytest.skip(f"integration image {TEST_IMAGE!r} not present locally")
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("orig")
+        (ws / "ro").mkdir()
+        (ws / "ro" / "f").write_text("read-only")
+        export = tmp_path / "state" / "exports" / "r1"
+        ws_obj = StepWorkspace.materialise(ws, [], "linux", export)
+        profile = resolve_effective_profile(IsolationConfig(image=TEST_IMAGE))
+        b = DockerBackend(image=TEST_IMAGE, workspace=str(ws),
+                          iso_state_dir=str(tmp_path / "state"), profile=profile,
+                          export_root=str(export),
+                          cache_mounts=ws_obj.mount_points()[1:])
+        b.ensure_image()
+        b.create_execution_container()
+        return b, ws, export
+
+    def _req(self, export, argv, mount_specs):
+        return SandboxExecutionRequest(
+            argv=argv, cwd=str(export),
+            env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"},
+            mount_set=resolve_mount_set(mount_specs),
+            egress_policy=EgressPolicy())
+
+    def test_ro_mount_rejects_write(self, tmp_path):
+        b, _ws, export = self._export_backend(tmp_path)
+        try:
+            req = self._req(export, ["sh", "-c", "printf x > ro/f"],
+                            [MountSpec(path="ro", mode="ro")])
+            result = b.run(req)
+            assert result.exit_code != 0  # read-only mount: EROFS
+        finally:
+            b.close()
+
+    def test_rw_mount_syncs_back(self, tmp_path):
+        b, ws, export = self._export_backend(tmp_path)
+        try:
+            req = self._req(export, ["sh", "-c", "printf changed > src/a.py"],
+                            [MountSpec(path="src", mode="rw")])
+            result = b.run(req)
+            assert result.exit_code == 0, result.stderr
+            assert (ws / "src" / "a.py").read_text() == "changed"
         finally:
             b.close()
