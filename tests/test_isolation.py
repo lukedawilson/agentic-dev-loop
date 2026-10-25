@@ -1424,6 +1424,30 @@ class TestUnit5RuntimeEnforcement:
         finally:
             backend.close()
 
+    def test_proxy_death_fails_closed(self, tmp_path):
+        """BR-11.3: a networked profile whose egress proxy has died fails the
+        request loudly - the enforcement point being down is never a silent
+        degradation."""
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        try:
+            backend.run(req)
+            prof = next(iter(backend._pool.values()))
+            assert prof.proxy is not None
+            prof.proxy.stop()
+            with pytest.raises(SandboxError, match="proxy"):
+                backend.run(req)
+        finally:
+            backend.close()
+
     def test_rw_step_syncs_back(self, tmp_path):
         """BR-4: after a declared-rw step, the export changes sync back to the
         real repo and a sync-back audit record is written host-side."""

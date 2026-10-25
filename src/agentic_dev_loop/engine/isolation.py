@@ -970,6 +970,11 @@ class DockerBackend(Sandbox):
                 "AE-SBX-013: networked execution requested but no networked "
                 "container is running - declare `network: true` on the step "
                 "(docs/setup.md §3)")
+        if request.network and prof.proxy is not None and not prof.proxy.is_alive:
+            raise SandboxError(
+                "AE-SBX-018: the egress proxy for this profile has stopped - "
+                "failing closed (BR-11.3): no networked execution runs "
+                "without egress enforcement")
         result = self._exec(request, prof.name)
         if mount_set.rw_paths() and self._export_root is not None:
             self._sync_back(mount_set)

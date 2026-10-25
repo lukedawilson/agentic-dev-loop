@@ -42,6 +42,11 @@ class EgressProxy:
         self._writers: set = set()
         self._closing = False
 
+    @property
+    def is_alive(self) -> bool:
+        """True while the proxy's server thread is running."""
+        return self._thread is not None and self._thread.is_alive()
+
     def start(self, host: str = "127.0.0.1", port: int = 0) -> int:
         """Bind the proxy on ``host:port`` (ephemeral when port=0) and serve
         in a background thread. Returns the bound port."""
