@@ -382,3 +382,5 @@
 - $(date -u +%Y-%m-%dT%H:%M:%SZ) - Unit-5 Code Generation Part 1 STARTED: code-generation plan being drafted (TDD steps, story traceability, files created/modified/unchanged, key decisions), mirroring the unit-4 code-generation-plan structure. No code is written before explicit user approval.
 
 - $(date -u +%Y-%m-%dT%H:%M:%SZ) - Unit-5 Code Generation Part 1: plan written at aidlc-docs/construction/plans/unit-5-code-generation-plan.md (14 TDD steps, BR/NFR traceability, files created/modified/unchanged, KD-1..7, 026-scrub coordination note). AWAITING explicit user approval before any code per repo AGENTS.md.
+
+- $(date -u +%Y-%m-%dT%H:%M:%SZ) - Planning docs committed and pushed (commit 47777fd, main): unit-5 FD/NFR/ID plans + artifacts, unit-5 code-generation plan, unit-6/7 intent docs, commercial-name scrub of planning docs, 35 files. Pre-commit em-dash check passed. Code Generation Part 1 still AWAITING explicit user approval before any code.
