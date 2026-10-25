@@ -31,6 +31,7 @@ steps:
   - name: dev
     agent: dev
     produces: implementation-summary.md   # hygiene-tracked, no verdict
+    mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
     on_pass: restore
 
   - name: restore
@@ -45,6 +46,8 @@ steps:
     command: .venv-sandbox/bin/pip install --upgrade pip && .venv-sandbox/bin/pip install -e ".[dev]" && .venv-sandbox/bin/pip-audit --skip-editable
     timeout: 600
     network: true
+    mounts: [{path: ".", mode: rw}]
+    egress: { presets: [package-registries] }   # BR-9: one preset, all toolchains
     on_pass: test
     on_fail: { goto: dev, retry: true }
 
@@ -53,6 +56,7 @@ steps:
     setup: |-
       { [ -x .venv-sandbox/bin/python ] && .venv-sandbox/bin/python -c 'import sys' ; } || { rm -rf .venv-sandbox/* && python -m venv .venv-sandbox ; } && .venv-sandbox/bin/pip install -e ".[dev]"
     timeout: 600
+    mounts: [{path: ".", mode: rw}]
     on_pass: review
     on_fail: { goto: dev, retry: true }
 
@@ -60,6 +64,7 @@ steps:
     agent: review
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
+    mounts: [{path: ".", mode: ro}]
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -68,6 +73,7 @@ steps:
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
     max_iterations: 200
+    mounts: [{path: ".", mode: ro}]
     on_pass: commit
     on_fail: { goto: dev, retry: true }
     # UNVERIFIABLE moves on like pass (never rewinds, never retries): the run

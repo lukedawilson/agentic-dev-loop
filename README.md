@@ -30,7 +30,7 @@ flowchart LR
 | Feature | What it gives you |
 | --- | --- |
 | **Stage-gated agent loop** | Agents do the work, test stages verify it, and the pipeline only advances when each stage passes its gates - looping back with full context when one fails. |
-| **Kernel-level sandboxing** | Agent work and command stages run isolated from your machine: [no network access **by default** - authors opt specific stages in](#per-stage-networking), no writes outside your workspace. No sandbox available → the run stops instead of degrading. |
+| **Kernel-level sandboxing** | Agent work and command stages run isolated from your machine: [no network access **by default** - authors opt specific stages in](#per-stage-networking), writes only to declared `mounts:`, and no access to `.git` (steps run against a fresh export). No sandbox available → the run stops instead of degrading. |
 | **Crash-safe resume** | Interrupt a run at any time and pick it up later - finished stages stay finished, and you resume from exactly where it stopped. |
 | **Live graph visualisation** | Follow every run in the browser: stage status, pass/fail verdicts, retry cycles, and live console output as it happens. |
 | **Extensible** | Plug in your own actions, tools, and document loaders to adapt the loop to your projects. |
@@ -51,16 +51,17 @@ LLM timeout (agent runs are long).
 | LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. |
 
 ```bash
-pip install "agentic-dev-loop==1.0.0a9"
+pip install "agentic-dev-loop==1.0.0a17"
 agentic-dev-loop --version
 ```
 
 The canonical consumer install is **pipx**, which puts the engine's venv
-*outside* the workspace - the sandbox mount set is exactly `{workspace}`, so an
-out-of-workspace install is unmounted and never agent-writable:
+*outside* the workspace - the sandbox mounts only the step's declared `mounts:`
+from a fresh export, so an out-of-workspace install is unmounted and never
+agent-writable:
 
 ```bash
-pipx install "agentic-dev-loop==1.0.0a9"
+pipx install "agentic-dev-loop==1.0.0a17"
 ```
 
 If you install with `uv` shortly after a release, pass `--refresh` - PyPI
@@ -69,7 +70,7 @@ reuses a pre-upload snapshot of the index for up to 10 minutes, reporting
 "no version of agentic-dev-loop==X.Y.Z" for a version that is already live:
 
 ```bash
-uv pip install --refresh "agentic-dev-loop==1.0.0a9"
+uv pip install --refresh "agentic-dev-loop==1.0.0a17"
 ```
 
 On the first run the engine pulls the **digest-pinned** dev image
@@ -169,7 +170,8 @@ steps:
 | `agent:` / `command:` / `action:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
-| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox (command steps, network ON, stamp-cached); `network: true` grants egress to a command or agent step (default off) - see [Per-stage networking](#per-stage-networking). |
+| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox (command steps, network ON, stamp-cached); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
+| `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
 | `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [Secrets](#secrets--refs-only-never-values). |
 | `isolation:` (optional) | Configures the sandbox - image override, resource caps, `allow_git_mutations`, `seccomp_profile`. It can never disable it. See [browser sandbox](docs/browser-sandbox.md). |
 | `state_dir` | Defaults to `~/.agentic-dev-loop/runs/<pipeline-hash>/` - artifacts and checkpoints live outside the sandbox mount. |
@@ -220,26 +222,45 @@ steps:
 
 The sandbox is network-off by default. A step that legitimately needs egress -
 a QA step that curls a service it booted, an agent that must hit an API or
-fetch package metadata mid-conversation - declares it explicitly:
+fetch package metadata mid-conversation - declares it explicitly, and names
+exactly what it may reach:
 
 ```yaml
 steps:
   - name: fetch-docs
     command: curl -fsSL https://example.com/spec.json -o spec.json
-    network: true            # egress for this step only
+    mounts: [{ path: ".", mode: rw }]      # the cwd + a place to write spec.json
+    network: true                          # egress for this step only
+    egress: { targets: [example.com] }     # ...and only these hosts
+
+  - name: restore
+    command: .venv-sandbox/bin/pip install -e ".[dev]"
+    mounts: [{ path: ".", mode: rw }]
+    network: true
+    egress: { presets: [package-registries] }   # pypi/npm/NuGet/cargo + VCS
 ```
 
 - **Default off.** Every step runs with `--network none` unless it declares
-  `network: true`. A networked step runs in a second, otherwise-identical
-  sandbox container (`--read-only`, `--cap-drop ALL`, single workspace mount)
-  on the Docker bridge network - the default network-none container is always
-  created too, so no infrastructure work happens mid-run.
+  `network: true`.
+- **A networked step that writes output must also declare a writable mount.**
+  `mounts:` is strict-by-default: with no `mounts:` a step mounts nothing, so
+  a command like `curl ... -o spec.json` has no writable cwd to write into.
+  Declare `mounts: [{ path: ".", mode: rw }]` (or a narrower rw path) for any
+  networked step that needs to produce files.
+- **`network: true` is now scoped by the `egress:` allowlist.** A networked
+  step's traffic is forced through an engine-run per-policy egress proxy
+  (injected via `HTTP_PROXY`/`HTTPS_PROXY` and reached through the
+  `host.docker.internal` host-gateway); a request to an undeclared host is
+  denied and logged as an enforcement event. The engine never adds an
+  undeclared target. `egress: { class: browser }` is the explicit
+  broad-but-logged class (every connection logged, nothing filtered); command
+  and agent steps default to a strict allowlist.
 - **Command, agent, and sandbox-action steps** may declare it. The host-side
   built-in `commit` action never takes it (refused once the registry is known).
-- **Author opt-in is the control.** A networked step gives its agent raw
-  egress for that stage; the default stays network-off everywhere. Reserve it
-  for stages that need it (QA, integration). The residual risk is documented
-  in [docs/setup.md](docs/setup.md).
+- **Author opt-in is the control.** A networked step grants its agent egress
+  to exactly the declared hosts for that stage; the default stays network-off
+  everywhere. Reserve it for stages that need it (QA, integration). The
+  residual risks are documented in [docs/setup.md](docs/setup.md).
 
 ## Dependency policy (locked by default)
 
@@ -365,7 +386,7 @@ the loop is building.
 ```bash
 git clone git@github.com:lukedawilson/agentic-dev-loop.git
 cd agentic-dev-loop
-pipx install "agentic-dev-loop==1.0.0a9"   # engine venv OUTSIDE the workspace (self-check)
+pipx install "agentic-dev-loop==1.0.0a17"   # engine venv OUTSIDE the workspace (self-check)
 export OPENAI_API_KEY=...           # set your LLM key in the host env (no .env in the repo)
 python -m pytest tests/ -q            # fast suite (in-repo .venv is for tests only)
 python -m pytest tests/ -q -m "not docker"   # skip engine-dependent tests
