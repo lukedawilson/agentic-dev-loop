@@ -28,6 +28,25 @@ shipped.
    `UNVERIFIABLE`, add an `## UNVERIFIABLE` section listing each skipped
    check and the blocking reason.
 
+## PROBE-PLAN RULES
+
+- **Variant matrix.** Enumerate the meaningful values of every parameter a
+  changed surface exposes - each enum/flag value, optional fields present and
+  absent, numeric boundaries - and probe at least one behaviour per value. One
+  representative value per surface is not coverage.
+- **Outcome probes.** A probe ends at an observable outcome, never at "command
+  accepted". A task or operation id is not an outcome - poll to a terminal
+  state and assert the result. A mutation is not an outcome - re-read the
+  stored state and assert it matches the intent.
+- **Concurrency probes.** For operations that touch shared mutable state (a
+  run directory, an operation registry, a store), run two concurrent calls and
+  assert the documented semantics - both complete correctly, or the second
+  fails with an explicit error naming the conflict. A silent join, dropped
+  call, or lost update is a FAIL.
+- **Error messages are assertions.** Record the error text in the report row:
+  a correct exit code with a generic or misleading message is a FAIL - the
+  message is how a caller self-corrects.
+
 ## RULES
 
 - NEVER modify any file under src/ or any project file. Report-only. Your
