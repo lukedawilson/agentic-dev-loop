@@ -1271,16 +1271,20 @@ def resolve_image_ref(image: str, environ: Mapping[str, str] | None = None) -> s
 
 
 def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
+                    state_dir: str | Path,
                     runner: CommandRunner | None = None,
-                    refresh: bool | None = None,
-                    state_dir: str | Path | None = None) -> Sandbox:
+                    refresh: bool | None = None) -> Sandbox:
     """Eager startup sequence (Q2): probe → image → materialise export →
     backend → ensure_image → create+start → pre-provision every declared setup
     (stamp-cached).
 
     ``state_dir`` (the run state dir) hosts the .git-free export under
-    ``exports/<run-id>/``, materialised here (BR-2/BR-3); when omitted the
-    legacy workspace model applies (integration tests, programmatic calls)."""
+    ``exports/<run-id>/``, materialised here (BR-2/BR-3). It is required:
+    the runtime always resolves a mount set for steps, and enforcement needs
+    the export (AE-SBX-017), so there is no legacy fallback through this
+    entry point. The legacy workspace model is reachable only through the
+    direct Sandbox API (DockerBackend without an export + requests carrying
+    ``mount_set=None``), which is integration-tests-only."""
     seccomp_profile = resolved_seccomp_profile(cfg)
     probe_docker(runner)
     profile = resolve_effective_profile(cfg.isolation)
@@ -1290,16 +1294,13 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     sandbox_venv_dir = resolve_sandbox_venv_dir(
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
 
-    export_root: str | None = None
-    cache_mounts: list[tuple[str, str, str]] | None = None
-    if state_dir is not None:
-        export_root = str(Path(state_dir) / "exports" / uuid.uuid4().hex)
-        cache_paths = discover_cache_paths(workspace, sandbox_venv_dir)
-        ws = StepWorkspace.materialise(
-            workspace, cache_paths, sys.platform, export_root,
-            state_dir=str(state_dir))
-        export_root = str(ws.export_root)
-        cache_mounts = ws.mount_points()[1:]  # skip the export root itself
+    export_root = str(Path(state_dir) / "exports" / uuid.uuid4().hex)
+    cache_paths = discover_cache_paths(workspace, sandbox_venv_dir)
+    ws = StepWorkspace.materialise(
+        workspace, cache_paths, sys.platform, export_root,
+        state_dir=str(state_dir))
+    export_root = str(ws.export_root)
+    cache_mounts = ws.mount_points()[1:]  # skip the export root itself
 
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),

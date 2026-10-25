@@ -975,6 +975,24 @@ class TestStartupSandbox:
             "isolation": {"state_dir": str(tmp_path / "iso-state")},
         })
 
+    def test_state_dir_required(self, tmp_path, monkeypatch):
+        """The run state_dir is mandatory: the runtime always resolves a
+        mount set for steps, so enforcement needs the materialised export
+        (AE-SBX-017). Omitting state_dir fails at the call - never silently
+        degrades to the legacy workspace model."""
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path)
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner()
+        with pytest.raises(TypeError, match="state_dir"):
+            startup_sandbox(cfg, workspace=ws, runner=runner)  # type: ignore[call-arg]
+        assert runner.calls == []
+
     def test_sequence_and_provision(self, tmp_path, monkeypatch):
         from agentic_dev_loop.engine import isolation
         from agentic_dev_loop.engine.isolation import startup_sandbox
@@ -992,7 +1010,7 @@ class TestStartupSandbox:
             ok(""),               # docker run -d --rm (exec container)
             ok(""),               # docker run provision
         )
-        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         try:
             kinds = [c[1] for c in runner.calls]
             assert kinds == ["version", "info", "image", "run", "run"]
@@ -1006,9 +1024,10 @@ class TestStartupSandbox:
             sandbox.close()
 
     def test_network_declaration_starts_second_container(self, tmp_path, monkeypatch):
-        """014: declaring `network: true` on any step makes eager startup
-        create the bridge-network container in addition to the default
-        network-none one - the default (no declaration) stays single-container."""
+        """014/unit-5: startup creates only the base network-none export
+        container. The bridge-network container for a network-declaring step
+        starts lazily in the profile pool on the first networked request
+        (covered by test_isolation_integration), never eagerly at startup."""
         from agentic_dev_loop.core.config import PipelineConfig
         from agentic_dev_loop.engine.isolation import startup_sandbox
 
@@ -1030,15 +1049,13 @@ class TestStartupSandbox:
             ok("1.54"),           # probe version
             ok("linux"),          # probe ostype
             ok(""),               # image inspect
-            ok(""),               # docker run -d --rm (network-none exec)
-            ok(""),               # docker run -d --rm (networked exec)
+            ok(""),               # docker run -d --rm (base export container)
         )
-        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         try:
             run_argv = [c for c in runner.calls if c[1] == "run"]
-            assert len(run_argv) == 2
+            assert len(run_argv) == 1
             assert "--network" in run_argv[0] and "none" in run_argv[0]
-            assert "--network" in run_argv[1] and "bridge" in run_argv[1]
         finally:
             sandbox.close()
 
@@ -1059,20 +1076,24 @@ class TestStartupSandbox:
 
         # Without refresh the stamp is a hit: no provision container runs.
         runner = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""))
-        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         sandbox.close()
         assert not [c for c in runner.calls if "python -m venv .venv-sandbox" in c]
 
         # With refresh the stamp is ignored: provision re-runs.
         runner2 = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""), ok(""))
-        sandbox2 = startup_sandbox(cfg, workspace=ws, runner=runner2, refresh=True)
+        sandbox2 = startup_sandbox(cfg, workspace=ws,
+                                   state_dir=tmp_path / "run-state",
+                                   runner=runner2, refresh=True)
         sandbox2.close()
         assert [c for c in runner2.calls if "python -m venv .venv-sandbox" in c]
 
     def test_relocated_venv_dir_flows_into_payloads(self, tmp_path, monkeypatch):
         """022: a set `sandbox_venv_dir` is resolved and threaded into BOTH the
-        exec and provision payloads; the workspace stays free of `.venv-sandbox`
-        noise (the outside dir is mounted at the unchanged container path)."""
+        exec and provision payloads. The exec (base export) container maps it
+        into the export at `.venv-sandbox`; the provision container maps it
+        into the real workspace path. The workspace stays free of
+        `.venv-sandbox` noise either way."""
         from agentic_dev_loop.engine.isolation import startup_sandbox
 
         ws = tmp_path / "ws"
@@ -1090,14 +1111,18 @@ class TestStartupSandbox:
             ok(""),               # docker run -d --rm (exec container)
             ok(""),               # docker run provision
         )
-        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         try:
-            target = f"{venv_dir}:{ws}/.venv-sandbox"
-            for argv in runner.calls:
-                if argv[:2] == ["docker", "run"]:
-                    assert target in argv
-                    assert argv[argv.index(target) - 1] == "-v"
-                    assert f"{ws}/.venv:ro" in argv
+            root = sandbox.export_root
+            exec_argv = [c for c in runner.calls
+                         if c[:2] == ["docker", "run"] and "--detach" in c][0]
+            prov_argv = [c for c in runner.calls
+                         if c[:2] == ["docker", "run"] and "--detach" not in c][0]
+            exec_target = f"{venv_dir}:{root}/.venv-sandbox"
+            prov_target = f"{venv_dir}:{ws}/.venv-sandbox"
+            assert exec_argv[exec_argv.index(exec_target) - 1] == "-v"
+            assert prov_argv[prov_argv.index(prov_target) - 1] == "-v"
+            assert f"{ws}/.venv:ro" in prov_argv
         finally:
             sandbox.close()
 
@@ -1121,7 +1146,7 @@ class TestStartupSandbox:
             ok(""),       # image inspect
             ok(""),       # docker run -d --rm (exec container)
         )
-        sandbox = startup_sandbox(cfg, workspace=ws, runner=runner)
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         try:
             run_argv = [c for c in runner.calls if c[:2] == ["docker", "run"]][0]
             resolved = chromium_userns_profile_path()
@@ -1146,7 +1171,7 @@ class TestStartupSandbox:
         monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
         runner = FakeRunner()
         with pytest.raises(ValueError, match="bundled:chromium-userns"):
-            startup_sandbox(cfg, workspace=ws, runner=runner)
+            startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         assert runner.calls == []
 
     def test_in_workspace_sandbox_venv_dir_fails_loud(self, tmp_path, monkeypatch):
@@ -1161,7 +1186,7 @@ class TestStartupSandbox:
         monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
         runner = FakeRunner(ok("1.54"), ok("linux"))
         with pytest.raises(SandboxError, match="AE-SBX-015"):
-            startup_sandbox(cfg, workspace=ws, runner=runner)
+            startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
 
 
 class TestBundledSeccompProfile:
