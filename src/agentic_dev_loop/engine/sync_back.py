@@ -105,6 +105,12 @@ def plan_sync_back(export_changes: Mapping[str, str],
 
 
 def _digest(path: Path) -> str:
+    if path.is_symlink():
+        # Track the link target, never the resolved content: the export can
+        # legitimately hold dangling symlinks (host-darwin venv entries,
+        # scratch links) and resolving them against the host would crash.
+        return "link:" + hashlib.sha256(
+            os.readlink(path).encode("utf-8")).hexdigest()
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -112,7 +118,9 @@ def _snapshot(root: Path,
               cache_paths: list[str] | tuple[str, ...] = ()) -> dict[str, str]:
     """rel-path -> sha256 for every file under root, excluding ``.git``,
     host-only dirs, and declared caches (BR-3: caches are bind-mounted, not
-    copied, so their contents are never part of the export)."""
+    copied, so their contents are never part of the export). Symlinks are
+    tracked by their link target (never resolved against the host), so
+    dangling links snapshot fine."""
     cache = [_parts(c) for c in cache_paths]
     out: dict[str, str] = {}
     for dirpath, dirnames, filenames in os.walk(root):
@@ -180,7 +188,7 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
         src = export_root / rel
         dst = real_repo / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
+        shutil.copy2(src, dst, follow_symlinks=False)
     for rel in plan.to_delete:
         (real_repo / rel).unlink(missing_ok=True)
 

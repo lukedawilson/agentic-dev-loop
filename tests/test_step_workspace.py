@@ -32,6 +32,26 @@ def test_materialise_copies_except_git_and_host_only(tmp_path):
     assert not (export / ".venv").exists()
 
 
+def test_materialise_preserves_symlinks_without_resolving(tmp_path):
+    repo = _repo(tmp_path)
+    (repo / "links").mkdir()
+    (repo / "links" / "dangling").symlink_to("nowhere")
+    (repo / "links" / "valid").symlink_to("../src/a.py")
+    export = tmp_path / "state" / "exports" / "run1"
+    # Completing materialise also proves the baseline snapshot survives the
+    # dangling link (it runs _snapshot on the export after the copy).
+    StepWorkspace.materialise(repo, [], "linux", export)
+    dangling = export / "links" / "dangling"
+    valid = export / "links" / "valid"
+    # Symlinks copy as symlinks, never resolved against the host: the
+    # dangling one stays dangling, the valid one keeps its relative target.
+    assert dangling.is_symlink()
+    assert os.readlink(dangling) == "nowhere"
+    assert not dangling.exists()
+    assert valid.is_symlink()
+    assert os.readlink(valid) == "../src/a.py"
+
+
 def test_missing_cache_is_loud(tmp_path):
     repo = _repo(tmp_path)
     export = tmp_path / "state" / "exports" / "run1"

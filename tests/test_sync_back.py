@@ -2,6 +2,7 @@
 only, .git never touched, conflicts loud."""
 
 import hashlib
+import os
 
 import pytest
 
@@ -98,6 +99,24 @@ def test_whole_tree_dot_syncs_back(tmp_path):
     assert set(report.synced_paths) == {"src/a.py", "docs/new.md"}
     assert (ws / "src" / "a.py").read_text() == "changed-a"
     assert (ws / "docs" / "new.md").read_text() == "new"
+
+
+def test_symlink_syncs_as_symlink_never_resolved(tmp_path):
+    """A symlink the sandbox creates in a declared-rw path syncs back as a
+    symlink, including a dangling one (whose target only makes sense inside
+    the export). Resolving it against the host would crash or corrupt."""
+    ws = _workspace(tmp_path)
+    exp = _export(tmp_path, ws)
+    (exp / "links").mkdir()
+    (exp / "links" / "to-src").symlink_to("../src/a.py")
+    (exp / "links" / "dangling").symlink_to("no-such-target")
+    report = sync_back(exp, ws, declared_rw=["."])
+    assert report.conflicts == ()
+    assert set(report.synced_paths) == {"links/to-src", "links/dangling"}
+    assert (ws / "links" / "to-src").is_symlink()
+    assert os.readlink(ws / "links" / "to-src") == "../src/a.py"
+    assert (ws / "links" / "dangling").is_symlink()
+    assert os.readlink(ws / "links" / "dangling") == "no-such-target"
 
 
 def test_cache_not_deleted(tmp_path):

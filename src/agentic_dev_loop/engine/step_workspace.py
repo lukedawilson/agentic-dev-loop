@@ -140,7 +140,7 @@ class StepWorkspace:
             src = repo / rel
             dst = self._export_root / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
+            shutil.copy2(src, dst, follow_symlinks=False)
         for cache in self._plan.cache_mounts:
             (self._export_root / cache.relative).mkdir(parents=True,
                                                        exist_ok=True)

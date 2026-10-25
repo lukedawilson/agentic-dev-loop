@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a19] - 2026-10-25
+
+### Changed
+
+- fix: repair hostboundary tests for the unit-5 export model
+- docs: add plan 028 pipeline-declared caches and sync excludes
+- docs: apply deferred unit-3 always-on amendments; add unit-5 story-map pillar rows
+- Uncommitted changes: src/agentic_dev_loop/engine/step_workspace.py, src/agentic_dev_loop/engine/sync_back.py, tests/test_step_workspace.py, tests/test_sync_back.py
+
 ## [1.0.0a18] - 2026-10-25
 
 ### Added
