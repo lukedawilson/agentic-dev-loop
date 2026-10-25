@@ -95,7 +95,7 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
                  registry: Registry | None = None) -> tuple[bool, int]:
     """Load a pipeline YAML, resolve docs via the selected document loader,
     and run the graph to completion. Returns (success, attempts) - the
-    public API, yosk's `construct`/`resume_loop` equivalent.
+    public API, the consumer's `construct`/`resume_loop` equivalent.
 
     `args` carries the parsed CLI namespace: loader flags, --resume,
     --max-attempts (which overrides the YAML value when set), and --no-viz.

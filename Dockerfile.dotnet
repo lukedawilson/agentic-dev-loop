@@ -1,4 +1,4 @@
-# Custom sandbox image for dotnet construction loops (e.g. yosk-cms).
+# Custom sandbox image for dotnet construction loops (e.g. the consumer repo).
 #
 # Same lineage as the default dev image (python:3.12-slim, Debian trixie)
 # plus the pieces a dotnet pipeline needs in-sandbox:

@@ -70,7 +70,7 @@ Adding a toolchain = preset data + cache declarations; no mechanism change.
 
 **Target matching** (`match_target(hostname, policy)`): allowlist entries stay domain-shaped; the proxy matches the request hostname (CONNECT target) per connection against the expanded policy; unmatched = deny + logged as an enforcement event (Q2 amended, BR-6). Pure.
 
-**Export planning** (`plan_workspace_export(repo, cache_paths, platform)`): export dir layout, cache bind-mount list, existence checks (missing cache path = loud, F2). Pure over platform facts.
+**Export planning** (`plan_step_workspace(repo, cache_paths, platform)`): export dir layout, cache bind-mount list, existence checks (missing cache path = loud, F2). Pure over platform facts.
 
 **Sync-back planning** (`plan_sync_back(export_changes, declared_rw)`): which changed paths sync (only declared-rw paths); git-aware (never touches `.git`); conflict detection. Pure function.
 
@@ -87,7 +87,7 @@ flowchart LR
     RMP --> KEY[container_profile_key]
     AEP --> KEY
     KEY --> POOL[container pool]
-    REPO[real repo] --> EXP[plan_workspace_export]
+    REPO[real repo] --> EXP[plan_step_workspace]
     EXP --> ED[export dir + cache bind-mounts]
     ED --> SBX[Sandbox.run]
     POOL --> SBX
@@ -101,4 +101,4 @@ flowchart LR
 - `container_profile_key` stability: same (mount set, policy) ⇒ same key, every time.
 - `resolve_mount_set` idempotence + strict-default property: empty input ⇒ empty mount set.
 - `assemble_egress_policy` preset expansion determinism + unknown-preset rejection.
-- `plan_workspace_export` path invariants: export paths stay inside the export root; no `.git` in any produced path.
+- `plan_step_workspace` path invariants: export paths stay inside the export root; no `.git` in any produced path.

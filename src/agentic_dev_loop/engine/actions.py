@@ -1,6 +1,6 @@
 """Built-in pipeline actions. Node-shaped: (state, params) -> state update.
 
-`commit` policy (ported unchanged from yosk): agents never commit mid-run;
+`commit` policy (ported unchanged from the consumer): agents never commit mid-run;
 the pipeline commits exactly once, and only when the worktree was clean at
 run start - a dirty-at-start run is committed by the human, so the
 auto-commit can never swallow pre-existing unrelated changes (run 004: the

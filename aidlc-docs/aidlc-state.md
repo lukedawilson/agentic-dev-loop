@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 Infrastructure Design approved (2026-10-25), Code Generation in progress; Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection)
+- **Current Stage**: CONSTRUCTION - Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 Code Generation Part 1 approved (2026-10-25), Part 2 (implementation) pending code-mode switch; Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection)
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -100,14 +100,15 @@ Scope FR-2.1–FR-2.6 (always-on sandbox; Docker backend on ALL platforms - nati
 
 Withdrawn by user directive 2026-10-22 ("Let's rip it out and mark unit 4 as wontship/wontdo"). Rationale: the Claude Workflow tool's no-filesystem/no-shell sandbox makes the adapter agent-mediated at every seam (command gates, viz events, prompts) - not worth the divergence from engine-mode guarantees. NO Claude adapter ships (not even viz-only). The core/engine/viz module split IS KEPT (independent value: dependency contracts, guard tests, light installs). Adapter-surface removal = planning-docs/017-remove-unit-4-adapter.md → release 1.0.0a7 (renumbered 2026-10-22; setup-stamp/venv hardening split out to planning-docs/016-sandbox-venv-hardening.md). Historical docs (requirements FR-4.x, unit-4 construction artifacts, intent doc) remain as history.
 
-### unit-5 (workspace egress isolation) - ACTIVE (Infrastructure Design approved 2026-10-25)
+### unit-5 (workspace egress isolation) - ACTIVE (Code Generation Part 1 approved 2026-10-25)
 
 - Intent document: aidlc-docs/unit-5-intent-workspace-egress-isolation.md (drafted 2026-10-23; extended 2026-10-24 with live-sourced findings from plan 023 browser hardening; amended 2026-10-25 with the FD proxy-resolution note)
 - Scope: per-step mount granularity (rw / ro / absent) + egress allowlists + .git blindness; closes plan 023 follow-up 5 (read-only workspace, the residual write/exfil channel after the browser sandbox engages) and supersedes the narrow plan 023 Phase B
 - Functional Design: plans/unit-5-functional-design-plan.md (Q1-Q9, F1, F2, D-1, D-2); artifacts in aidlc-docs/construction/unit-5/functional-design/ (business-logic-model.md, business-rules.md BR-1..12, domain-entities.md)
 - NFR Requirements: plans/unit-5-nfr-requirements-plan.md (NFR-1..6; NFR-2/NFR-6 superseded 2026-10-25 by user directive: engine-managed per-policy egress proxy on ALL platforms, no nftables, no privileged CI); artifacts in aidlc-docs/construction/unit-5/nfr-requirements/ (nfr-requirements.md NFR-5.1..5.8, tech-stack-decisions.md TS-1..8)
 - Infrastructure Design: plans/unit-5-infrastructure-design-plan.md (ID-1..6); artifacts in aidlc-docs/construction/unit-5/infrastructure-design/ (infrastructure-design.md, deployment-architecture.md; shared-infrastructure.md N/A justified)
-- Next: Code Generation
+- Code Generation: plans/unit-5-code-generation-plan.md (Part 1 APPROVED 2026-10-25, user: "Ok, approved, continue"; 15 TDD steps incl. the folded-in ERD-review step 15: run_agent onto Runtime)
+- Next: Code Generation Part 2 (implementation) - blocked on the code-mode switch (planner mode cannot touch src/ or tests/)
 
 ### unit-6 (cloud deployment) - INTENT ONLY (recorded 2026-10-25)
 

@@ -6,7 +6,7 @@
 
 Design inputs: the unit-5 Functional Design (plans/unit-5-functional-design-plan.md; artifacts at aidlc-docs/construction/unit-5/functional-design/: business-logic-model.md, business-rules.md BR-1..12, domain-entities.md) and NFR Requirements (plans/unit-5-nfr-requirements-plan.md; artifacts at aidlc-docs/construction/unit-5/nfr-requirements/: nfr-requirements.md NFR-5.1..5.8, tech-stack-decisions.md TS-1..8).
 
-Infrastructure surface after the 2026-10-25 enforcement-point amendment (engine-managed per-policy egress proxy on ALL platforms; no nftables, no NET_ADMIN, no privileged CI): the proxy itself (implementation, container reachability, lifecycle), workspace-export materialisation, sync-back mechanics, and CI wiring for portable enforcement tests. Kernel-level egress and the native Linux backend are deferred to unit-7 (intent recorded 2026-10-25); the cloud box that will host them is unit-6.
+Infrastructure surface after the 2026-10-25 enforcement-point amendment (engine-managed per-policy egress proxy on ALL platforms; no nftables, no NET_ADMIN, no privileged CI): the proxy itself (implementation, container reachability, lifecycle), step-workspace materialisation, sync-back mechanics, and CI wiring for portable enforcement tests. Kernel-level egress and the native Linux backend are deferred to unit-7 (intent recorded 2026-10-25); the cloud box that will host them is unit-6.
 
 ## Steps
 
@@ -54,7 +54,7 @@ X) Other
 
 [Answer]: A - ephemeral, loopback-bound OS-assigned port per policy per run, engine-spawned and engine-killed (user selected the recommended option)
 
-### Question ID-4 (workspace-export materialisation): copy vs git worktree vs archive
+### Question ID-4 (step-workspace materialisation): copy vs git worktree vs archive
 
 The export must preserve the working tree as-is (including uncommitted changes - the dev step works on dirty state), exclude `.git` by construction (BR-2), and exclude host-only dirs.
 

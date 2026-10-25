@@ -1,4 +1,4 @@
-"""Action tests - ported from yosk's TestKillListenersOnPort /
+"""Action tests - ported from the consumer's TestKillListenersOnPort /
 TestGitWorktreeClean / TestCommitNode, retargeted at the node-shaped
 `(state, params) -> dict` API. Real processes and real git repos throughout:
 git and sockets are local utilities, not network boundaries."""

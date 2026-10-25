@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from agentic_dev_loop.core.config import PipelineConfig
 
 # Tooling directories are workspace-root-relative fixed names (the same layout
-# the dogfood pipeline and yosk use); the other tooling paths are config- or
+# the dogfood pipeline and the consumer repo use); the other tooling paths are config- or
 # pipeline-file-relative.
 TOOLING_DIR_NAMES = ("aidlc-docs", "tools")
 

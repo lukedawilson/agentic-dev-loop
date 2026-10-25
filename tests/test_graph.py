@@ -1,6 +1,6 @@
 """Graph builder + run_pipeline behavioral tests.
 
-The yosk-equivalent YAML below must reproduce the hardcoded loop's behavior:
+The consumer-equivalent YAML below must reproduce the hardcoded loop's behavior:
 dev → check → review → qa → commit, retries to dev, failure on
 exhaustion/exception. run_agent is stubbed (the SDK network boundary);
 everything else - files, git, checkpoints - is real."""
@@ -21,8 +21,8 @@ from agentic_dev_loop.engine.registry import Registry, default_registry, load_ex
 from agentic_dev_loop.engine.stages import Runtime
 from agentic_dev_loop.viz import VizBus
 
-YOSK_YAML = """\
-name: yosk-construction
+REFERENCE_YAML = """\
+name: reference-construction
 extensions:
   - agentic_dev_loop.engine.extensions.aidlc:AidlcExtension
 additional_files:
@@ -101,10 +101,10 @@ def git(repo: Path, *args: str) -> str:
 
 @pytest.fixture
 def repo(tmp_path, monkeypatch, fake_sandbox):
-    """A real git repo with the yosk-equivalent pipeline committed clean."""
+    """A real git repo with the consumer-equivalent pipeline committed clean."""
     repo = tmp_path / "repo"
     repo.mkdir()
-    (repo / "pipeline.yaml").write_text(YOSK_YAML)
+    (repo / "pipeline.yaml").write_text(REFERENCE_YAML)
     (repo / "coding-standards-ddd.yaml").write_text("STANDARDS")
     (repo / "plan.md").write_text("THE PLAN")
     git(repo, "init")
@@ -131,7 +131,7 @@ def script_all_pass(fake_agents):
 
 
 class TestTopology:
-    def test_yosk_pipeline_node_set(self, repo):
+    def test_reference_pipeline_node_set(self, repo):
         cfg = load_config(Path("pipeline.yaml"))
         registry = default_registry()
         load_extensions(cfg.extensions, registry)
@@ -143,7 +143,7 @@ class TestTopology:
                 "bump", "success"} <= nodes
 
     def test_unknown_action_fails_at_build(self, repo):
-        (repo / "bad.yaml").write_text(YOSK_YAML.replace(
+        (repo / "bad.yaml").write_text(REFERENCE_YAML.replace(
             "action: commit", "action: no_such_action"))
         cfg = load_config(Path("bad.yaml"))
         runtime = Runtime(cfg=cfg, registry=default_registry(),
@@ -248,7 +248,7 @@ class TestRunPipeline:
         # is not a tooling modification - the loader's missing-file guard is
         # what catches it.
         (repo / "pipeline.yaml").write_text(
-            YOSK_YAML.replace("coding-standards-ddd.yaml",
+            REFERENCE_YAML.replace("coding-standards-ddd.yaml",
                               "no-such-shared-file.yaml"))
         git(repo, "add", "-A")
         git(repo, "commit", "-m", "reference missing additional file")
@@ -257,7 +257,7 @@ class TestRunPipeline:
         assert fake_agents.calls == []
 
     def test_empty_loader_docs_fail_fast(self, repo, fake_agents):
-        (repo / "empty.yaml").write_text(YOSK_YAML.replace(
+        (repo / "empty.yaml").write_text(REFERENCE_YAML.replace(
             "agentic_dev_loop.engine.extensions.aidlc:AidlcExtension",
             "sample_ext:EmptyLoaderExtension"))
         git(repo, "add", "-A")
@@ -267,7 +267,7 @@ class TestRunPipeline:
         assert fake_agents.calls == []
 
 
-LOCKED_YAML = YOSK_YAML.replace(
+LOCKED_YAML = REFERENCE_YAML.replace(
     "deps_policy: open\n",
     "deps_policy: locked\nlockfiles: [uv.lock]\n",
     1)

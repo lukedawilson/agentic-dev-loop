@@ -10,7 +10,7 @@ Functional Design approved (2026-10-25). Unit-5 = per-step mount granularity (rw
 
 ### NFR-1 - Performance budget (export, policy assembly, pool, sync-back)
 
-Context: new per-run costs over unit-3's baseline: workspace export materialisation, egress policy assembly (proxy config generation), profile-keyed pool warm-up, sync-back after rw steps.
+Context: new per-run costs over unit-3's baseline: step-workspace materialisation, egress policy assembly (proxy config generation), profile-keyed pool warm-up, sync-back after rw steps.
 
 A) **Practical targets, measured not enforced** - export + policy assembly within a few seconds for typical repos; sync-back proportional to changed files; pool warm-up amortised across steps; no CI gates (unit-3/4 precedent).
 

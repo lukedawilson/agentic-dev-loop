@@ -8,7 +8,7 @@
 | TS-4 | **Profile-keyed container pool** | ContainerProfile = (resolved mount set, resolved egress policy, seccomp/cap policy); containers created lazily per distinct profile, destroyed at pipeline end + error paths; provision container keeps its broad-egress trust-phase profile. Extends unit-3's persistent-per-run model (D-1, BR-10). |
 | TS-5 | **Presets as engine data** | package-registries and other target sets ship as engine data resolved at policy-assembly time; author overrides add account-specific hosts; new toolchains = preset data + cache declarations, never mechanism (D-2, Q9, BR-8/9). |
 | TS-6 | **rsync-style git-aware sync-back** | After rw steps, declared-rw changes sync back to the real repo; sandbox detached during sync; conflicts loud (F1, BR-4). |
-| TS-7 | **Pure-function core** | resolve_mount_set / assemble_egress_policy / match_target / plan_workspace_export / plan_sync_back / container_profile_key all pure; Docker/proxy transport isolated behind the existing Sandbox surface. (NFR-5.7, PBT targets from FD) |
+| TS-7 | **Pure-function core** | resolve_mount_set / assemble_egress_policy / match_target / plan_step_workspace / plan_sync_back / container_profile_key all pure; Docker/proxy transport isolated behind the existing Sandbox surface. (NFR-5.7, PBT targets from FD) |
 | TS-8 | **Proxy enforcement tests in existing CI** | Enforcement-behaviour tests (the proxy actually denying unmatched traffic) are portable (no root) and run in normal CI (ubuntu + windows matrix), never silently skipped; export/sync-back tested against real repos in existing jobs. No privileged job. (NFR-5.7) |
 
 ## Deferred

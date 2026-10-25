@@ -189,7 +189,7 @@ secrets:                              # refs only - never values
     key: KINDIE_CLIENT_SECRET         # provider-specific locator
   r2-keys:
     from: env
-    key: YOSK_R2_KEYS
+    key: R2_KEYS
 
 steps:
   - name: qa

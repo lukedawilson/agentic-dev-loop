@@ -6,14 +6,14 @@ from pydantic import ValidationError
 
 from agentic_dev_loop.core.config import Route, default_state_dir, load_config
 
-# The plan's yosk-equivalent reference pipeline (009, YAML schema section),
+# The plan's reference pipeline (consumer-equivalent) (009, YAML schema section),
 # verbatim except for two substitutions: 012 replaced the agent step named
 # `test` (artifact ci-fix.md, PASS/FAIL) with the mechanical command step
 # named `test` - same position, same on_fail wiring; and 009 dropped the
 # port_sweep step (its sweep moved into engine startup, no longer a pipeline
 # step). This is the canonical pin: the documented schema must load.
 FULL_YAML = """\
-name: yosk-construction
+name: reference-construction
 
 extensions:
   - agentic_dev_loop.engine.extensions.aidlc:AidlcExtension
@@ -86,7 +86,7 @@ def test_full_schema_example_round_trips(tmp_path):
     p.write_text(FULL_YAML)
     cfg = load_config(p)
 
-    assert cfg.name == "yosk-construction"
+    assert cfg.name == "reference-construction"
     assert cfg.extensions == ["agentic_dev_loop.engine.extensions.aidlc:AidlcExtension"]
     assert cfg.additional_files == ["coding-standards-ddd.yaml"]
     assert cfg.state_dir == ".pr"

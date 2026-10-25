@@ -50,7 +50,7 @@ secrets:                              # top-level; refs only - never values
     key: KINDIE_CLIENT_SECRET         # provider-specific locator
   r2-keys:
     from: env
-    key: YOSK_R2_KEYS
+    key: R2_KEYS
 ```
 
 Step-level opt-in (agent/command steps; action steps are host-side and get nothing):

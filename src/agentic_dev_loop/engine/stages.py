@@ -1,6 +1,6 @@
 """Stage nodes, routers, and the run_agent port.
 
-The yosk loop's hardcoded stages become per-step closures built from the
+The consumer loop's hardcoded stages become per-step closures built from the
 pipeline config; the fixed policies stay here, not in config:
 
 - per-attempt hygiene: every declared artifact/produces file + last-error.md
@@ -68,7 +68,7 @@ class Runtime:
 def prompt_dir(runtime: Runtime) -> str:
     """state_dir as agents must address it. Agents resolve prompt paths
     against their workspace, so a bare `state_dir.name` only reaches the real
-    state_dir when the pipeline file sits at the workspace root - yosk runs
+    state_dir when the pipeline file sits at the workspace root - the consumer runs
     agentic-dev-loop/pipeline.yaml from the repo root, where `.pr` and
     `agentic-dev-loop/.pr` diverge. Workspace-relative when under the workspace,
     the absolute path when outside it."""
@@ -240,7 +240,7 @@ def clear_attempt_artifacts(runtime: Runtime) -> None:
 
 def _unclear_target(runtime: Runtime, step: StepConfig) -> str:
     """Where the unclear-verdict retry loops to: on_fail's goto when that is
-    a step, else the entry step (yosk always looped back to dev)."""
+    a step, else the entry step (the consumer always looped back to dev)."""
     target = route_target(step.on_fail)
     if target is not None and target not in TERMINALS:
         return target
@@ -549,7 +549,7 @@ def make_router(runtime: Runtime, step: StepConfig):
 def make_bump_node(runtime: Runtime):
     """Close the retry cycle: consume one attempt, clear per-attempt
     artifacts, and rebuild the context with the accumulated notes - the
-    attempt-start duties yosk's dev node owned, generalized to any target."""
+    attempt-start duties the consumer's dev node owned, generalized to any target."""
 
     def node(state: dict) -> dict:
         clear_attempt_artifacts(runtime)

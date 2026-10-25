@@ -1,4 +1,4 @@
-"""load_agent tests - ported from yosk's TestLoadAgent, retargeted at the
+"""load_agent tests - ported from the consumer's TestLoadAgent, retargeted at the
 library signature which also builds the Agent via the SDK factory. Real
 agent files on disk (fail-fast file policy); real LLM/Agent SDK objects
 (constructed locally, no network)."""

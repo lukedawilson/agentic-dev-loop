@@ -38,7 +38,7 @@ def _cfg_with_secrets(tmp_path) -> PipelineConfig:
     data = _base()
     data["secrets"] = {
         "kinde-client-secret": {"from": "env", "key": "KINDIE_CLIENT_SECRET"},
-        "r2-keys": {"from": "env", "key": "YOSK_R2_KEYS"},
+        "r2-keys": {"from": "env", "key": "R2_KEYS"},
     }
     data["steps"] = [
         {"name": "qa", "agent": "qa", "secrets": ["kinde-client-secret"],
@@ -127,7 +127,7 @@ class TestProviderResolution:
     def test_resolve_secrets_returns_ref_keyed_values(self, tmp_path):
         cfg = _cfg_with_secrets(tmp_path)
         resolved = resolve_secrets(cfg, {"KINDIE_CLIENT_SECRET": "kinde-secret",
-                                         "YOSK_R2_KEYS": "r2-keys"})
+                                         "R2_KEYS": "r2-keys"})
         assert resolved == {"kinde-client-secret": "kinde-secret",
                             "r2-keys": "r2-keys"}
 
@@ -137,14 +137,14 @@ class TestProviderResolution:
             resolve_secrets(cfg, {"KINDIE_CLIENT_SECRET": "kinde-secret"})
         msg = str(e.value)
         assert "r2-keys" in msg
-        assert "YOSK_R2_KEYS" in msg
+        assert "R2_KEYS" in msg
         assert "env" in msg
         assert "['<none>']" in msg  # r2-keys is declared but unused by any step
 
     def test_resolve_secrets_missing_used_ref_names_step(self, tmp_path):
         cfg = _cfg_with_secrets(tmp_path)
         with pytest.raises(SecretResolutionError) as e:
-            resolve_secrets(cfg, {"YOSK_R2_KEYS": "r2-keys"})
+            resolve_secrets(cfg, {"R2_KEYS": "r2-keys"})
         assert "kinde-client-secret" in str(e.value)
         assert "['qa']" in str(e.value)
 

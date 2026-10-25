@@ -8,7 +8,7 @@
 | --- | --- |
 | MountSpec / MountSet | Dimension 1 ("Mount Set" concept) + Q3/Q4 answers (declared-writes, strict-by-default) |
 | TargetEntry / EgressPreset / EgressPolicy | Dimension 1 ("Egress Policy" concept) + Q1/Q2/Q8/Q9 answers |
-| WorkspaceExport | Dimensions 1-2 (the .git-free derivative; engine-owned) + Q5/F1/F2 answers |
+| StepWorkspace | Dimensions 1-2 (the .git-free derivative; engine-owned) + Q5/F1/F2 answers |
 | SyncBackReport | Dimension 3 (run-time contexts) + F1 answer |
 | ContainerProfile | Dimension 4 (change-togetherness: mount + network + caps move together) + D-1 |
 | StepConfig.mounts / StepConfig.egress | Dimension 2 (StepConfig owns the declarations) |
@@ -57,11 +57,11 @@ Behaviour: `profile_key()` yields the stable pool key (D-1); equal profiles ⇒ 
 
 ## New Entity (descent step 3)
 
-### `WorkspaceExport` (NEW - descent step 3, engine-owned state)
+### `StepWorkspace` (NEW - descent step 3, engine-owned state)
 
 The .git-free derivative the sandbox mounts. Owned and mutated by the engine (materialise → bind caches → mount → sync-back → destroy), never by the sandbox:
 
-- `materialise(repo, cache_paths, platform) -> ExportPlan` - worktree-add/archive into a run temp dir; cache existence checks (missing = loud, BR-3.2).
+- `materialise(repo, cache_paths, platform) -> StepWorkspacePlan` - copy-based materialisation into `state_dir/exports/<run-id>/` (ID-4); `.git` absent by construction; cache existence checks (missing = loud, BR-3.2).
 - `mount_points()` - the Docker mount list: export root + cache bind-mounts at the same relative paths, rw (BR-3.1).
 - `sync_back(declared_rw) -> SyncBackReport` - git-aware, sandbox detached, conflicts loud (BR-4).
 
@@ -80,7 +80,7 @@ The .git-free derivative the sandbox mounts. Owned and mutated by the engine (ma
 | `resolve_mount_set` | `(step_mounts) -> MountSet` | strict default, path/mode validation (BR-1) |
 | `assemble_egress_policy` | `(step_egress) -> EgressPolicy` | preset expansion, class classification, validation (BR-7/8) |
 | `match_target` | `(hostname, policy) -> allowed | denied` | hostname matching at the proxy; unmatched = deny + logged (BR-6) |
-| `plan_workspace_export` | `(repo, cache_paths, platform) -> ExportPlan` | export layout + cache bind-mount list + existence checks (BR-3) |
+| `plan_step_workspace` | `(repo, cache_paths, platform) -> StepWorkspacePlan` | export layout + cache bind-mount list + existence checks (BR-3) |
 | `plan_sync_back` | `(export_changes, declared_rw) -> SyncPlan` | git-aware, declared-rw only, conflict detection (BR-4) |
 | `container_profile_key` | `(mount_set, policy) -> str` | stable pool key (D-1, BR-10) |
 
@@ -94,7 +94,7 @@ All pure - the PBT-03 targets (serialisation round-trips, key stability, strict-
 | TargetEntry / EgressPreset / EgressPolicy | 1 (VO with invariants) | Correct |
 | ContainerProfile | 1 (VO, pool key) | Correct |
 | SyncBackReport | 1 (VO) | Correct |
-| WorkspaceExport | 3 (entity: engine-owned lifecycle state) | Correct |
+| StepWorkspace | 3 (entity: engine-owned lifecycle state) | Correct |
 | Pure functions | 0 (module-level, platform-independent) | Correct |
 | Sandbox / DockerBackend | 3 (modified; surface retained) | Correct - extended, not replaced; the retained single-implementation `Sandbox` interface is the unit-3 user-directed exception, unchanged |
 | Registries/CDNs/app endpoints | external actors | Not modelled - outside the domain |

@@ -1,6 +1,6 @@
 """Stage nodes, routers, context assembly, and the run_agent port.
 
-The yosk hardcoded stages (dev/test/review/qa + bump) become per-step node
+The consumer hardcoded stages (dev/test/review/qa + bump) become per-step node
 and router closures built from the pipeline config; the fixed policies
 (hygiene, verdict-first truncation, unclear-verdict retry, notes) stay here."""
 
@@ -78,7 +78,7 @@ class TestBuildContext:
         assert "## Previous attempt feedback\n\nnote one\n\nnote two" in ctx
 
     def test_output_paths_workspace_relative_for_subdirectory_pipeline(self, tmp_path):
-        """yosk layout: the pipeline YAML lives in a subdirectory while the
+        """consumer layout: the pipeline YAML lives in a subdirectory while the
         workspace is the repo root - the prompt path must reach the real
         state_dir; state_dir.name alone sends agents to the wrong directory
         (U18 burned 3 attempts on an unfindable ci-fix.md)."""
