@@ -2,7 +2,7 @@
 
 > **Status: COMPLETED**
 
-**Origin:** security review of the agentic-dev-loop sandbox boundary (2026-10-23). Secret exfiltration ranked the #1 exposure: network-on containers run agent-written code and installed packages with the workspace mounted - and the workspace contains the repo `.env` (yosk: Kinde creds, read by `qa/common.sh` directly from the file).
+**Origin:** security review of the agentic-dev-loop sandbox boundary (2026-10-23). Secret exfiltration ranked the #1 exposure: network-on containers run agent-written code and installed packages with the workspace mounted - and the workspace contains the repo `.env` (the consumer: Kinde creds, read by `qa/common.sh` directly from the file).
 
 **Agreed design decisions (user, 2026-10-23):**
 1. Provide a `secrets:` section in the pipeline config.
@@ -86,11 +86,11 @@ Merge resolved secrets into the existing `resolve_sandbox_env` fixed-base + step
 
 The store knows every resolved value at run time. Any engine-written output - captured step output, retry notes ("Previous attempt feedback"), artifacts, `state_dir` files - must have resolved secret values scrubbed before being written. (Hygiene, not a control: the declaring step's agent has already seen the value.)
 
-## Consumer migration (acceptance test - yosk)
+## Consumer migration (acceptance test - the consumer)
 
 1. `qa/common.sh`: read Kinde creds from environment variables, not the repo `.env`.
 2. Delete the repo `.env` (values move to host env / store).
-3. yosk `pipeline.yaml`: add the `secrets:` block and `secrets: [...]` on the qa step.
+3. the consumer `pipeline.yaml`: add the `secrets:` block and `secrets: [...]` on the qa step.
 4. A full run must pass QA against real Kinde/R2 with no `.env` in the workspace.
 5. Evaluate restructure per decision 5: can the secret-consuming part of qa move into a command step, leaving the qa agent secret-free?
 
@@ -109,7 +109,7 @@ The store knows every resolved value at run time. Any engine-written output - ca
 - [ ] Pipeline with `secrets:` + step opt-in injects values only into declaring steps (probe via command step printing env → output scrubbed of values).
 - [ ] Run with `.env` in workspace refuses to start and names the file; `.env.example` does not trip it.
 - [ ] Missing/unresolvable ref fails fast with the ref and step named.
-- [ ] yosk full run green with no `.env` in the workspace.
+- [ ] the consumer full run green with no `.env` in the workspace.
 - [ ] No resolved value appears in `state_dir`, retry notes, or artifacts after a run that consumed secrets.
 
 ## Out of scope (separate units)

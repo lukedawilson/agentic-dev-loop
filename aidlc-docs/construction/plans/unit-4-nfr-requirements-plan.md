@@ -18,7 +18,7 @@ Primary use-case: developers who know and love the agentic dev loop but are forc
 
 ### NFR-2 - Backward compatibility of the module split
 
-[Answer]: B - hard break now (no shims): clean split with no re-export shims; consumers (this repo's + yosk-cms's pipeline.yaml `agentic_dev_loop.extensions.aidlc` strings, test imports) update to the new module paths immediately. Accepted pre-1.0 since the package is still alpha (1.0.0a5). AGENTS.md backward-compat rule satisfied by documenting the exact migration (list of old→new import paths) in the release notes/docs. (Raw: "B")
+[Answer]: B - hard break now (no shims): clean split with no re-export shims; consumers (this repo's + the consumer repo's pipeline.yaml `agentic_dev_loop.extensions.aidlc` strings, test imports) update to the new module paths immediately. Accepted pre-1.0 since the package is still alpha (1.0.0a5). AGENTS.md backward-compat rule satisfied by documenting the exact migration (list of old→new import paths) in the release notes/docs. (Raw: "B")
 
 ### NFR-3 - Performance budget (build time, step overhead)
 

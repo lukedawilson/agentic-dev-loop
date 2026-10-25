@@ -23,7 +23,7 @@ The `bump` node's conditional edge already routes to **any** step name in `state
 
 ## Verified facts
 
-- `_unclear_target(runtime, step)` (stages.py:154-160): returns `route_target(step.on_fail)` when it names a non-terminal step, else `runtime.cfg.steps[0].name` (the entry step). Docstring: "yosk always looped back to dev". Its **sole** caller is `make_agent_node` line 223 (`"retry_target": _unclear_target(runtime, step)`).
+- `_unclear_target(runtime, step)` (stages.py:154-160): returns `route_target(step.on_fail)` when it names a non-terminal step, else `runtime.cfg.steps[0].name` (the entry step). Docstring: "the consumer always looped back to dev". Its **sole** caller is `make_agent_node` line 223 (`"retry_target": _unclear_target(runtime, step)`).
 - `make_agent_node` (stages.py:184-225): for verdict steps, missing artifact **or** unparseable verdict → `step_verdicts[name] = None`, `notes = [_unclear_note(...)]`, `retry_target = _unclear_target(...)`. `_unclear_note` (:163-181) produces the three wordings (truncated / "did not write `{rel}` on attempt {attempt}." / unparseable + "Its findings so far:\n\n{text}").
 - FAIL path (:211-217) is **unchanged by this plan**: `retry_target = step.on_fail.goto` only when `on_fail` is a `Route` with `retry=True`.
 - `make_router` (:258-273): unclear → `"bump"` while `attempt < max_attempts`, else `END` - the "never routable, attempt-bounded" policy (README.md:210).

@@ -9,7 +9,7 @@
 ## Code Quality Indicators
 
 - **Linting**: Not configured (no ruff/flake8/mypy config in pyproject.toml); `py.typed` shipped.
-- **Code Style**: Consistent - dense docstrings carrying rationale/history; module docstrings explain policy and provenance ("ported unchanged from yosk").
+- **Code Style**: Consistent - dense docstrings carrying rationale/history; module docstrings explain policy and provenance ("ported unchanged from the consumer").
 - **Documentation**: Good - README + COMPAT-SHIMS.md + extensive inline rationale; AI-DLC workflow now onboarded.
 
 ## Technical Debt

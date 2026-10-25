@@ -8,7 +8,7 @@ owning run then fails every step with
 `Error response from daemon: No such container: <hash>-exec-net` and has to be
 killed and restarted.
 
-**Observed case:** The yosk-cms plan 002 run's containers (`0521b47c...`) were
+**Observed case:** The consumer repo plan 002 run's containers (`0521b47c...`) were
 removed after a misdiagnosis. Two wrong signals were treated as proof of
 orphaning:
 
@@ -17,7 +17,7 @@ orphaning:
    network and I/O, burning almost no CPU. A healthy step looks identical.
 2. No run dir under `~/.agentic-dev-loop/runs/<hash>/` was read as "owning run
    gone". Run state is workspace-local; the wrong location was searched. The
-   container was live: a `dotnet test` step for the yosk-cms repo was attached
+   container was live: a `dotnet test` step for the consumer repo repo was attached
    to it.
 
 The run was killed by its owner and restarted fresh. The `a6a80b5b` pair was

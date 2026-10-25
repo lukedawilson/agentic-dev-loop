@@ -4,7 +4,7 @@
 
 ## Scope
 
-This repository only (the engine). Consumer repos (e.g. yosk-cms) are not
+This repository only (the engine). Consumer repos (e.g. the consumer repo) are not
 touched; they adopt the behaviour by updating their own pipeline.yaml and
 their own copies of the sdk_agents prompts when they pull the new engine.
 

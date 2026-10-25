@@ -47,7 +47,7 @@ The bootstrap-protocol paragraphs added to `sdk_agents/dev.agent.md` in 018's im
 
 ## 3. Migration (acceptance targets)
 
-- **yosk-cms** - human generates `packages.lock.json` for the solution (and lockfiles for any npm workspace); pipeline sets `deps_policy: locked`; restore step becomes `dotnet restore --locked-mode` (and `npm ci` where applicable).
+- **the consumer repo** - human generates `packages.lock.json` for the solution (and lockfiles for any npm workspace); pipeline sets `deps_policy: locked`; restore step becomes `dotnet restore --locked-mode` (and `npm ci` where applicable).
 - **agent-engine** - human generates the python lockfile (`uv.lock` via uv, or pip-tools); pipeline sets `deps_policy: locked`; restore step becomes the locked install command.
 
 ## 4. Explicitly out of scope

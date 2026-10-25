@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 intent drafted (2026-10-24)
+- **Current Stage**: CONSTRUCTION - Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 Infrastructure Design approved (2026-10-25), Code Generation in progress; Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection)
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -24,7 +24,7 @@
 - **Total Stages**: 12 planned
 - **Stages to Execute**: Application Design, Units Generation, Functional Design, NFR Requirements, Infrastructure Design, Code Generation, Build and Test
 - **Stages to Skip**: User Stories (user confirmed), NFR Design (no perf/HA work; container infra covered by Infrastructure Design)
-- **Unit Order**: Unit 1 output-passing fix + file-tool removal → Unit 2 SDK hardening → Unit 3 kernel-level sandboxing (vertical slices) → Unit 4 Claude Dynamic Workflows driver (pipeline model + viz; no Docker sandboxing from Claude Code) → Unit 5 workspace egress isolation (per-step mount granularity + egress allowlists; intent drafted 2026-10-24)
+- **Unit Order**: Unit 1 output-passing fix + file-tool removal → Unit 2 SDK hardening → Unit 3 kernel-level sandboxing (vertical slices) → Unit 4 Claude Dynamic Workflows driver (pipeline model + viz; no Docker sandboxing from Claude Code) → Unit 5 workspace egress isolation (per-step mount granularity + egress allowlists; intent drafted 2026-10-24) → Unit 6 cloud deployment (intent recorded 2026-10-25; comes first - the cloud Linux box is the test environment for the native path) → Unit 7 Linux-native sandboxing + egress protection (intent recorded 2026-10-25)
 
 ## Extension Configuration
 - **Domain Standards**: Yes - enabled (Requirements Analysis, 2026-10-17)
@@ -62,10 +62,10 @@ Per-unit construction stages (5 stages per unit: Functional Design, NFR Requirem
 - Unit 3: kernel-level sandboxing (always-on) - Infrastructure Design [x]
 - Unit 3: kernel-level sandboxing (always-on) - Code Generation [x]
 - Unit 4: Claude Dynamic Workflows driver - WONTSHIP/WONTDO (withdrawn 2026-10-22; excluded from construction progress)
-- Unit 5: workspace egress isolation - Functional Design [ ]
-- Unit 5: workspace egress isolation - NFR Requirements [ ]
-- Unit 5: workspace egress isolation - NFR Design [ ] (global SKIP)
-- Unit 5: workspace egress isolation - Infrastructure Design [ ]
+- Unit 5: workspace egress isolation - Functional Design [x] (approved 2026-10-25)
+- Unit 5: workspace egress isolation - NFR Requirements [x] (approved 2026-10-25)
+- Unit 5: workspace egress isolation - NFR Design [x] (global SKIP)
+- Unit 5: workspace egress isolation - Infrastructure Design [x] (approved 2026-10-25)
 - Unit 5: workspace egress isolation - Code Generation [ ]
 - Build and Test: green at unit-3 close (2026-10-21, full suite incl. docker-marked tests); re-run at unit-5 close
 
@@ -93,15 +93,30 @@ Scope FR-2.1–FR-2.6 (always-on sandbox; Docker backend on ALL platforms - nati
 - [x] NFR Requirements - approved 2026-10-19 (NFR-1 per-step env; NFR-2 persistent-per-run; NFR-3 docker CLI; NFR-5 setup hook provision phase + stamp caching; NFR-6 CI ubuntu+windows; major directive: drop native backend, keep interface; artifacts in aidlc-docs/construction/unit-3/nfr-requirements/)
 - [x] Infrastructure Design - approved 2026-10-19 (ID-1 own dev image via CI/GHCR; ID-2 any compliant daemon, API ≥1.43, Linux-containers mode on Windows; ID-3 ~/.agentic-dev-loop/state, one stamp/key; ID-4 caps 4g/2cpu exec, 8g/4cpu provision, per-pipeline override; ID-5 JSONL audit + 5MB rotation; ID-6 GitHub-hosted ubuntu+windows CI; ID-7 repo-shipped docs/setup.md user guide; ID-8 terminology = kernel-level sandboxing; artifacts in aidlc-docs/construction/unit-3/infrastructure-design/ + construction/shared-infrastructure.md)
 - [x] Code Generation - complete (implemented by the dev loop: isolation.py + Docker sandbox + per-step env/setup + SDK terminal seam; releases v0.3.0 → v1.0.0a5; plan-014 per-stage networking `network: true` added post-FD)
-- [x] Build and Test - full suite green incl. docker-marked integration tests (host daemon); validated end-to-end in yosk-cms unit-8 run (user: "tested it thoroughly in the yosk-cms repo and it's working")
+- [x] Build and Test - full suite green incl. docker-marked integration tests (host daemon); validated end-to-end in the consumer repo unit-8 run (user: "tested it thoroughly in the consumer repo repo and it's working")
 - [ ] Operations (placeholder)
 
 ### unit-4 (Claude Dynamic Workflows driver) - WONTSHIP/WONTDO (2026-10-22)
 
 Withdrawn by user directive 2026-10-22 ("Let's rip it out and mark unit 4 as wontship/wontdo"). Rationale: the Claude Workflow tool's no-filesystem/no-shell sandbox makes the adapter agent-mediated at every seam (command gates, viz events, prompts) - not worth the divergence from engine-mode guarantees. NO Claude adapter ships (not even viz-only). The core/engine/viz module split IS KEPT (independent value: dependency contracts, guard tests, light installs). Adapter-surface removal = planning-docs/017-remove-unit-4-adapter.md → release 1.0.0a7 (renumbered 2026-10-22; setup-stamp/venv hardening split out to planning-docs/016-sandbox-venv-hardening.md). Historical docs (requirements FR-4.x, unit-4 construction artifacts, intent doc) remain as history.
 
-### unit-5 (workspace egress isolation) - INTENT ONLY (draft, 2026-10-24)
+### unit-5 (workspace egress isolation) - ACTIVE (Infrastructure Design approved 2026-10-25)
 
-- Intent document: aidlc-docs/unit-5-intent-workspace-egress-isolation.md (drafted 2026-10-23; extended 2026-10-24 with live-sourced findings from plan 023 browser hardening)
+- Intent document: aidlc-docs/unit-5-intent-workspace-egress-isolation.md (drafted 2026-10-23; extended 2026-10-24 with live-sourced findings from plan 023 browser hardening; amended 2026-10-25 with the FD proxy-resolution note)
 - Scope: per-step mount granularity (rw / ro / absent) + egress allowlists + .git blindness; closes plan 023 follow-up 5 (read-only workspace, the residual write/exfil channel after the browser sandbox engages) and supersedes the narrow plan 023 Phase B
-- No functional design stage yet; unit is next in order after the dependency plans land (018-021)
+- Functional Design: plans/unit-5-functional-design-plan.md (Q1-Q9, F1, F2, D-1, D-2); artifacts in aidlc-docs/construction/unit-5/functional-design/ (business-logic-model.md, business-rules.md BR-1..12, domain-entities.md)
+- NFR Requirements: plans/unit-5-nfr-requirements-plan.md (NFR-1..6; NFR-2/NFR-6 superseded 2026-10-25 by user directive: engine-managed per-policy egress proxy on ALL platforms, no nftables, no privileged CI); artifacts in aidlc-docs/construction/unit-5/nfr-requirements/ (nfr-requirements.md NFR-5.1..5.8, tech-stack-decisions.md TS-1..8)
+- Infrastructure Design: plans/unit-5-infrastructure-design-plan.md (ID-1..6); artifacts in aidlc-docs/construction/unit-5/infrastructure-design/ (infrastructure-design.md, deployment-architecture.md; shared-infrastructure.md N/A justified)
+- Next: Code Generation
+
+### unit-6 (cloud deployment) - INTENT ONLY (recorded 2026-10-25)
+
+- Intent document: aidlc-docs/unit-6-intent-cloud-deployment.md (split from the combined unit-6 intent by user directive 2026-10-25)
+- Scope (per user): a simple deployment path (e.g. Hetzner VPS or Render-like) with viz accessible to the author - plans built locally, loop run in the cloud
+- Ordering rationale (user, 2026-10-25, verbatim): "that comes before the linux native unit (we need it to test the linux native stuff since I have a mac)" - the cloud Linux box is the test environment for the unit-7 native path
+
+### unit-7 (Linux-native sandboxing + egress protection) - INTENT ONLY (recorded 2026-10-25)
+
+- Intent document: aidlc-docs/unit-7-intent-linux-native-sandboxing.md (split from the combined unit-6 intent by user directive 2026-10-25)
+- Scope (per user): Linux-native sandboxing (no Docker); Linux-native egress protection (the kernel-level enforcement deferred from unit-5)
+- Ordering rationale (user, 2026-10-25): after unit-6 - built and tested on the unit-6 cloud box

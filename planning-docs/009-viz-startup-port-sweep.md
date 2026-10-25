@@ -22,7 +22,7 @@ The `port_sweep` step leaves `examples/self/pipeline.yaml` (the `kill_listeners`
 
 ## Verified facts
 
-- **The hazard is live on this machine (2026-10-08):** pid 81855 is an agent-engine viz server holding 8321, launched from `/Users/luke/dev/work/yosk-cms` (`ps` command contains `agent-engine`; `lsof -a -p 81855 -d cwd -Fn` reports `fcwd`/`n/Users/luke/dev/work/yosk-cms`). Consequences, all three verified: (a) any run from this repo today dies loudly on the port; (b) today's pipeline-step sweep would SIGTERM/SIGKILL that live yosk-cms run (its command line matches `agent-engine`); (c) a cwd-scoped sweep spares it - cwd differs - and the fallback hands this repo's run a free port.
+- **The hazard is live on this machine (2026-10-08):** pid 81855 is an agent-engine viz server holding 8321, launched from the consumer repo workspace (`ps` command contains `agent-engine`; `lsof -a -p 81855 -d cwd -Fn` reports `fcwd`/`n` for the consumer repo workspace). Consequences, all three verified: (a) any run from this repo today dies loudly on the port; (b) today's pipeline-step sweep would SIGTERM/SIGKILL that live consumer-repo run (its command line matches `agent-engine`); (c) a cwd-scoped sweep spares it - cwd differs - and the fallback hands this repo's run a free port.
 - `lsof -a -p PID -d cwd -Fn` output format (macOS): `p<PID>` / `fcwd` / `n<path>` - parse the `n` line after `fcwd`.
 - Console entry point is `agent-engine = "agent_engine.cli:main"` (pyproject.toml:19-20), so a listener's `ps` command line contains the literal `agent-engine` (a `python -m agent_engine` run would show `agent_engine` - same limitation as today's pipeline step; accepted).
 - `serve_viz` raises `OSError` naming `--viz-port` on any bind failure (viz.py:265-270); locked in plan 001 line 17 ("Fail fast, never silently degrade") and enforced by `tests/test_viz.py::test_bind_failure_is_loud` (line 424).
@@ -35,7 +35,7 @@ The `port_sweep` step leaves `examples/self/pipeline.yaml` (the `kill_listeners`
 | Situation on `--viz-port` at startup | Sweep | Bind |
 |---|---|---|
 | Orphaned viz from a crashed run of **this** workspace | cwd matches + cmd matches → reaped | preferred port binds |
-| Live viz from a **different** workspace (yosk-cms case) | cwd differs → spared | `EADDRINUSE` → OS-assigned port + printed notice |
+| Live viz from a **different** workspace (the consumer repo case) | cwd differs → spared | `EADDRINUSE` → OS-assigned port + printed notice |
 | Live viz from the **same** workspace | cwd matches → killed (same-repo concurrency is already unsupported - shared checkpoint DB, `clear_attempt_artifacts`) | preferred port binds |
 | Port free | no-op | preferred port binds |
 | `--viz-port 0` | sweep skipped (port 0 means "any port"; nothing to reap) | OS-assigned |
@@ -44,7 +44,7 @@ The `port_sweep` step leaves `examples/self/pipeline.yaml` (the `kill_listeners`
 ## Global Constraints
 
 - TDD red→green→refactor for every task
-- Mock policy (repo rule, extended here): `run_agent` remains the only stubbed *agent* seam; process/socket tests stay real (`lsof_required` marker). The CLI-lifecycle tests **must** stub the sweep - a real sweep in a test could kill a contributor's live server on 8321 (the yosk-cms pid on this machine is exactly that case). The seam is `agent_engine.graph.kill_listeners_on_port` (the name `graph` imports), monkeypatched in `main()` lifecycle tests only - the same justification plan 001 gave `serve_viz`/`webbrowser.open`
+- Mock policy (repo rule, extended here): `run_agent` remains the only stubbed *agent* seam; process/socket tests stay real (`lsof_required` marker). The CLI-lifecycle tests **must** stub the sweep - a real sweep in a test could kill a contributor's live server on 8321 (the consumer repo pid on this machine is exactly that case). The seam is `agent_engine.graph.kill_listeners_on_port` (the name `graph` imports), monkeypatched in `main()` lifecycle tests only - the same justification plan 001 gave `serve_viz`/`webbrowser.open`
 - Never silent: the fallback prints a notice naming the busy preferred port and the actual port
 - No new dependencies; `lsof`/`socket`/`errno` only
 - Full suite green at the end of every task: `.venv-sandbox/bin/python -m pytest tests/ -q`
@@ -141,8 +141,8 @@ if args.viz_port:
 
 1. `.venv-sandbox/bin/python -m pytest tests/ -q` green.
 2. Manual, staged, on this machine (pid 81855 still holds 8321 - ideal fixture):
-   - Run any pipeline (or `viz_demo.py` with `--port 8321`) → notice printed, server on a free port, pid 81855's yosk-cms server untouched.
-   - Terminate the yosk-cms server, re-run → binds 8321 (preferred honored).
+   - Run any pipeline (or `viz_demo.py` with `--port 8321`) → notice printed, server on a free port, the consumer repo's server (pid 81855) untouched.
+   - Terminate the consumer repo server, re-run → binds 8321 (preferred honored).
    - Launch `viz_demo.py --port <free>`, kill it with SIGKILL (simulated crash orphan), re-run `viz_demo.py` on the same port from the same cwd → orphan reaped, preferred binds.
 3. Real `agent-engine examples/self/pipeline.yaml --plan <doc>` run - **user triggers** (makes LLM calls).
 

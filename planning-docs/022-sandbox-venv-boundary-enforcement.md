@@ -43,7 +43,7 @@ The requested fix has three items:
    `remove_sandbox_venv` must be re-verified for the mounted case
    (contents-delete fallback).
 4. **Defaults must stay bit-compatible.** With `sandbox_venv_dir` unset,
-   today's workspace-local `.venv-sandbox` behavior must be unchanged - yosk
+   today's workspace-local `.venv-sandbox` behavior must be unchanged - the consumer
    and any other consumer must not observe a difference. The relocation is
    strictly opt-in config.
 5. **Docker cannot exclude a subdirectory.** The only way to hide `.venv`
@@ -51,10 +51,10 @@ The requested fix has three items:
    dir to manage) or a bind of an empty host dir `-v {empty}:{ws}/.venv:ro`.
    `ro` matters: agents must fail loudly writing there, not silently succeed
    against a decoy.
-6. **Cross-repo impact.** yosk-cms's host engine venv also lives in the
+6. **Cross-repo impact.** the consumer repo's host engine venv also lives in the
    workspace (`.venv`, non-editable install). Masking is safe there (dotnet
    steps never use `.venv`) and closes the same hole - but no consumer
-   breakage is allowed, so yosk's pipeline must keep loading unchanged.
+   breakage is allowed, so the consumer's pipeline must keep loading unchanged.
 7. **The docs purge is a classification exercise, not a sed.** 57
    `.venv/bin` hits split into FIX (sandbox/agent-facing), KEEP
    (host-facing), and stale-reference investigation (`examples/self/` no
@@ -112,7 +112,7 @@ The requested fix has three items:
 3. Docs purge per classification; engine pipeline.yaml opts in to
    `sandbox_venv_dir`.
 4. **REFACTOR** + full suite (`.venv/bin/python -m pytest tests/ -q -m "not docker"`);
-   confirm yosk's pipeline.yaml still loads and its dotnet steps are
+   confirm the consumer's pipeline.yaml still loads and its dotnet steps are
    unaffected (default path, bit-compatible payloads).
 
 ## Verification checklist
@@ -124,7 +124,7 @@ The requested fix has three items:
   green in-container; `git add -A` sweep sees no venv noise.
 - Default path (unset): payload argv identical to pre-change snapshots.
 - Grep: zero `.venv/bin/python` occurrences in agent-facing files.
-- yosk-cms pipeline: loads and runs unchanged (no `.venv` usage in its
+- the consumer repo pipeline: loads and runs unchanged (no `.venv` usage in its
   sandbox steps).
 
 ## Open questions
@@ -133,7 +133,7 @@ The requested fix has three items:
   (fallback: bind an empty host dir read-only).
 - `remove_sandbox_venv` on a mountpoint: is a contents-delete fallback
   needed?
-- Should yosk also opt in to `sandbox_venv_dir`? Its `.venv` is the engine's
+- Should the consumer also opt in to `sandbox_venv_dir`? Its `.venv` is the engine's
   own install - masking it is safe, but no change is required for its
   sandbox to keep working. Defer to the consumer-migration step.
 

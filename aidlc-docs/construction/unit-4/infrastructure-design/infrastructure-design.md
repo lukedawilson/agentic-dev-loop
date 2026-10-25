@@ -29,7 +29,7 @@ flowchart TD
 | Skill install (ID-3) | `agentic-dev-loop-workflow install-skill` copies SKILL.md + template into `~/.claude/skills/agentic-dev-loop/` idempotently (overwrite), writes a VERSION marker; skill files never user-edited. |
 | Generated artifact (ID-2) | `project_workflow` + `render_workflow_js` write `.agentic-dev-loop/workflow.js` in the workspace; header = core version + pipeline hash; CC workflow-creation consumes it. |
 | Version stamping | Generated JS header + skill VERSION marker both record the core version; golden tests pin template ↔ core compatibility. |
-| Migration (ID-5) | Hard break; CHANGELOG old→new import table; in-repo pipeline.yaml `extensions:` strings + docs examples updated at implementation; yosk-cms upgrade note. |
+| Migration (ID-5) | Hard break; CHANGELOG old→new import table; in-repo pipeline.yaml `extensions:` strings + docs examples updated at implementation; the consumer repo upgrade note. |
 
 ## Failure modes (fail fast / fail loud)
 

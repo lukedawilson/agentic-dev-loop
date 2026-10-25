@@ -53,5 +53,5 @@ Both console scripts ship posix + powershell entry points (ID-1 requirement-firs
 
 - CHANGELOG + release notes carry the old→new import table (e.g. `agentic_dev_loop.config` → `agentic_dev_loop.core.config`, `agentic_dev_loop.extensions.aidlc` → `agentic_dev_loop.engine.extensions.aidlc` - exact paths fixed at Code Generation).
 - This repo's own `agentic-dev-loop/pipeline.yaml` `extensions:` string updated in the same change.
-- yosk-cms: documented upgrade note (pipeline.yaml extensions string + import updates).
+- the consumer repo: documented upgrade note (pipeline.yaml extensions string + import updates).
 - Explicit instruction to consumers: update before upgrading the package (alpha, breaking allowed pre-1.0).

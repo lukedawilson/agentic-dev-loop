@@ -77,6 +77,7 @@ unit touches. Live-verified facts:
 - **Config:** `mounts:` per step - list of `{path (repo-relative), mode: rw | ro}` - default preserves today's `{workspace}` rw (compatibility), plus `exclude: [".git"]`; FD decides strict-vs-compat defaults.
 - **Mount enforcement:** multiple `-v` flags per request; `ro` submounts for read-only paths.
 - **Egress enforcement:** engine-created per-policy network; the host applies nftables rules to the network namespace *before* the container starts inside it (no NET_ADMIN needed in-container) - or an HTTP(S) proxy the container must use, with a kernel-level block as backstop. Domain-based allowlists need DNS control (resolve-and-allow, or DNS interception) - an FD problem.
+- **FD resolution (2026-10-25):** the engine-managed per-policy egress proxy became THE enforcement point on all platforms; nftables-in-netns dropped. Kernel-level enforcement is deferred to the future native Linux backend (unit-3 FD-2 scope). Product posture for now: "best we can do with Docker". Hostname matching at the proxy per connection (CONNECT target); no IP resolution, no DNS interception.
 - **Provision container:** startup keeps broad egress (stamp-cached, runs before any agent input exists) - FD confirms.
 
 ## Open questions (revisit later - Functional Design)

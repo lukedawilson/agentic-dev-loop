@@ -20,7 +20,7 @@ Module split (`core` / `engine` / `viz`) with extras inversion, workflow project
 - [ ] 10. **Workflow CLI** - `tests/test_workflow_cli.py`: `install-skill` copies SKILL.md + template into `~/.claude/skills/agentic-dev-loop/` idempotently + writes VERSION marker (ID-3; test via tmp HOME); `--version`.
 - [ ] 11. **CI workflow-mode job** - `.github/workflows/workflow-mode.yml` (ubuntu + windows): install `[workflow]` extra only → run projection on fixture → render → golden compare. Proves no hidden engine imports (ID-4). Existing `ci.yml` + `release.yml` unchanged.
 - [ ] 12. **PBT** - `tests/test_unit4_pbt.py`: projection round-trip, ingest-token uniqueness, template determinism (same inputs → same JS modulo header).
-- [ ] 13. **Migration docs** - CHANGELOG old→new import table; `docs/setup.md` migration section; in-repo `agentic-dev-loop/pipeline.yaml` extensions string → `agentic_dev_loop.engine.extensions.aidlc`; README workflow-mode install/usage section; yosk-cms upgrade note (ID-5).
+- [ ] 13. **Migration docs** - CHANGELOG old→new import table; `docs/setup.md` migration section; in-repo `agentic-dev-loop/pipeline.yaml` extensions string → `agentic_dev_loop.engine.extensions.aidlc`; README workflow-mode install/usage section; the consumer repo upgrade note (ID-5).
 - [ ] 14. **Full regression** - existing suite green under new layout; docker-marked tests untouched; guard + golden + PBT green.
 
 ## Story traceability

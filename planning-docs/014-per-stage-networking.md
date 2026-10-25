@@ -119,9 +119,9 @@ it exists. Ask the user if they want the README pre-updated instead.
 3. Fetch tool policy defaults: empty allowlist (deny everything, author must list domains) vs allow-https-anywhere-by-default with caps?
 4. Should networked command steps be restricted to non-`goto`-reachable stages, or is author declaration enough?
 
-## Use-case evaluation - yosk-cms QA agent (Q1 answer)
+## Use-case evaluation - the consumer repo QA agent (Q1 answer)
 
-Evaluated `../yosk-cms` (`agent-engine/pipeline.yaml` + `sdk_agents/qa.agent.md`). The QA agent is runtime-verification: it boots the dotnet stack (`qa/boot-builder.sh`), mints a Kinde M2M token (`qa/mint-token.sh`), uploads fixtures (`qa/upload-source.sh`), curl-probes APIs, and runs a Playwright/headless-Chromium browser tier (`qa/probe.mjs`) against the served bundle.
+Evaluated the consumer repo (`agent-engine/pipeline.yaml` + `sdk_agents/qa.agent.md`). The QA agent is runtime-verification: it boots the dotnet stack (`qa/boot-builder.sh`), mints a Kinde M2M token (`qa/mint-token.sh`), uploads fixtures (`qa/upload-source.sh`), curl-probes APIs, and runs a Playwright/headless-Chromium browser tier (`qa/probe.mjs`) against the served bundle.
 
 | QA need | Under today's sandbox | Verdict |
 | --- | --- | --- |
@@ -136,7 +136,7 @@ Evaluated `../yosk-cms` (`agent-engine/pipeline.yaml` + `sdk_agents/qa.agent.md`
 
 Security consequence (accepted + documented): a networked agent step gives the agent raw egress for that stage. Author opt-in is the control; the default stays `--network none` everywhere; the networked container keeps `--read-only --cap-drop ALL` and the single-mount set. Threat-model note: networked stages are the only sandbox stages where an agent could exfiltrate - pipeline authors should reserve them for stages that need it (QA, integration).
 
-Side finding: yosk-cms is a *future consumer* - its pipeline still uses `agent_engine.extensions.aidlc` (pre-rename) and would need the rename migration + always-on sandbox reconciliation when it upgrades to the new wheel.
+Side finding: the consumer repo's pipeline still uses `agent_engine.extensions.aidlc` (pre-rename) and would need the rename migration + always-on sandbox reconciliation when it upgrades to the new wheel.
 
 ## Resolved decisions
 

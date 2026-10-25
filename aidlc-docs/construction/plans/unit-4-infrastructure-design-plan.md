@@ -26,7 +26,7 @@ Unit-4 has no traditional infrastructure (no servers beyond the localhost viz, n
 
 ### ID-5 - Consumer migration list mechanics
 
-[Answer]: A - docs + in-repo updates at implementation: CHANGELOG/release-notes carry an old→new import table; this repo's pipeline.yaml `extensions:` string and docs examples updated; yosk-cms gets a documented upgrade note; no migration script. (Raw: "A")
+[Answer]: A - docs + in-repo updates at implementation: CHANGELOG/release-notes carry an old→new import table; this repo's pipeline.yaml `extensions:` string and docs examples updated; the consumer repo gets a documented upgrade note; no migration script. (Raw: "A")
 
 ## Steps
 

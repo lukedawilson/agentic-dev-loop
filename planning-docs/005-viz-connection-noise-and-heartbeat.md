@@ -4,7 +4,7 @@
 
 > **For agentic workers:** Use bite-sized task execution to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Two defects surfaced during the first real long `--viz` loop run (yosk, plan 017, 2026-09-01):
+**Goal:** Two defects surfaced during the first real long `--viz` loop run (the consumer, plan 017, 2026-09-01):
 
 1. **Browser disconnects dump tracebacks into the loop's terminal.** A client that resets a keep-alive connection while the server is blocked reading the next request line raises `ConnectionResetError` from `handle_one_request → rfile.readline(65537)`. `viz.py` catches resets only on the SSE body path (`_events`); the plain request path has no catch, so `socketserver` prints `Exception occurred during processing of request` + a full traceback - noise that reads as a failure. Verified: traceback captured from the live loop's terminal; server and pipeline unaffected (subsequent `/topology` and `/events` requests served fine).
 2. **A long-running node looks dead.** Events fire only at node boundaries (LangGraph `tasks`/`updates` stream parts translated in `run_pipeline`). The observed `dev` node ran 26+ minutes emitting nothing between `node_started` and its next event - the backlog replay was exactly `run_started` + `node_started(dev)`, while the process was provably alive (CPU time climbing, SDK child alive). The page shows a static "dev running" with no sign of life, indistinguishable from a hang.
