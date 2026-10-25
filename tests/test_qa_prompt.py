@@ -27,3 +27,11 @@ def test_unverifiable_verdict_rules_present():
 
 def test_inconclusive_budget_rule_retained():
     assert "INCONCLUSIVE" in _text()
+
+
+def test_probe_plan_rules_present():
+    text = _text()
+    assert "**Variant matrix.**" in text
+    assert "**Outcome probes.**" in text
+    assert "**Concurrency probes.**" in text
+    assert "**Error messages are assertions.**" in text

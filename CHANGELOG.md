@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a17] - 2026-10-25
+
+### Changed
+
+- docs(planning): add 027 artifact-injection plan; QA probe-plan rules
+- Audit: record combined scrub+docs commit 3479d71
+- chore: scrub commercial name; add unit-5 ERD, step-execution flowchart, and fold-in docs
+- Audit: record planning-docs commit 47777fd
+- Unit-5 FD+NFR+ID docs, code-gen plan, unit-6/7 intents, name scrub
+- docs(planning): add planning conventions (tooling-path deliverables)
+- Uncommitted changes: docs/vps-dev-feasibility.md, planning-docs/027-inject-stage-artifacts-into-agent-contexts.md, src/agentic_dev_loop/engine/graph.py, src/agentic_dev_loop/engine/stages.py, tests/test_graph.py, tests/test_qa_prompt.py, tests/test_stages.py
+
 ## [1.0.0a16] - 2026-10-24
 
 ### Changed

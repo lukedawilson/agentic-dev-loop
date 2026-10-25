@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 DEFAULT_MAX_ITERATIONS = 500
 DEFAULT_COMMAND_TIMEOUT = 600.0  # seconds - a pytest-class suite budget
 LAST_ERROR = "last-error.md"
+ARTIFACT_CONTEXT_CAP = 24_000  # chars per artifact injected into a step's context
 
 
 @dataclass
@@ -196,15 +197,41 @@ def _run_command(command: str, workspace: Path, timeout: float,
         return None, out.decode("utf-8", "replace"), True
 
 
+def _artifact_file(runtime: Runtime, step_name: str) -> str | None:
+    """The declared artifact/produces filename a step writes, keyed by step
+    name - the artifacts dict only carries step name -> captured text."""
+    for step in runtime.cfg.steps:
+        if step.name == step_name:
+            if step.artifact is not None:
+                return step.artifact
+            if step.produces:
+                return step.produces[0]
+            return None
+    return None
+
+
 def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
-                  notes: list[str] | None = None) -> str:
+                  notes: list[str] | None = None,
+                  artifacts: dict[str, str] | None = None) -> str:
     """Assemble the attempt's shared message: subject, doc bundle, the
     canonical dependency-policy paragraph (021), the expected-output-paths
     section generated from step defs (a prompt merely naming files lets agents
-    skip them), and previous-attempt notes."""
+    skip them), accumulated stage artifacts (027), and previous-attempt
+    notes."""
     parts = [f"You are working on {subject}.\n"]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
+    if artifacts:
+        parts.append("## Stage artifacts")
+        for step_name, content in artifacts.items():
+            capped = content[:ARTIFACT_CONTEXT_CAP]
+            if len(content) > ARTIFACT_CONTEXT_CAP:
+                filename = _artifact_file(runtime, step_name)
+                path = (f"{prompt_dir(runtime)}/{filename}" if filename
+                        else prompt_dir(runtime))
+                capped += (f"\n\n[... content truncated - full text at "
+                           f"`{path}`]")
+            parts.append(f"### {step_name}\n\n{capped}")
     parts.append("## Dependency policy\n\n" + policy_injection(runtime.cfg))
     lines = []
     for step in runtime.cfg.steps:
@@ -295,8 +322,11 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
         attempt = state["attempt"]
         subject = state["subject"]
         max_iterations = step.max_iterations or DEFAULT_MAX_ITERATIONS
+        message = build_context(runtime, state["docs"], state["subject"],
+                                state["notes"],
+                                artifacts=state.get("artifacts", {}))
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
-        result = run_agent(step.agent, state["context"], runtime,
+        result = run_agent(step.agent, message, runtime,
                            max_iterations=max_iterations, step=step)
         if not result.ok:
             print(f"[{subject}] {step.name} agent failed on attempt {attempt}.", flush=True)
@@ -330,7 +360,10 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
         if verdicts_map is None:
             merged = {**state["step_verdicts"], step.name: "pass"} if captures else \
                 state["step_verdicts"]
-            return {"step_verdicts": merged, "failed": False}
+            update = {"step_verdicts": merged, "failed": False}
+            if captures and result.response is not None:
+                update["artifacts"] = {step.name: result.response}
+            return update
 
         parsed = Verdict.from_text(result.response or "", verdicts_map)
         merged = {**state["step_verdicts"], step.name: None}
@@ -340,16 +373,24 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
             if verdict == "pass":
                 print(f"[{subject}] {step.name} VERDICT: PASS on attempt {attempt}.",
                       flush=True)
-                return {"step_verdicts": merged, "failed": False}
+                update = {"step_verdicts": merged, "failed": False}
+                if captures and result.response is not None:
+                    update["artifacts"] = {step.name: result.response}
+                return update
             if verdict == "unverifiable":
                 print(f"[{subject}] {step.name} qa verdict: UNVERIFIABLE "
                       f"(moves on).", flush=True)
-                return {"step_verdicts": merged, "failed": False}
+                update = {"step_verdicts": merged, "failed": False}
+                if captures and result.response is not None:
+                    update["artifacts"] = {step.name: result.response}
+                return update
             print(f"[{subject}] {step.name} verdict: fail on attempt {attempt}.",
                   flush=True)
             update = {"step_verdicts": merged,
                       "notes": [f"## {step.name} output (attempt {attempt})\n\n"
                                 f"{result.response}"]}
+            if captures and result.response is not None:
+                update["artifacts"] = {step.name: result.response}
             if isinstance(step.on_fail, Route) and step.on_fail.retry:
                 update["retry_target"] = step.on_fail.goto
             return update
@@ -548,16 +589,14 @@ def make_router(runtime: Runtime, step: StepConfig):
 
 def make_bump_node(runtime: Runtime):
     """Close the retry cycle: consume one attempt, clear per-attempt
-    artifacts, and rebuild the context with the accumulated notes - the
-    attempt-start duties the consumer's dev node owned, generalized to any target."""
+    artifacts, and reset verdicts/failed for the next attempt. The retried
+    agent's message is rebuilt per run by make_agent_node from the
+    accumulated notes and artifacts (027)."""
 
     def node(state: dict) -> dict:
         clear_attempt_artifacts(runtime)
-        context = build_context(runtime, state["docs"], state["subject"],
-                                state["notes"])
         return {"attempt": state["attempt"] + 1,
                 "step_verdicts": {},
-                "context": context,
                 "failed": False}
 
     return node

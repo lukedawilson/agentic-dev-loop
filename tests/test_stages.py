@@ -17,8 +17,9 @@ from openhands.sdk.conversation.state import ConversationExecutionStatus
 from agentic_dev_loop.core.config import PipelineConfig
 from agentic_dev_loop.engine.registry import Registry, default_registry
 from agentic_dev_loop.engine.stages import (
-    Runtime, _run_command, build_context, make_action_node, make_agent_node,
-    make_bump_node, make_command_node, make_router, run_agent,
+    ARTIFACT_CONTEXT_CAP, Runtime, _run_command, build_context,
+    make_action_node, make_agent_node, make_bump_node, make_command_node,
+    make_router, run_agent,
 )
 
 
@@ -53,7 +54,7 @@ def runtime(tmp_path, fake_sandbox):
 
 def make_state(**over):
     state = {"subject": "plan plan.md", "docs": {"plan.md": "THE PLAN"},
-             "context": "CTX", "attempt": 1, "max_attempts": 3, "notes": [],
+             "artifacts": {}, "attempt": 1, "max_attempts": 3, "notes": [],
              "failed": False, "outcome": None, "commit_allowed": False,
              "step_verdicts": {}, "retry_target": None, "thread_id": "t1"}
     state.update(over)
@@ -113,6 +114,27 @@ class TestBuildContext:
         ctx = build_context(rt, {}, "s", [])
         assert "dev agent writes:" in ctx
         assert "test agent writes:" not in ctx
+
+    def test_artifacts_render_one_subsection_per_artifact_in_order(self, runtime):
+        ctx = build_context(runtime, {}, "s", [],
+                            artifacts={"dev": "summary text",
+                                       "review": "findings text"})
+        assert "## Stage artifacts" in ctx
+        assert "### dev\n\nsummary text" in ctx
+        assert "### review\n\nfindings text" in ctx
+        assert ctx.index("### dev") < ctx.index("### review")  # dict order
+
+    def test_artifact_content_capped_with_run_state_path_marker(self, runtime):
+        big = "x" * (ARTIFACT_CONTEXT_CAP + 100)
+        ctx = build_context(runtime, {}, "s", [], artifacts={"dev": big})
+        assert "x" * ARTIFACT_CONTEXT_CAP in ctx
+        assert "x" * (ARTIFACT_CONTEXT_CAP + 100) not in ctx
+        assert ("[... content truncated - full text at "
+                "`.pr/implementation-summary.md`]") in ctx
+
+    def test_no_artifacts_renders_no_section(self, runtime):
+        ctx = build_context(runtime, {}, "s", [])
+        assert "## Stage artifacts" not in ctx
 
 
 class TestDepsPolicyContext:
@@ -181,6 +203,40 @@ class TestAgentNode:
         assert update["retry_target"] == "dev"
         (note,) = update["notes"]
         assert "broken build" in note and "attempt 2" in note
+
+    def test_no_verdicts_branch_captures_artifact(self, runtime, fake_agents):
+        fake_agents.set("dev", [("write", "implementation-summary.md", "MARKER-DEV")])
+        update = make_agent_node(runtime, runtime.cfg.steps[0])(make_state())
+        assert update["artifacts"] == {"dev": "MARKER-DEV"}
+
+    def test_pass_verdict_captures_artifact(self, runtime, fake_agents):
+        fake_agents.set("check", [("write", "ci-fix.md", "MARKER-CHECK\nVERDICT: PASS\n")])
+        update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
+        assert update["artifacts"] == {"check": "MARKER-CHECK\nVERDICT: PASS\n"}
+
+    def test_fail_verdict_captures_artifact(self, runtime, fake_agents):
+        fake_agents.set("check", [("write", "ci-fix.md", "MARKER-FAIL\nVERDICT: FAIL\n")])
+        update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
+        assert update["artifacts"] == {"check": "MARKER-FAIL\nVERDICT: FAIL\n"}
+
+    def test_unverifiable_verdict_captures_artifact(self, runtime, fake_agents):
+        step = make_cfg([
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE"},
+             "on_pass": "success"}]).steps[0]
+        fake_agents.set("qa", [("write", "qa-report.md", "MARKER-UNVER\nVERDICT: UNVERIFIABLE\n")])
+        update = make_agent_node(runtime, step)(make_state())
+        assert update["artifacts"] == {"qa": "MARKER-UNVER\nVERDICT: UNVERIFIABLE\n"}
+
+    def test_capture_error_branch_returns_no_artifacts(self, runtime, fake_agents):
+        update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
+        assert "artifacts" not in update
+
+    def test_unclear_branch_returns_no_artifacts(self, runtime, fake_agents):
+        fake_agents.set("check", [("write", "ci-fix.md", "undecided")])
+        update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
+        assert "artifacts" not in update
 
     def test_verdicts_merge_with_prior_steps(self, runtime, fake_agents):
         fake_agents.set("check", [("write", "ci-fix.md", "VERDICT: PASS")])
@@ -528,14 +584,11 @@ class TestBumpNode:
     def test_consumes_attempt_resets_verdicts_rebuilds_cleans(self, runtime):
         for stale in ("ci-fix.md", "implementation-summary.md", "last-error.md"):
             (runtime.state_dir / stale).write_text("stale")
-        state = make_state(attempt=1, notes=["N1"],
+        state = make_state(attempt=1, notes=["N1"], artifacts={"dev": "D1"},
                            step_verdicts={"check": "fail"})
         update = make_bump_node(runtime)(state)
-        assert update["attempt"] == 2
-        assert update["step_verdicts"] == {}
-        assert update["failed"] is False
-        assert "## Previous attempt feedback\n\nN1" in update["context"]
-        assert "## plan.md\n\nTHE PLAN" in update["context"]
+        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False}
+        assert "context" not in update  # message is rebuilt per run (027)
         for stale in ("ci-fix.md", "implementation-summary.md", "last-error.md"):
             assert not (runtime.state_dir / stale).exists()
 

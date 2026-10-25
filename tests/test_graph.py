@@ -178,6 +178,31 @@ class TestRunPipeline:
         second_dev = fake_agents.messages_for("dev")[1]
         assert "broken build" in second_dev  # fail note reached the next attempt
 
+    def test_downstream_agent_sees_prior_artifact(self, repo, fake_agents):
+        script_all_pass(fake_agents)
+        ok, attempts = run_pipeline("pipeline.yaml", args())
+        assert (ok, attempts) == (True, 1)
+        (dev_msg,) = fake_agents.messages_for("dev")
+        (check_msg,) = fake_agents.messages_for("check")
+        assert "## Stage artifacts" not in dev_msg  # runs before anything accumulates
+        assert "## Stage artifacts" in check_msg
+        assert "built it" in check_msg  # dev's captured response reached check
+
+    def test_retry_injects_review_artifact_notes_and_prior_dev(self, repo,
+                                                               fake_agents):
+        script_all_pass(fake_agents)
+        fake_agents.set("review", [
+            ("write", "review-findings.md", "VERDICT: NEEDS CHANGES\nfix the thing"),
+            ("write", "review-findings.md", "VERDICT: APPROVED"),
+        ])
+        ok, attempts = run_pipeline("pipeline.yaml", args())
+        assert (ok, attempts) == (True, 2)
+        second_dev = fake_agents.messages_for("dev")[1]
+        assert "## Stage artifacts" in second_dev
+        assert "built it" in second_dev          # dev's own attempt-1 artifact
+        assert "fix the thing" in second_dev      # review artifact + fail note
+        assert "## Previous attempt feedback" in second_dev
+
     def test_exhaustion_fails(self, repo, fake_agents):
         script_all_pass(fake_agents)
         fake_agents.set("check", [("write", "ci-fix.md", "VERDICT: FAIL")])

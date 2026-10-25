@@ -27,19 +27,27 @@ from .loaders import resolve_docs
 from .secrets import resolve_secrets, scan_env_files
 from .registry import (Registry, default_registry, load_extensions,
                        validate_action_network)
-from .stages import (Runtime, build_context, clear_attempt_artifacts,
+from .stages import (Runtime, clear_attempt_artifacts,
                      make_action_node, make_agent_node, make_bump_node,
                      make_command_node, make_router, success_node)
 
 CHECKPOINT_DB = "loop-checkpoints.sqlite"  # under state_dir, one DB per workspace
 
 
+def _merge_artifacts(a: dict[str, str], b: dict[str, str]) -> dict[str, str]:
+    """Accumulate per-step artifact text across nodes. LangGraph gives
+    un-annotated fields last-write-wins, so without this reducer one node's
+    entry would silently replace the accumulated dict."""
+    return {**a, **b}
+
+
 class LoopState(TypedDict):
     """State threaded through the graph. `notes` accumulates across attempts
-    (append reducer); every other key is last-write-wins."""
+    (append reducer), `artifacts` accumulates across stages (merge reducer);
+    every other key is last-write-wins."""
     subject: str
     docs: dict[str, str]
-    context: str                       # built at attempt start, shared by all stages
+    artifacts: Annotated[dict[str, str], _merge_artifacts]  # step name -> artifact text
     attempt: int
     max_attempts: int
     notes: Annotated[list[str], operator.add]
@@ -163,7 +171,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
     config = {"configurable": {"thread_id": thread_id}}
     db = str(state_dir / CHECKPOINT_DB)
     if resume:
-        initial = None  # state (docs/subject/context) comes from the checkpoint
+        initial = None  # state (docs/subject/artifacts) comes from the checkpoint
     else:
         _loader, docs, subject = resolve_docs(cfg, base, registry, args)
         # A fresh run owns state_dir: drop cross-run leftovers (a previous
@@ -173,7 +181,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
         initial: LoopState = {
             "subject": subject,
             "docs": docs,
-            "context": build_context(runtime, docs, subject, []),
+            "artifacts": {},
             "attempt": 1,
             "max_attempts": max_attempts,
             "notes": [],
@@ -221,7 +229,8 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                     f"Failure details: {state_dir}/last-error.md",
                     flush=True)
                 initial = {**values, "failed": False,
-                           "resume_target": target, "failed_step": None}
+                           "resume_target": target, "failed_step": None,
+                           "artifacts": values.get("artifacts", {})}
 
         if bus is None and not getattr(args, "no_viz", True):
             start_state = initial if initial is not None \
