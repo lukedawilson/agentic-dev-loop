@@ -133,6 +133,8 @@ No delegating entity; no service-named value object; no per-endpoint service; no
 - `unit-of-work.md`: the "OPT-IN - not requested ⇒ behavior unchanged" bullet is overturned by FD-4; unit-3 title "Kernel-level isolation" → "kernel-level sandboxing" (ID-8).
 - `unit-4-intent-claude-code-backend.md`: its opt-in assumption needs a matching amendment when unit-4 is planned; "kernel isolation" references (findings 5, §9) → "kernel-level sandboxing".
 
+> **Applied 2026-10-25:** the `requirements.md` and `unit-of-work.md` amendments above are now applied (always-on wording, FR-2.2 abstraction, Stage-2 title), and the story map gained unit-5 pillar rows (U5-P1..U5-P5). The `unit-4-intent` doc stays as history (unit-4 WONTSHIP).
+
 ## Amendment (2026-10-19) - loop-mechanics hardening
 
 - **DockerBackend**: constructor takes workspace only (iso_state_dir param dropped - Q1).
