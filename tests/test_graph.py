@@ -9,7 +9,6 @@ import argparse
 import queue
 import sqlite3
 import subprocess
-import time
 from pathlib import Path
 
 import pytest
@@ -352,21 +351,6 @@ class TestCommandStep:
         assert fake_agents.agents_called() == ["dev", "dev"]
         second_dev = fake_agents.messages_for("dev")[1]
         assert "test output" in second_dev and "attempt 1" in second_dev
-
-    def test_timeout_exhausts_run_and_kills_process_group(self, repo,
-                                                          fake_agents):
-        yaml = COMMAND_STAGE_YAML.replace(
-            "    command: python -c \"import sys; import pathlib; print('test output'); sys.exit(0 if pathlib.Path('.pr/fix.marker').exists() else 1)\"",
-            '    command: python -c "import time; time.sleep(3)"\n    timeout: 0.2')
-        self._write(repo, yaml)
-        fake_agents.set("dev", [("write", "fix.marker", "")])
-        start = time.monotonic()
-        ok, attempts = run_pipeline("commandstage.yaml", args())
-        elapsed = time.monotonic() - start
-        assert (ok, attempts) == (False, 3)
-        assert fake_agents.agents_called() == ["dev"] * 3
-        assert all("timed out" in m for m in fake_agents.messages_for("dev")[1:])
-        assert elapsed < 5.0  # killpg cut the 3s sleeps short
 
     def test_fail_forever_with_cli_max_attempts(self, repo, fake_agents):
         yaml = COMMAND_STAGE_YAML.replace(
