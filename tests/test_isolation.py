@@ -1646,7 +1646,7 @@ class TestDeclaredCachesAndSyncExcludes:
         cfg.isolation.sandbox_venv_dir = str(venv_dir)
         ws, _runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
         try:
-            target = f"#!{sandbox.export_root}/.venv-sandbox/bin/python"
+            target = f"#!{Path(sandbox.export_root) / '.venv-sandbox' / 'bin' / 'python'}"
             first = (venv_dir / "bin" / "pip").read_text().splitlines()[0]
             assert first == target
         finally:

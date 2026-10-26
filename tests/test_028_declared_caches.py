@@ -239,3 +239,21 @@ class TestRepairVenvShebangs:
 
         repair_venv_shebangs(venv, state_dir=state, export_root=new_export)
         assert script.read_text().splitlines()[0] == f"#!{new_python}"
+
+    def test_repair_detects_backslash_separated_stale_shebangs(self, tmp_path):
+        """Windows-written venv shebangs (backslash separators) must be
+        detected as stale and repaired, never silently skipped (a21 CI)."""
+        venv = tmp_path / "venv"
+        (venv / "bin").mkdir(parents=True)
+        state = tmp_path / "state"
+        new_export = state / "exports" / "bbbb"
+        new_python = new_export / ".venv-sandbox" / "bin" / "python"
+        new_python.parent.mkdir(parents=True)
+        new_python.write_text("#!/bin/sh\n")
+        stale = str(state / "exports" / "aaaa" / ".venv-sandbox"
+                    / "bin" / "python").replace("/", "\\")
+        (venv / "bin" / "pip").write_text(f"#!{stale}\nprint('hi')\n")
+
+        repair_venv_shebangs(venv, state_dir=state, export_root=new_export)
+
+        assert (venv / "bin" / "pip").read_text().splitlines()[0] == f"#!{new_python}"

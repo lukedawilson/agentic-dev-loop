@@ -524,7 +524,7 @@ def repair_venv_shebangs(venv_dir: str | Path, *,
     if not bin_dir.is_dir():
         return
     target = str(Path(export_root) / SANDBOX_VENV_DIR / "bin" / "python")
-    stale_prefix = str(Path(state_dir) / "exports").rstrip("/\\") + "/"
+    stale_prefix = (Path(state_dir) / "exports").as_posix() + "/"
     for entry in sorted(bin_dir.iterdir()):
         if entry.is_symlink() or not entry.is_file():
             continue
@@ -539,7 +539,7 @@ def repair_venv_shebangs(venv_dir: str | Path, *,
         interpreter = line[2:].strip()
         if not interpreter or interpreter == target:
             continue
-        if not interpreter.startswith(stale_prefix):
+        if not interpreter.replace("\\", "/").startswith(stale_prefix):
             continue
         _rewrite_shebang(entry, target)
 
