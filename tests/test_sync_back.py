@@ -137,3 +137,88 @@ def test_cache_not_deleted(tmp_path):
     assert "node_modules/dep.js" not in report.synced_paths
     assert (ws / "node_modules" / "dep.js").read_text() == "cache"
     assert (ws / "src" / "a.py").read_text() == "changed-a"
+
+
+class TestSyncExcludes:
+    """028: declared sync-excludes are scratch - never copied into the export
+    and never classified as add/modify/delete/conflict."""
+
+    def _ws(self, tmp_path):
+        ws = _workspace(tmp_path)
+        (ws / "src" / "proj" / "bin").mkdir(parents=True)
+        (ws / "src" / "proj" / "bin" / "a.dll").write_text("bin-a")
+        (ws / "src" / "proj" / "obj").mkdir(parents=True)
+        (ws / "src" / "proj" / "obj" / "b.o").write_text("obj-b")
+        return ws
+
+    def test_literal_exclude_skips_all_buckets(self, tmp_path):
+        ws = self._ws(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "qa" / ".artifacts").mkdir(parents=True)
+        (exp / "qa" / ".artifacts" / "new").write_text("added")
+        (exp / "qa" / ".artifacts" / "old").write_text("modified")
+        (ws / "qa" / ".artifacts").mkdir(parents=True, exist_ok=True)
+        (ws / "qa" / ".artifacts" / "deleted").write_text("gone")
+        (exp / "qa" / ".artifacts" / "conflict").write_text("exp-move")
+        (ws / "qa" / ".artifacts" / "conflict").write_text("real-move")
+        baseline = {"qa/.artifacts/old": hashlib.sha256(b"old").hexdigest(),
+                    "qa/.artifacts/conflict": hashlib.sha256(b"base").hexdigest()}
+        report = sync_back(exp, ws, ["."], baseline=baseline,
+                           excludes=["qa/.artifacts"])
+        assert report.conflicts == ()
+        assert all("qa/.artifacts" not in p for p in report.synced_paths)
+
+    def test_wildcard_bin_obj_deep_nesting(self, tmp_path):
+        ws = self._ws(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "proj" / "bin").mkdir(parents=True, exist_ok=True)
+        (exp / "src" / "proj" / "obj").mkdir(parents=True, exist_ok=True)
+        (exp / "src" / "proj" / "bin" / "new.dll").write_text("new")
+        (exp / "src" / "proj" / "obj" / "new.o").write_text("new")
+        (exp / "src" / "a.py").write_text("changed-a")
+        baseline = {"src/a.py": _digest(ws / "src" / "a.py")}
+        report = sync_back(exp, ws, ["."], baseline=baseline,
+                           excludes=["**/bin/**", "**/obj/**"])
+        assert report.conflicts == ()
+        assert report.synced_paths == ("src/a.py",)
+        assert not (ws / "src" / "proj" / "bin" / "new.dll").exists()
+        assert not (ws / "src" / "proj" / "obj" / "new.o").exists()
+
+    def test_host_side_drift_no_longer_conflicts(self, tmp_path):
+        """028: host-side obj/bin drift is excluded from both snapshots, so it
+        can no longer raise a BR-4.4 conflict (AE-SBX-016)."""
+        ws = self._ws(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "proj" / "bin" / "a.dll").write_text("host-drift")
+        (exp / "src" / "a.py").write_text("agent-change")
+        baseline = {"src/a.py": _digest(ws / "src" / "a.py")}
+        report = sync_back(exp, ws, ["."], baseline=baseline,
+                           excludes=["**/bin/**", "**/obj/**"])
+        assert report.conflicts == ()
+        assert report.synced_paths == ("src/a.py",)
+
+    def test_star_spans_separators(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "proj").mkdir(parents=True, exist_ok=True)
+        (exp / "src" / "proj" / "x.dll").write_text("new")
+        (exp / "root.dll").write_text("new")
+        report = sync_back(exp, ws, ["."], excludes=["*.dll"])
+        assert report.synced_paths == ()
+
+    def test_plan_sync_back_deterministic_with_excludes(self):
+        from agentic_dev_loop.engine.sync_back import plan_sync_back
+        changes = {
+            "src/a.py": "modified",
+            "src/bin/x.dll": "modified",
+            "src/bin/y.dll": "added",
+            "src/obj/z.o": "deleted",
+            "src/bin/c.dll": "conflict",
+        }
+        kwargs = dict(declared_rw=["."], excludes=["**/bin/**", "**/obj/**"])
+        a = plan_sync_back(changes, **kwargs)
+        b = plan_sync_back(changes, **kwargs)
+        assert a == b
+        assert a.to_copy == ("src/a.py",)
+        assert a.to_delete == ()
+        assert a.conflicts == ()

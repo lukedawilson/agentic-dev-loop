@@ -1570,3 +1570,84 @@ class TestUnit5RuntimeEnforcement:
             assert (ws / "src" / "a.py").read_text() == "external"
         finally:
             backend.close()
+
+
+class TestDeclaredCachesAndSyncExcludes:
+    """028: ``caches:``/``sync_excludes:`` wiring into startup and the
+    engine's removal of the hardcoded cache whitelist."""
+
+    def _cfg(self, tmp_path, **extra):
+        from agentic_dev_loop.core.config import PipelineConfig
+        steps = [{"name": "dev", "agent": "dev", "on_pass": "success"}]
+        data = {"name": "p", "llm": {"model": "m", "api_key_env": "K"},
+                "agents_dir": "agents", "steps": steps,
+                "lockfiles": ["uv.lock"],
+                "isolation": {"state_dir": str(tmp_path / "iso-state")}}
+        data.update(extra)
+        return PipelineConfig.model_validate(data)
+
+    def _startup(self, tmp_path, monkeypatch, cfg):
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""))
+        sandbox = startup_sandbox(cfg, workspace=ws,
+                                  state_dir=tmp_path / "run-state",
+                                  runner=runner)
+        return ws, runner, sandbox
+
+    def test_declared_missing_cache_auto_created(self, tmp_path, monkeypatch):
+        from agentic_dev_loop.core.config import PipelineConfig
+        cfg = PipelineConfig.model_validate({
+            "name": "p", "llm": {"model": "m", "api_key_env": "K"},
+            "agents_dir": "agents", "lockfiles": ["uv.lock"],
+            "caches": ["node_modules"],
+            "steps": [{"name": "dev", "agent": "dev", "on_pass": "success"}],
+            "isolation": {"state_dir": str(tmp_path / "iso-state")},
+        })
+        ws, runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
+        try:
+            assert (ws / "node_modules").is_dir()
+            root = Path(sandbox.export_root)
+            assert (root / "node_modules").is_dir()
+            run_argv = [c for c in runner.calls
+                        if c[:2] == ["docker", "run"] and "--detach" in c][0]
+            assert f"{ws / 'node_modules'}:{root}/node_modules" in run_argv
+        finally:
+            sandbox.close()
+
+    def test_sync_excludes_flow_into_backend(self, tmp_path, monkeypatch):
+        cfg = self._cfg(tmp_path, sync_excludes=["**/bin/**", "**/obj/**"])
+        _ws, _runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
+        try:
+            assert sandbox._sync_excludes == ["**/bin/**", "**/obj/**"]
+        finally:
+            sandbox.close()
+
+    def test_no_engine_cache_whitelist_remains(self):
+        import agentic_dev_loop.engine.isolation as isolation
+        import agentic_dev_loop.engine.presets as presets
+        assert not hasattr(presets, "CACHE_DIRS")
+        assert not hasattr(isolation, "discover_cache_paths")
+
+    def test_relocated_venv_shebang_repaired(self, tmp_path, monkeypatch):
+        """028: a venv built under an earlier export's path has its console
+        scripts repaired to point at this run's export python at startup."""
+        venv_dir = tmp_path / "outside-venv"
+        (venv_dir / "bin").mkdir(parents=True)
+        stale = (tmp_path / "run-state" / "exports" / "old-uuid"
+                 / ".venv-sandbox" / "bin" / "python")
+        (venv_dir / "bin" / "pip").write_text(
+            f"#!{stale}\nprint('ok')\n")
+        cfg = self._cfg(tmp_path)
+        cfg.isolation.sandbox_venv_dir = str(venv_dir)
+        ws, _runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
+        try:
+            target = f"#!{sandbox.export_root}/.venv-sandbox/bin/python"
+            first = (venv_dir / "bin" / "pip").read_text().splitlines()[0]
+            assert first == target
+        finally:
+            sandbox.close()

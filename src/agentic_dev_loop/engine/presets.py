@@ -2,25 +2,14 @@
 
 Preset data, never mechanism (D-2): one ``package-registries`` preset serves
 every toolchain, so the restore step stays toolchain-agnostic. Adding a
-toolchain adds a target here plus a cache declaration - no per-toolchain
-egress code exists.
+toolchain adds a target here plus a ``caches:`` entry in the pipeline - no
+per-toolchain egress code exists. Toolchain cache dirs are pipeline author
+data (``caches:``), never engine preset data (028).
 """
 
 from __future__ import annotations
 
 from agentic_dev_loop.core.config import KNOWN_EGRESS_PRESETS
-
-# The per-toolchain cache dirs (BR-9.3, BR-3.1): in-workspace paths that are
-# bind-mounted rw into the export rather than copied. Cache declarations are
-# preset data (D-2) - adding a toolchain adds a path here, never mechanism.
-CACHE_DIRS: tuple[str, ...] = (
-    ".venv-sandbox",
-    "node_modules",
-    "qa/node_modules",
-    "qa/.browsers",
-    ".nuget-packages",
-    "target",
-)
 
 
 # The package registries every toolchain's locked restore touches (BR-9.1):

@@ -40,7 +40,6 @@ from agentic_dev_loop.core.config import IsolationConfig, PipelineConfig
 from .egress_policy import EgressPolicy
 from .egress_proxy import EgressProxy
 from .mounts import Mount, MountSet
-from .presets import CACHE_DIRS
 from .proc import needs_shell, split_command
 from .seccomp import resolve_seccomp_profile
 from .step_workspace import StepWorkspace
@@ -228,21 +227,6 @@ class ContainerProfile:
 
     def key(self) -> str:
         return container_profile_key(self.mount_set, self.egress_policy)
-
-
-def discover_cache_paths(workspace: str | Path,
-                         sandbox_venv_dir: str | None = None) -> list[str]:
-    """The in-workspace cache dirs to bind-mount into the export (BR-3/F2).
-
-    Only dirs that actually exist are caches - an absent cache dir is simply
-    not a cache (the toolchain is unused), so materialisation never fails on
-    a repo that does not use, say, node. The relocated sandbox venv (022) is
-    never a cache: it bind-mounts from outside the workspace instead."""
-    ws = Path(workspace)
-    paths = [d for d in CACHE_DIRS if (ws / d).is_dir()]
-    if sandbox_venv_dir is not None:
-        paths = [d for d in paths if d != SANDBOX_VENV_DIR]
-    return paths
 
 
 @dataclass
@@ -523,6 +507,53 @@ def remove_sandbox_venv(workspace: str | Path, *,
             f"- remove it manually and re-run (docs/setup.md §5)") from e
 
 
+def repair_venv_shebangs(venv_dir: str | Path, *,
+                           state_dir: str | Path,
+                           export_root: str | Path) -> None:
+    """Repair stale export-path shebangs in a sandbox venv (028).
+
+    Each run materialises a fresh export under ``state_dir/exports/<uuid>/``,
+    so a venv built by an earlier run carries console-script shebangs that bake
+    that (now dead) export path. Rewrite every regular file under
+    ``<venv_dir>/bin/`` whose first line starts with ``#!`` and points at a
+    dead ``state_dir/exports/`` path to the current run's venv python
+    (``{export_root}/.venv-sandbox/bin/python``). Symlinks and files without a
+    shebang are left alone; idempotent; host-side, before any exec.
+    """
+    bin_dir = Path(venv_dir) / "bin"
+    if not bin_dir.is_dir():
+        return
+    target = str(Path(export_root) / SANDBOX_VENV_DIR / "bin" / "python")
+    stale_prefix = str(Path(state_dir) / "exports").rstrip("/\\") + "/"
+    for entry in sorted(bin_dir.iterdir()):
+        if entry.is_symlink() or not entry.is_file():
+            continue
+        try:
+            with entry.open("rb") as fh:
+                first = fh.readline(256)
+        except OSError:
+            continue
+        if not first.startswith(b"#!"):
+            continue
+        line = first.decode("utf-8", errors="replace").rstrip("\n").rstrip("\r")
+        interpreter = line[2:].strip()
+        if not interpreter or interpreter == target:
+            continue
+        if not interpreter.startswith(stale_prefix):
+            continue
+        _rewrite_shebang(entry, target)
+
+
+def _rewrite_shebang(path: Path, target: str) -> None:
+    """Replace only the first line of a regular file, preserving the rest."""
+    data = path.read_bytes()
+    nl = data.find(b"\n")
+    if nl == -1:
+        return
+    body = data[nl + 1:]
+    path.write_bytes(f"#!{target}\n".encode("utf-8") + body)
+
+
 def host_user_flag() -> str | None:
     """The ``docker --user`` value binding the sandbox to the host user.
 
@@ -759,7 +790,8 @@ class DockerBackend(Sandbox):
                  network: bool = False, sandbox_venv_dir: str | None = None,
                  seccomp_profile: str | None = None,
                  export_root: str | None = None,
-                 cache_mounts: list[tuple[str, str, str]] | None = None):
+                 cache_mounts: list[tuple[str, str, str]] | None = None,
+                 sync_excludes: list[str] | None = None):
         self._image = image
         self._workspace = workspace
         self._iso_state_dir = Path(iso_state_dir)  # host-only (audit)
@@ -783,6 +815,9 @@ class DockerBackend(Sandbox):
             for _source, target, _mode in self._cache_mounts:
                 self._cache_paths.append(
                     os.path.relpath(target, export_root).replace("\\", "/"))
+        # 028: run-wide sync-back excludes (scratch paths - skipped from both
+        # the export copy and every snapshot).
+        self._sync_excludes = list(sync_excludes or ())
         self._baseline: dict[str, str] = {}
         # The profile-keyed pool (D-1/BR-10): profile key -> running container.
         self._pool: dict[tuple[str, bool], _ProfileContainer] = {}
@@ -889,7 +924,8 @@ class DockerBackend(Sandbox):
         self._started = True
         if not self._baseline:
             self._baseline = _snapshot(Path(self._export_root),
-                                       self._cache_paths)
+                                       self._cache_paths,
+                                       self._sync_excludes)
 
     def provision(self, setup_cmd: str, stamp_key: str, stamp_dir: str,
                   force: bool) -> None:
@@ -1043,14 +1079,15 @@ class DockerBackend(Sandbox):
         report: SyncBackReport = sync_back(
             self._export_root, self._workspace, list(mount_set.rw_paths()),
             baseline=self._baseline, step_id=None,
-            cache_paths=self._cache_paths)
+            cache_paths=self._cache_paths, excludes=self._sync_excludes)
         if report.conflicts:
             raise SandboxError(
                 f"AE-SBX-016: sync-back conflict in "
                 f"{', '.join(report.conflicts)} - the real repo changed "
                 f"underneath; resolve before retrying (BR-4.4)")
         self._baseline = _snapshot(Path(self._export_root),
-                                   self._cache_paths)
+                                   self._cache_paths,
+                                   self._sync_excludes)
         append_audit_record(self._iso_state_dir, {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "sync_back",
@@ -1295,18 +1332,34 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
 
     export_root = str(Path(state_dir) / "exports" / uuid.uuid4().hex)
-    cache_paths = discover_cache_paths(workspace, sandbox_venv_dir)
+    # 028: cache paths are pipeline-author data (``caches:``), plus the engine's
+    # own sandbox venv when it is not relocated (016/022 behaviour - the venv
+    # is a cache only once it exists). Declared-but-missing caches are
+    # auto-created host-side (uid-owned, empty) before export planning, so the
+    # missing-cache guard in plan_step_workspace stays a race guard only.
+    cache_paths = list(cfg.caches)
+    if sandbox_venv_dir is None and (workspace / SANDBOX_VENV_DIR).is_dir():
+        if SANDBOX_VENV_DIR not in cache_paths:
+            cache_paths.append(SANDBOX_VENV_DIR)
+    for cache in cfg.caches:
+        (workspace / cache).mkdir(parents=True, exist_ok=True)
     ws = StepWorkspace.materialise(
         workspace, cache_paths, sys.platform, export_root,
-        state_dir=str(state_dir))
+        state_dir=str(state_dir), excludes=list(cfg.sync_excludes))
     export_root = str(ws.export_root)
     cache_mounts = ws.mount_points()[1:]  # skip the export root itself
+    # Repair console-script shebangs that bake a previous run's dead export
+    # path (028): a venv built by export A must execute its ``bin/*`` scripts
+    # when mounted into export B.
+    venv_dir = Path(sandbox_venv_dir) if sandbox_venv_dir else workspace / SANDBOX_VENV_DIR
+    repair_venv_shebangs(venv_dir, state_dir=state_dir, export_root=export_root)
 
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),
         profile=profile, runner=runner, network=needs_network,
         sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
-        export_root=export_root, cache_mounts=cache_mounts)
+        export_root=export_root, cache_mounts=cache_mounts,
+        sync_excludes=list(cfg.sync_excludes))
     backend.ensure_image()
     backend.create_execution_container()
     if refresh is None:

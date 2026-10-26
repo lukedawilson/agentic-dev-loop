@@ -14,6 +14,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from agentic_dev_loop.core.paths import dir_excluded, path_excluded
+
 from .sync_back import SyncBackReport, _snapshot, sync_back
 
 # Host-only dirs never copied into the export (022). ``.git`` is excluded by
@@ -48,16 +50,19 @@ def _relative_parts(path: str) -> tuple[str, ...]:
 
 def plan_step_workspace(repo: str | Path, cache_paths: list[str],
                         platform: str, export_root: str | Path,
-                        state_dir: str | None = None) -> StepWorkspacePlan:
+                        state_dir: str | None = None,
+                        excludes: list[str] | None = None) -> StepWorkspacePlan:
     """Plan the export (BR-2/BR-3): copy every workspace file except
-    ``.git``/host-only dirs/cache paths/``state_dir``; bind-mount each
-    declared cache path rw. A missing declared cache path is a loud failure
-    (BR-3.2, pillar 5). Pure over platform facts - deterministic given the
-    repo state."""
+    ``.git``/host-only dirs/cache paths/``state_dir``/sync-excludes; bind-mount
+    each declared cache path rw. A missing declared cache path is a loud
+    failure (BR-3.2, pillar 5) - kept as a race guard; startup pre-creates the
+    dirs host-side (028). Excluded paths are scratch: skipped at copy time with
+    no mount. Pure over platform facts - deterministic given the repo state."""
     repo = Path(repo)
     export_root = Path(export_root)
     cache_rels = [_relative_parts(c) for c in cache_paths]
     state_dir_rel = _relative_parts(state_dir) if state_dir else None
+    excludes = list(excludes or ())
 
     for cache in cache_paths:
         if not (repo / cache).exists():
@@ -73,10 +78,13 @@ def plan_step_workspace(repo: str | Path, cache_paths: list[str],
             d for d in dirnames
             if d not in _EXCLUDED_DIRS
             and not _excluded(rel_dir_parts + (d,), cache_rels, state_dir_rel)
+            and not dir_excluded((rel_dir / d).as_posix(), excludes)
         ]
         for name in filenames:
             parts = rel_dir_parts + (name,)
             if _excluded(parts, cache_rels, state_dir_rel):
+                continue
+            if path_excluded("/".join(parts), excludes):
                 continue
             copy_paths.append("/".join(parts))
 
@@ -122,16 +130,19 @@ class StepWorkspace:
     @classmethod
     def materialise(cls, repo: str | Path, cache_paths: list[str],
                     platform: str, export_root: str | Path,
-                    state_dir: str | None = None) -> "StepWorkspace":
+                    state_dir: str | None = None,
+                    excludes: list[str] | None = None) -> "StepWorkspace":
         """Copy the workspace into the export, excluding ``.git``/host-only
-        dirs/caches/``state_dir``; pre-create the cache mount targets so the
-        rw bind-mounts have uid-owned destinations (the AE-SBX-009 class)."""
+        dirs/caches/``state_dir``/sync-excludes; pre-create the cache mount
+        targets so the rw bind-mounts have uid-owned destinations (the
+        AE-SBX-009 class)."""
         plan = plan_step_workspace(repo, cache_paths, platform, export_root,
-                                   state_dir=state_dir)
+                                   state_dir=state_dir, excludes=excludes)
         ws = cls(plan, real_repo=repo)
         ws._copy(repo)
         ws._baseline = _snapshot(
-            ws._export_root, cache_paths=[c.relative for c in plan.cache_mounts])
+            ws._export_root, cache_paths=[c.relative for c in plan.cache_mounts],
+            excludes=list(excludes or ()))
         return ws
 
     def _copy(self, repo: Path) -> None:
@@ -154,10 +165,12 @@ class StepWorkspace:
             points.append((cache.source, f"{root}/{cache.relative}", "rw"))
         return points
 
-    def sync_back(self, declared_rw: list[str]) -> SyncBackReport:
+    def sync_back(self, declared_rw: list[str],
+                  excludes: list[str] | None = None) -> SyncBackReport:
         """Git-aware diff-copy of declared-rw changes back to the real repo
         (BR-4). Delegates to ``sync_back``; conflicts are loud."""
         return sync_back(
             self._export_root, self._real_repo, declared_rw,
             baseline=getattr(self, "_baseline", None),
-            cache_paths=[c.relative for c in self._plan.cache_mounts])
+            cache_paths=[c.relative for c in self._plan.cache_mounts],
+            excludes=list(excludes or ()))

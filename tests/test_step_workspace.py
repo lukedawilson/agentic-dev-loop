@@ -111,3 +111,49 @@ def test_whole_tree_dot_sync_back_and_cache_untouched(tmp_path):
     assert (repo / "src" / "a.py").read_text() == "print('changed')"
     assert (repo / "node_modules" / "dep.js").read_text() == "cache"
     assert "node_modules/dep.js" not in report.synced_paths
+
+
+class TestSyncExcludesScratchSemantics:
+    """028: excluded paths are scratch - skipped at export copy time with no
+    bind-mount (unlike caches, which get a rw window from the real workspace)."""
+
+    def _repo(self, tmp_path):
+        repo = tmp_path / "repo"
+        (repo / "src").mkdir(parents=True)
+        (repo / "src" / "a.py").write_text("print('a')")
+        (repo / "src" / "proj" / "bin").mkdir(parents=True)
+        (repo / "src" / "proj" / "bin" / "x.dll").write_text("bin")
+        (repo / "src" / "proj" / "obj").mkdir(parents=True)
+        (repo / "src" / "proj" / "obj" / "y.o").write_text("obj")
+        (repo / "docs").mkdir()
+        (repo / "docs" / "d.md").write_text("# doc")
+        return repo
+
+    def test_excluded_paths_not_copied(self, tmp_path):
+        repo = self._repo(tmp_path)
+        export = tmp_path / "state" / "exports" / "run1"
+        ws = StepWorkspace.materialise(repo, [], "linux", export,
+                                       excludes=["**/bin/**", "**/obj/**"])
+        assert (export / "src" / "a.py").exists()
+        assert not (export / "src" / "proj" / "bin" / "x.dll").exists()
+        assert not (export / "src" / "proj" / "obj" / "y.o").exists()
+        # scratch paths get no cache bind-mount
+        assert [c.relative for c in ws._plan.cache_mounts] == []
+
+    def test_literal_exclude_not_copied(self, tmp_path):
+        repo = self._repo(tmp_path)
+        (repo / "qa" / ".artifacts").mkdir(parents=True)
+        (repo / "qa" / ".artifacts" / "big").write_text("big")
+        export = tmp_path / "state" / "exports" / "run1"
+        ws = StepWorkspace.materialise(repo, [], "linux", export,
+                                       excludes=["qa/.artifacts"])
+        assert not (export / "qa" / ".artifacts" / "big").exists()
+
+    def test_missing_cache_still_loud_in_planner(self, tmp_path):
+        """The planner keeps its missing-cache guard as a race guard only
+        (startup pre-creates declared caches before it runs)."""
+        repo = self._repo(tmp_path)
+        export = tmp_path / "state" / "exports" / "run1"
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="does not exist"):
+            StepWorkspace.materialise(repo, ["missing-cache"], "linux", export)

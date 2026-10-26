@@ -150,6 +150,43 @@ steps:
   unrestricted egress. The host-side built-in `commit` action rejects
   `mounts:`/`egress:`/`network:` (refused once the registry is known).
 
+### Caches and sync-excludes (028)
+
+Two top-level, run-wide lists declare which in-workspace dirs are toolchain
+caches and which paths are scratch (never copied into the export, never synced
+back). Both default to `[]`.
+
+```yaml
+caches: [.nuget-packages, qa/node_modules, qa/.browsers]
+sync_excludes: ["**/bin/**", "**/obj/**"]
+```
+
+- **`caches:`** - repo-relative dirs bind-mounted rw from the real workspace
+  into the export at the same relative paths (the build/packaging caches that
+  should persist across runs but never sync back). A declared cache that is
+  missing at run start is auto-created host-side (empty, uid-owned) before
+  export planning, then bind-mounted - it is no longer a loud failure
+  (BR-3.2 amended). Validation rejects traversal, absolute paths, `.git`, the
+  host-only `.venv`, a path under a relative `state_dir`, and a step mount
+  under a cache (the rw cache submount would defeat a declared `ro` mount
+  there). A whole-tree `.` mount stays fine - the cache submount layers on
+  top. Declaring `.venv-sandbox` here while `isolation.sandbox_venv_dir` is
+  set is a contradiction (the venv is relocated outside the workspace).
+- **`sync_excludes:`** - scratch paths. A literal entry (no wildcard) excludes
+  the dir and everything under it (`qa/.artifacts`). A wildcard entry is
+  `fnmatch` on the full posix relpath, and `*` spans path separators, so
+  `**/bin/**` matches a literal `/bin/` segment at any depth and `*.dll`
+  matches at any depth. Excluded paths are skipped in both snapshots and never
+  classify as added/modified/deleted/conflict - no copy-back, no deletion
+  mirroring, and no BR-4.4 conflict from host-side build-artifact drift. They
+  are also skipped at export materialisation (no bind-mount), so a step cannot
+  read pre-existing excluded content: in-sandbox builds are clean builds.
+  Put the reusable part (restore inputs) in `caches:` instead.
+- **Artifact shadowing footgun:** a step's `artifact:`/`produces:` path that
+  matches a `sync_excludes:` entry will never sync back. Load warns
+  (non-fatal) naming the step and path - wildcard overlap is fuzzy, so it is
+  a warning, not a hard failure.
+
 ## 4. Caching
 
 Every `setup:` hook is **stamp-cached** in

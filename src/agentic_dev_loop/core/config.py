@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import re
+import warnings
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from agentic_dev_loop.core.paths import _has_wildcards, path_excluded, relative_parts
 
 TERMINALS = frozenset({"success", "failure"})
 KNOWN_SECRET_PROVIDERS = frozenset({"env"})
@@ -48,6 +51,38 @@ def _validate_mount_path(path: str) -> str:
         if seg in HOST_ONLY_MOUNT_DIRS:
             raise ValueError(
                 f"mount path {path!r} names the host-only dir {seg!r}")
+    return "/".join(parts) if parts else "."
+
+
+def _validate_declared_path(path: str, *, allow_wildcards: bool) -> str:
+    """Validate one declared ``caches:``/``sync_excludes:`` entry (028).
+
+    Same repo-relative contract as mount paths: non-empty, no absolute paths,
+    no ``..`` traversal, no ``.git`` component, no host-only dir. Wildcard
+    entries (``sync_excludes:`` only) skip wildcard segments in the literal
+    checks; the literal segments still obey the same rules. The normalised
+    forward-slash form is returned.
+    """
+    if not isinstance(path, str) or not path.strip():
+        raise ValueError("declared path must be a non-empty string")
+    p = path.strip()
+    if p.startswith(("/", "\\")) or (len(p) > 1 and p[1] == ":"):
+        raise ValueError(
+            f"declared path {path!r} must be repo-relative (no absolute paths)")
+    parts = [seg for seg in p.replace("\\", "/").split("/")
+             if seg not in ("", ".")]
+    for seg in parts:
+        if allow_wildcards and any(ch in seg for ch in "*?["):
+            continue
+        if seg == "..":
+            raise ValueError(
+                f"declared path {path!r} escapes the repo (no '..' traversal)")
+        if seg == ".git":
+            raise ValueError(
+                f"declared path {path!r} must never name '.git'")
+        if seg in HOST_ONLY_MOUNT_DIRS:
+            raise ValueError(
+                f"declared path {path!r} names the host-only dir {seg!r}")
     return "/".join(parts) if parts else "."
 
 
@@ -404,6 +439,13 @@ class PipelineConfig(BaseModel):
     # missing-dependency fail-fast.
     deps_policy: str = "locked"
     lockfiles: list[str] = []
+    # 028: pipeline-declared toolchain caches (rw bind-mounts from the real
+    # workspace) and run-wide sync-back excludes (scratch semantics: skipped
+    # from both the export copy and sync-back). Both default to [] - absent
+    # means "no toolchain caches beyond the engine's own sandbox venv" and
+    # "no sync-back excludes".
+    caches: list[str] = []
+    sync_excludes: list[str] = []
 
     @field_validator("deps_policy")
     @classmethod
@@ -417,6 +459,21 @@ class PipelineConfig(BaseModel):
     @classmethod
     def _coerce_lockfiles(cls, v: Any) -> Any:
         return [v] if isinstance(v, str) else v
+
+    @field_validator("caches", "sync_excludes", mode="before")
+    @classmethod
+    def _coerce_declared_paths(cls, v: Any) -> Any:
+        return [v] if isinstance(v, str) else v
+
+    @field_validator("caches")
+    @classmethod
+    def _valid_caches(cls, v: list[str]) -> list[str]:
+        return [_validate_declared_path(c, allow_wildcards=False) for c in v]
+
+    @field_validator("sync_excludes")
+    @classmethod
+    def _valid_sync_excludes(cls, v: list[str]) -> list[str]:
+        return [_validate_declared_path(c, allow_wildcards=True) for c in v]
 
     @field_validator("secrets", mode="before")
     @classmethod
@@ -462,6 +519,96 @@ class PipelineConfig(BaseModel):
                     raise ValueError(
                         f"step {step.name!r}: mount path {m.path!r} names "
                         f"the host-only state_dir {self.state_dir!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _caches_avoid_state_dir(self) -> "PipelineConfig":
+        """028: a declared cache may never name (or sit under) the host-only
+        run-state dir - it would bind-mount the engine's own state into the
+        sandbox as a rw cache."""
+        sd = self.state_dir.strip().rstrip("/\\")
+        if not sd or sd in ("/", "."):
+            return self
+        sd_parts = relative_parts(sd)
+        if not sd_parts:
+            return self
+        for cache in self.caches:
+            cp = relative_parts(cache)
+            if cp[:len(sd_parts)] == sd_parts:
+                raise ValueError(
+                    f"cache path {cache!r} names the host-only state_dir "
+                    f"{self.state_dir!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _mounts_avoid_caches(self) -> "PipelineConfig":
+        """028/BR-1.3: a step mount equal to or under a declared cache is
+        rejected - the rw cache submount would silently defeat a declared
+        ``ro`` mount there. A whole-tree ``.`` mount stays fine (the cache
+        submount layers on top)."""
+        cache_parts = [relative_parts(c) for c in self.caches if relative_parts(c)]
+        if not cache_parts:
+            return self
+        for step in self.steps:
+            for m in step.mounts:
+                mp = relative_parts(m.path)
+                for cp in cache_parts:
+                    if mp[:len(cp)] == cp:
+                        raise ValueError(
+                            f"step {step.name!r}: mount path {m.path!r} names "
+                            f"declared cache {('/'.join(cp))!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _excludes_avoid_caches(self) -> "PipelineConfig":
+        """028: a literal sync-exclude equal to or under a declared cache is
+        redundant (caches already behave as scratch) and fails loud. Wildcard
+        excludes are skipped - their overlap is fuzzy, not a contradiction."""
+        cache_parts = [relative_parts(c) for c in self.caches if relative_parts(c)]
+        if not cache_parts:
+            return self
+        for exclude in self.sync_excludes:
+            if _has_wildcards(exclude):
+                continue
+            ep = relative_parts(exclude)
+            for cp in cache_parts:
+                if ep[:len(cp)] == cp:
+                    raise ValueError(
+                        f"sync_excludes entry {exclude!r} is redundant: it is "
+                        f"already excluded as declared cache "
+                        f"{('/'.join(cp))!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _sandbox_venv_not_declared_cache(self) -> "PipelineConfig":
+        """028: the sandbox venv is engine infrastructure, never author data.
+        Declaring ``.venv-sandbox`` in ``caches:`` while the 022 relocation
+        (``isolation.sandbox_venv_dir``) is set is a contradiction."""
+        if self.isolation is None or self.isolation.sandbox_venv_dir is None:
+            return self
+        for cache in self.caches:
+            if relative_parts(cache) == (".venv-sandbox",):
+                raise ValueError(
+                    "declaring '.venv-sandbox' in 'caches:' contradicts "
+                    "'isolation.sandbox_venv_dir' - the sandbox venv is "
+                    "relocated outside the workspace (022)")
+        return self
+
+    @model_validator(mode="after")
+    def _warn_shadowed_artifacts(self) -> "PipelineConfig":
+        """028: an artifact/produces path matching a sync-exclude would never
+        sync back. Non-fatal warning (wildcard overlap is fuzzy, so a hard
+        failure would false-positive)."""
+        if not self.sync_excludes:
+            return self
+        for step in self.steps:
+            for artifact in list(step.produces) + (
+                    [step.artifact] if step.artifact is not None else []):
+                if path_excluded(artifact, self.sync_excludes):
+                    warnings.warn(
+                        f"step {step.name!r}: {artifact!r} matches a "
+                        "sync_excludes entry and will never sync back",
+                        stacklevel=2)
         return self
 
     @model_validator(mode="after")

@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CHECKER = REPO_ROOT / "tools" / "check_no_em_dash.py"
 
@@ -52,5 +54,7 @@ def test_checker_passes_clean_files(tmp_path):
 
 
 def test_no_em_dash_in_any_tracked_file():
+    if not (REPO_ROOT / ".git").exists():
+        pytest.skip("no .git directory - the guard covers tracked files only")
     result = _run()
     assert result.returncode == 0, result.stdout

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- pipeline-declared `caches:` and `sync_excludes:` (028). `caches:` names
+  repo-relative toolchain cache dirs bind-mounted rw from the real workspace
+  (auto-created host-side if missing); `sync_excludes:` names scratch paths
+  skipped from both the export copy and sync-back (literal component-prefix or
+  `fnmatch` wildcards). Console-script shebangs baking a previous run's export
+  path are repaired at startup.
+
+### Changed
+
+- BR-3.2 amended: a missing declared cache is auto-created (empty, uid-owned)
+  and bind-mounted instead of failing loud.
+
+### Breaking
+
+- removed the engine's hardcoded toolchain cache whitelist (`CACHE_DIRS`);
+  pipelines relying on it must declare those dirs in `caches:`. The dogfood
+  pipeline already relocates its sandbox venv and declares nothing.
+
 ## [1.0.0a20] - 2026-10-26
 
 ### Changed

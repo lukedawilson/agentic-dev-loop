@@ -72,3 +72,22 @@ class TestPresetDeterminism:
         b = assemble_egress_policy(EgressSpec(presets=["package-registries"]))
         assert a == b
         assert a.targets and all(isinstance(t, TargetEntry) for t in a.targets)
+
+
+class TestSyncBackExcludeDeterminism:
+    """028: sync-back planning with excludes stays deterministic (PBT-03)."""
+
+    @given(changes=st.dictionaries(
+        st.sampled_from(["src/a.py", "src/bin/x.dll", "src/bin/y.dll",
+                         "src/obj/z.o", "docs/readme.md", "qa/.artifacts/big"]),
+        st.sampled_from(["added", "modified", "deleted", "conflict"]),
+        max_size=6))
+    def test_plan_deterministic_with_excludes(self, changes):
+        from agentic_dev_loop.engine.sync_back import plan_sync_back
+        a = plan_sync_back(changes, ["."],
+                           excludes=["**/bin/**", "**/obj/**"])
+        b = plan_sync_back(changes, ["."],
+                           excludes=["**/bin/**", "**/obj/**"])
+        assert a == b
+        for rel in a.to_copy + a.to_delete + a.conflicts:
+            assert "bin/" not in rel and "obj/" not in rel
