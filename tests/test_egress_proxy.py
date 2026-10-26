@@ -5,6 +5,7 @@ unmatched hostname is denied and logged as an enforcement event (BR-6)."""
 import http.server
 import socket
 import threading
+import time
 
 import pytest
 
@@ -126,3 +127,79 @@ def test_connect_port_constraint_matches_exact_port():
             p.stop()
     finally:
         server.shutdown()
+
+
+class _RawTcpServer:
+    """A bare TCP listener that records every byte it receives."""
+
+    def __init__(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(1)
+        self.port = self.sock.getsockname()[1]
+        self.received = bytearray()
+        self._thread = threading.Thread(target=self._accept, daemon=True)
+        self._thread.start()
+
+    def _accept(self):
+        try:
+            conn, _ = self.sock.accept()
+        except OSError:
+            return
+        with conn:
+            conn.settimeout(5.0)
+            while True:
+                try:
+                    chunk = conn.recv(65536)
+                except socket.timeout:
+                    break
+                if not chunk:
+                    break
+                self.received.extend(chunk)
+
+    def close(self):
+        try:
+            self.sock.close()
+        except OSError:
+            pass
+
+
+def test_connect_headers_drained_not_tunnelled():
+    """The CONNECT request's header block must be consumed by the proxy, not
+    relayed into the tunnel. Clients send the request line, headers and the
+    first TLS bytes in one write; leaking the headers corrupts the handshake
+    (the upstream answers with a TLS decode alert)."""
+    upstream = _RawTcpServer()
+    try:
+        policy = EgressPolicy(targets=(TargetEntry(host="127.0.0.1"),))
+        p = EgressProxy(policy=policy)
+        p.start()
+        try:
+            tls_bytes = b"\x16\x03\x01" + b"post-200-bytes"
+            payload = (
+                f"CONNECT 127.0.0.1:{upstream.port} HTTP/1.1\r\n"
+                "Host: 127.0.0.1\r\n"
+                "User-Agent: pip\r\n"
+                "Proxy-Connection: keep-alive\r\n"
+                "\r\n"
+            ).encode("latin-1") + tls_bytes
+            with socket.create_connection(("127.0.0.1", p._port), timeout=5.0) as s:
+                s.sendall(payload)
+                s.settimeout(5.0)
+                buf = b""
+                while b"\r\n\r\n" not in buf:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+            assert b"200 Connection Established" in buf
+            deadline = time.monotonic() + 5.0
+            while (time.monotonic() < deadline
+                   and len(upstream.received) < len(tls_bytes)):
+                time.sleep(0.05)
+            assert bytes(upstream.received) == tls_bytes
+        finally:
+            p.stop()
+    finally:
+        upstream.close()

@@ -131,6 +131,13 @@ class EgressProxy:
             _write(writer, b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
             return
         self._record(host, True)
+        # Drain the rest of the CONNECT request (the header block after the
+        # request line). Clients send the whole request in one write, so the
+        # headers are already buffered here; relaying them to the upstream as
+        # if they were the first tunnel bytes corrupts the TLS handshake (the
+        # upstream answers with a decode alert - the restore step's SSL
+        # TLSV1_ALERT_DECODE_ERROR).
+        await _drain_headers(reader)
         conn = await _open(host, port)
         if conn is None:
             _write(writer, b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
@@ -220,6 +227,16 @@ async def _forward_headers(reader, upstream, host: str) -> None:
         upstream.write(f"Host: {host}\r\n".encode("latin-1"))
     upstream.write(b"\r\n")
     await upstream.drain()
+
+
+async def _drain_headers(reader) -> None:
+    """Consume a request's header block (the lines after the request line,
+    terminated by a blank line). The CONNECT path must not forward these to
+    the upstream tunnel - only the post-200 bytes belong there."""
+    while True:
+        line = await reader.readline()
+        if not line or line in (b"\r\n", b"\n"):
+            break
 
 
 async def _relay_both(client_reader, client_writer, upstream_reader,
