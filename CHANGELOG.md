@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a20] - 2026-10-26
+
+### Changed
+
+- fix: drain CONNECT headers before opening the egress tunnel
+
 ## [1.0.0a19] - 2026-10-25
 
 ### Changed
