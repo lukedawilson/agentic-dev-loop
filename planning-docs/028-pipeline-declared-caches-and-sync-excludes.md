@@ -1,6 +1,6 @@
 # 028 - Pipeline-declared caches and sync-back excludes
 
-> Follow-up to the 1.0.0a18 migration analysis. Status: plan (not implemented).
+> **Status: COMPLETED**
 
 ## Context
 

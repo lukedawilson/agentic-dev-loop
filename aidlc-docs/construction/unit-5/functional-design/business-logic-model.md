@@ -30,14 +30,14 @@ Unit 5 replaces "every container mounts {workspace} rw, `network: true` = unrest
 | Q3 | Declared-writes model: every mount entry carries a mode; source/docs default ro; only declared outputs and caches are rw per step. |
 | Q4 | Strict-by-default: empty or missing `mounts` = empty mount set (mount nothing). Dogfood pipeline + the reference consumer repo gain explicit declarations as part of this unit. |
 | Q5 | Worktree-export: engine materialises a fresh repo export into a temp dir and mounts that; `.git` absent by construction. |
-| Q6 | Caches stay in-workspace at current paths, declared rw under the new `mounts` field. |
+| Q6 | Caches stay in-workspace at current paths, declared rw under the top-level `caches:` field (028). |
 | Q7 | Tiered testability: pure functions everywhere; fake Sandbox backend for run-loop logic; docker-marked tests opt-in; proxy enforcement tests portable (no root), normal CI, never silently skipped. |
 | Q8 | Browser steps get an explicit broad-but-logged egress class (connection logging); command/agent steps keep strict allowlists. |
 | Q9 | Engine-shipped presets + pipeline-author override; undeclared targets fail loudly; the engine never adds targets. |
 | F1 | Sync-back after each step with declared rw mounts (git-aware; sandbox detached during step). |
-| F2 | Real-workspace cache paths bind-mounted into the export at the same relative paths, rw. |
+| F2 | Real-workspace `caches:` paths bind-mounted into the export at the same relative paths, rw; a missing declared cache is auto-created host-side (028). |
 | D-1 | Profile-keyed container pool (mount set + egress policy + seccomp/caps), extending unit-3's persistent-per-run lifecycle rather than replacing it. |
-| D-2 | Multi-toolchain support is preset data, never mechanism. |
+| D-2 | Multi-toolchain egress is preset data and caches are pipeline declarations - never mechanism (amended 2026-10-25). |
 
 ## Multi-toolchain coverage (user requirement)
 
@@ -51,7 +51,7 @@ One **package-registries** preset serves every toolchain; restore steps referenc
 | Rust (cargo) | `crates.io`, `static.crates.io` |
 | VCS / source installs | `github.com`, `codeload.github.com`, `objects.githubusercontent.com` |
 
-**Per-toolchain cache declarations** (all in-workspace, rw, bind-mounted into the export):
+**Per-toolchain cache declarations** (all in-workspace, rw, bind-mounted into the export; author-declared under `caches:` in `pipeline.yaml` - the engine ships no cache dirs):
 
 | Toolchain | Cache paths |
 | --- | --- |
@@ -60,7 +60,7 @@ One **package-registries** preset serves every toolchain; restore steps referenc
 | .NET | `.nuget-packages` |
 | Rust | `target/` (build outputs - declared rw by the build step) |
 
-Adding a toolchain = preset data + cache declarations; no mechanism change.
+Adding a toolchain = egress preset data + a `caches:` entry in `pipeline.yaml`; no mechanism change.
 
 ## Algorithms
 
@@ -70,9 +70,9 @@ Adding a toolchain = preset data + cache declarations; no mechanism change.
 
 **Target matching** (`match_target(hostname, policy)`): allowlist entries stay domain-shaped; the proxy matches the request hostname (CONNECT target) per connection against the expanded policy; unmatched = deny + logged as an enforcement event (Q2 amended, BR-6). Pure.
 
-**Export planning** (`plan_step_workspace(repo, cache_paths, platform)`): export dir layout, cache bind-mount list, existence checks (missing cache path = loud, F2). Pure over platform facts.
+**Export planning** (`plan_step_workspace(repo, cache_paths, platform, excludes)`): export dir layout, cache bind-mount list, existence checks (missing cache path = loud race guard; startup pre-creates, 028), and scratch excludes skipped at copy time. Pure over platform facts.
 
-**Sync-back planning** (`plan_sync_back(export_changes, declared_rw)`): which changed paths sync (only declared-rw paths); git-aware (never touches `.git`); conflict detection. Pure function.
+**Sync-back planning** (`plan_sync_back(export_changes, declared_rw, cache_paths, excludes)`): which changed paths sync (only declared-rw paths, minus caches and sync-excludes); git-aware (never touches `.git`); conflict detection. Pure function.
 
 **Profile keying** (`container_profile_key(mount_set, policy)`): stable pool key; equal profiles ⇒ same container (D-1). Pure function.
 

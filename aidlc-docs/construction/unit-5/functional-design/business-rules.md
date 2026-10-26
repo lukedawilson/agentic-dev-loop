@@ -23,8 +23,8 @@
 
 | Rule | Detail |
 | --- | --- |
-| BR-3.1 | Declared cache paths (in-workspace, rw: `.venv-sandbox`, `node_modules`, `qa/node_modules`, `qa/.browsers`, `.nuget-packages`, `target/`) are bind-mounted from the real workspace into the export at the same relative paths, rw. |
-| BR-3.2 | Cache paths must exist at export time; a missing declared cache path is a loud failure (pillar 5). |
+| BR-3.1 | Cache paths are author-declared in `pipeline.yaml` (`caches:`, repo-relative, rw); the engine ships no toolchain cache dirs. The sandbox venv (`.venv-sandbox`) remains engine infrastructure. |
+| BR-3.2 (amended 2026-10-25) | A missing declared cache dir is auto-created host-side (empty, uid-owned, `mkdir -p`) and bind-mounted; it is no longer a loud failure. |
 | BR-3.3 | The rw window into the real workspace is exactly the declared cache paths - nothing else. |
 
 ## BR-4: Sync-back (F1)
@@ -35,6 +35,7 @@
 | BR-4.2 | Only declared-rw paths sync; ro paths cannot change and are never copied back. |
 | BR-4.3 | The sandbox is detached (step complete) before sync-back runs; sync-back is host-side. |
 | BR-4.4 | A sync conflict (real repo changed underneath) is a loud failure, never an overwrite. |
+| BR-4.5 (028) | Declared `sync_excludes:` paths are scratch: never copied into the export and never synced (copy, delete, or conflict); excluded from both snapshots; entries validated at load. |
 
 ## BR-5: Egress enforcement (Q1)
 
@@ -76,7 +77,7 @@
 | --- | --- |
 | BR-9.1 | The `package-registries` preset covers pypi (`pypi.org`, `files.pythonhosted.org`, `api.osv.dev`), npm (`registry.npmjs.org`, `nodejs.org`), .NET (`api.nuget.org`), Rust (`crates.io`, `static.crates.io`), and VCS/source installs (`github.com`, `codeload.github.com`, `objects.githubusercontent.com`). |
 | BR-9.2 | Restore steps reference the preset; plan 018's toolchain-agnostic restore stays agnostic - no toolchain-specific egress config exists. |
-| BR-9.3 | Per-toolchain caches are cache declarations (BR-3.1), not mechanism; adding a toolchain adds preset data + cache declarations only. |
+| BR-9.3 | Per-toolchain caches are pipeline declarations (`caches:`), not engine preset data; adding a toolchain adds a `caches:` entry (plus egress preset data where needed) - no engine change. |
 
 ## BR-10: Container model (D-1)
 
@@ -90,7 +91,7 @@
 
 | Rule | Detail |
 | --- | --- |
-| BR-11.1 | Every failure - unknown mount/egress key, bad mode, malformed target, missing cache path, proxy application failure, sync conflict, container-create failure - is loud, naming the problem. |
+| BR-11.1 | Every failure - unknown mount/egress key, bad mode, malformed target, proxy application failure, sync conflict, container-create failure - is loud, naming the problem. |
 | BR-11.2 | No silent degradation: a step whose mount set or egress policy cannot be realised refuses to run. |
 | BR-11.3 | Error paths always destroy the created networks and containers. |
 

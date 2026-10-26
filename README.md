@@ -178,6 +178,7 @@ steps:
 | `extensions_dir` | Where consumer `extensions:` modules resolve - defaults to `~/.agentic-dev-loop/extensions`, **outside** the workspace. Workspace-resident extension/tool modules are refused at load. |
 | `deps_policy` | `locked` (default) or `open`. `locked` = the human-owned lockfile is the source of truth and the agent may not add dependencies; `open` = the bootstrap protocol (the agent may add exact-pinned manifest entries). See [Dependency policy](#dependency-policy-locked-by-default). |
 | `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
+| `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from the real workspace (auto-created if missing); `sync_excludes:` names scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
 
 ### Secrets (`secrets:`) - refs only, never values
 

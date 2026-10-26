@@ -61,7 +61,7 @@ Behaviour: `profile_key()` yields the stable pool key (D-1); equal profiles ⇒ 
 
 The .git-free derivative the sandbox mounts. Owned and mutated by the engine (materialise → bind caches → mount → sync-back → destroy), never by the sandbox:
 
-- `materialise(repo, cache_paths, platform) -> StepWorkspacePlan` - copy-based materialisation into `state_dir/exports/<run-id>/` (ID-4); `.git` absent by construction; cache existence checks (missing = loud, BR-3.2).
+- `materialise(repo, cache_paths, platform, excludes) -> StepWorkspacePlan` - copy-based materialisation into `state_dir/exports/<run-id>/` (ID-4); `.git` absent by construction; cache existence checks (missing = loud race guard; startup pre-creates declared caches, 028); `sync_excludes:` skipped at copy time.
 - `mount_points()` - the Docker mount list: export root + cache bind-mounts at the same relative paths, rw (BR-3.1).
 - `sync_back(declared_rw) -> SyncBackReport` - git-aware, sandbox detached, conflicts loud (BR-4).
 
@@ -70,8 +70,9 @@ The .git-free derivative the sandbox mounts. Owned and mutated by the engine (ma
 | Entity | Change |
 | --- | --- |
 | `StepConfig` (config.py) | gains `mounts` (list of `{path, mode}`) and `egress` (targets/preset/class); both `extra=forbid` validated at load. `network: bool` keeps meaning "step may use the network" - the egress policy now decides what it may reach. |
+| `PipelineConfig` (config.py) | gains top-level `caches` and `sync_excludes` (list[str], default `[]`, single strings coerced), validated at load with cross-field checks (028). |
 | `DockerBackend` (engine/isolation.py) | the two-persistent-container model becomes the profile-keyed pool (BR-10); gains per-policy egress proxy management (BR-5) and export materialisation/sync-back orchestration. The `Sandbox` surface is unchanged (unit-3 extension seam). |
-| `IsolationConfig` | unchanged this unit (mount/egress live per-step); presets are engine data, not config. |
+| `IsolationConfig` | unchanged this unit (mount/egress live per-step); egress presets are engine data, toolchain caches are now `PipelineConfig` author data (028). |
 
 ## Pure functions (descent step 0)
 
@@ -80,8 +81,8 @@ The .git-free derivative the sandbox mounts. Owned and mutated by the engine (ma
 | `resolve_mount_set` | `(step_mounts) -> MountSet` | strict default, path/mode validation (BR-1) |
 | `assemble_egress_policy` | `(step_egress) -> EgressPolicy` | preset expansion, class classification, validation (BR-7/8) |
 | `match_target` | `(hostname, policy) -> allowed | denied` | hostname matching at the proxy; unmatched = deny + logged (BR-6) |
-| `plan_step_workspace` | `(repo, cache_paths, platform) -> StepWorkspacePlan` | export layout + cache bind-mount list + existence checks (BR-3) |
-| `plan_sync_back` | `(export_changes, declared_rw) -> SyncPlan` | git-aware, declared-rw only, conflict detection (BR-4) |
+| `plan_step_workspace` | `(repo, cache_paths, platform, excludes) -> StepWorkspacePlan` | export layout + cache bind-mount list + existence checks + scratch excludes (BR-3/028) |
+| `plan_sync_back` | `(export_changes, declared_rw, cache_paths, excludes) -> SyncPlan` | git-aware, declared-rw only minus caches/excludes, conflict detection (BR-4/028) |
 | `container_profile_key` | `(mount_set, policy) -> str` | stable pool key (D-1, BR-10) |
 
 All pure - the PBT-03 targets (serialisation round-trips, key stability, strict-default property, preset-expansion determinism, export-path invariants).
