@@ -43,7 +43,7 @@ steps:
     # bundles a stale wheel, and pip is not a pyproject pin dev can bump, so
     # the audit would otherwise deadlock on pip's own CVEs. Cheap no-op once
     # current; keeps the audit scoped to project pins only.
-    command: .venv-sandbox/bin/pip install --upgrade pip && .venv-sandbox/bin/pip install -e ".[dev]" && .venv-sandbox/bin/pip-audit --skip-editable
+    command: .venv-sandbox/bin/python -m pip install --upgrade pip && .venv-sandbox/bin/python -m pip install -e ".[dev]" && .venv-sandbox/bin/python -m pip_audit --skip-editable
     timeout: 600
     network: true
     mounts: [{path: ".", mode: rw}]
@@ -54,7 +54,7 @@ steps:
   - name: test
     command: .venv-sandbox/bin/python -m pytest tests/ -q -m "not docker"   # sandboxed: exit code is the verdict
     setup: |-
-      { [ -x .venv-sandbox/bin/python ] && .venv-sandbox/bin/python -c 'import sys' ; } || { rm -rf .venv-sandbox/* && python -m venv .venv-sandbox ; } && .venv-sandbox/bin/pip install -e ".[dev]"
+      { [ -x .venv-sandbox/bin/python ] && .venv-sandbox/bin/python -c 'import sys' ; } || { rm -rf .venv-sandbox/* && python -m venv .venv-sandbox ; } && .venv-sandbox/bin/python -m pip install -e ".[dev]"
     timeout: 600
     mounts: [{path: ".", mode: rw}]
     on_pass: review

@@ -60,6 +60,43 @@ implementation:
   TS-5 flip from "cache declarations are engine preset data" to "pipeline
   author data".
 
+## Venv console-script shebangs bake the export path (in scope)
+
+### Evidence (2026-10-26, restore step, exit 127)
+
+- `.venv-sandbox/bin/pip` in the restore step failed with
+  `/bin/sh: 1: .venv-sandbox/bin/pip: not found` (exit 127) in the net
+  profile container of run 0f1ebcaf.
+- The venv's console scripts carry a shebang that bakes the export path of
+  the run that built them, e.g.
+  `#!/Users/luke/.agentic-dev-loop/runs/6cb529022644/exports/f7cfb13c.../.venv-sandbox/bin/python`.
+  Each run materialises a new export (uuid4) under the config-keyed
+  `runs/<hash>/exports/` dir, so in any later run that path does not exist
+  in the container: execve returns ENOENT and /bin/sh reports "not found".
+- `bin/python` survives because venv `bin/python` is a symlink to the
+  image's `/usr/local/bin/python`; `.venv-sandbox/bin/python -m pip` works
+  while `.venv-sandbox/bin/pip` dies. Reproduced inside the live container
+  (pip exits 127, `python -c 'import sys'` exits 0).
+- Latent since the venv was first built under the export model; masked by
+  the TLS decode-alert failure (fixed in v1.0.0a20, commit a9df530) and by
+  the restore command's previous `python -m pip` form. Worked around in
+  pipeline.yaml by restoring the `python -m pip` / `python -m pip_audit`
+  forms.
+
+### Required engine change
+
+- In `startup_sandbox`, after the venv is mounted into the export, rewrite
+  the shebang line of every regular file under `{sandbox_venv_dir}/bin/`
+  whose first line starts with `#!` and points at a dead
+  `{state_dir}/exports/` path to the current run's venv python
+  (`{export_root}/.venv-sandbox/bin/python`). Skip symlinks and files
+  without a shebang. Host-side, idempotent, before any exec.
+- Regression test (TDD): build a venv in export A, then start a sandbox
+  with export B and assert `bin/pip`'s shebang points at B and
+  `.venv-sandbox/bin/pip --version` exits 0 inside the exec container.
+- Once the repair ships, pipeline.yaml may go back to the direct
+  `.venv-sandbox/bin/pip` forms; both forms must pass.
+
 ## Proposed config surface
 
 ```yaml
@@ -245,6 +282,9 @@ sync_excludes: ["**/bin/**", "**/obj/**"]
    egress data only.
 6. All new pure logic is PBT/unit-covered per BR-12.1; TDD red-green-refactor
    throughout.
+7. A venv built during one run executes its console scripts during a later
+   run: `.venv-sandbox/bin/pip --version` exits 0 in an export that did not
+   build the venv (shebang repaired at startup).
 
 ## Future work (explicitly out of scope)
 
