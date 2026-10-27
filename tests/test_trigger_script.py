@@ -6,11 +6,7 @@ a stale install rejects newer pipeline configs at load time (e.g.
 is upgraded on every run. Tests drive the real script with stub
 executables on PATH - no network, no mocks of the script's logic.
 
-The script is bash, so it is executed through `bash` on every platform:
-Windows cannot CreateProcess a `.sh` file (shebangs are a POSIX concept)
-and its MSYS bash (git-bash, preinstalled on windows-latest runners)
-understands only POSIX-style paths (`/c/...`), so PATH entries and
-redirect targets inside stub bodies are converted accordingly.
+The script is bash, so it is executed through `bash`.
 """
 
 import os
@@ -24,19 +20,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "trigger-agentic-dev-loop.sh"
 
 
-def _msys(path: Path) -> str:
-    """POSIX-style form of a Windows path (`C:\\x` -> `/c/x`).
-
-    MSYS bash splits PATH on `:` and treats backslashes as escapes, so a
-    native `C:\\...` entry would fragment into `C` + `\\...`. Pass the
-    mount-style form instead. On POSIX the path is returned unchanged.
-    """
-    if os.name != "nt":
-        return str(path)
-    drive, rest = os.path.splitdrive(str(path))
-    return "/" + drive[0].lower() + rest.replace("\\", "/")
-
-
 def _bash() -> str:
     bash = shutil.which("bash")
     if bash is None:
@@ -46,7 +29,7 @@ def _bash() -> str:
 
 def _run_script(*args: str, env: dict) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [_bash(), _msys(SCRIPT), *args],
+        [_bash(), str(SCRIPT), *args],
         capture_output=True,
         text=True,
         env=env,
@@ -64,7 +47,7 @@ def _make_stub(bin_dir: Path, name: str, body: str) -> None:
 def _env_with(bin_dir: Path | None = None) -> dict:
     entries = ["/usr/bin", "/bin"]
     if bin_dir is not None:
-        entries.insert(0, _msys(bin_dir))
+        entries.insert(0, str(bin_dir))
     return {**os.environ, "PATH": ":".join(entries)}
 
 
@@ -80,7 +63,7 @@ def test_trigger_upgrades_existing_install(tmp_path):
     _make_stub(
         bin_dir,
         "pipx",
-        f'echo "$*" >> "{_msys(pipx_log)}"',
+        f'echo "$*" >> "{str(pipx_log)}"',
     )
 
     result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))

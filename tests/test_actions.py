@@ -375,9 +375,8 @@ class TestCommitNode:
 
     def test_add_excludes_live_checkpoint_db(self, tmp_path, monkeypatch):
         """The live checkpointer DB under state_dir stays open for the whole
-        run; on Windows an open SQLite file blocks other readers and
-        `git add -A` fails to hash it (CI-red gate failure). The add must
-        exclude sqlite files under the state dir on every OS."""
+        run, so `git add -A` cannot hash it. The add must exclude sqlite
+        files under the state dir."""
         repo = tmp_path / "repo"
         init_git_repo(repo)
         (repo / "feature.cs").write_text("// constructed by the pipeline")

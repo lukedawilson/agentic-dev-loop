@@ -5,11 +5,8 @@ stateless pure functions shared by the command-step and action-step
 surfaces; property tests exercise the invariants that keep the subprocess
 boundary fail-safe (BR-4, BR-5)."""
 
-import os
-import pytest
 import signal
 import string
-import subprocess
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
@@ -45,23 +42,10 @@ class TestNeedsShell:
 
 
 class TestHostShellExecution:
-    """How the HOST (non-sandbox) path executes a shell-needing command.
-    Windows cannot rely on shell=True - cmd.exe mangles $VAR and pipelines
-    (the CI-red hybrid failures) - so it prefers the discovered POSIX sh."""
+    """How the HOST (non-sandbox) path executes a shell-needing command."""
 
-    def test_posix_uses_shell_true(self):
-        argv, shell = host_shell_execution("a && b", nt=False)
-        assert (argv, shell) == ("a && b", True)
-
-    def test_windows_prefers_discovered_sh(self):
-        which = lambda name: "C:/Program Files/Git/bin/sh.exe"  # noqa: E731
-        argv, shell = host_shell_execution("a && b", nt=True, which=which)
-        assert argv == ["C:/Program Files/Git/bin/sh.exe", "-c", "a && b"]
-        assert shell is False
-
-    def test_windows_without_sh_falls_back_to_shell_true(self):
-        argv, shell = host_shell_execution("a && b", nt=True,
-                                           which=lambda name: None)
+    def test_uses_shell_true(self):
+        argv, shell = host_shell_execution("a && b")
         assert (argv, shell) == ("a && b", True)
 
 
@@ -144,10 +128,8 @@ class TestChildEnv:
 
 
 class TestKillProcessTree:
-    """The timeout reap path. CI-red on Windows: `proc.kill()` terminates
-    only the direct child - a git-bash `sh -c` wrapper's python child
-    survives, keeps the pipes open, and the follow-up communicate() blocks
-    out the full sleep. The tree must be reaped root-to-leaves."""
+    """The timeout reap path: ``start_new_session`` made ``proc.pid`` the
+    process-group id, so ``killpg`` reaps the whole tree."""
 
     class _Proc:
         def __init__(self, log):
@@ -157,30 +139,14 @@ class TestKillProcessTree:
         def kill(self):
             self.log.append("kill")
 
-    @pytest.mark.skipif(not hasattr(os, "killpg"), reason="POSIX-only: os.killpg does not exist on Windows")
-    def test_posix_reaps_the_whole_process_group(self, monkeypatch):
+    def test_reaps_the_whole_process_group(self, monkeypatch):
         killed = []
         monkeypatch.setattr(
             "agentic_dev_loop.engine.proc.os.killpg",
             lambda pid, sig: killed.append((pid, sig)))
         proc = self._Proc([])
 
-        kill_process_tree(proc, nt=False)
+        kill_process_tree(proc)
 
         assert killed == [(99, signal.SIGKILL)]
         assert proc.log == []  # the wrapper needs no separate kill
-
-    def test_windows_taskkills_the_tree_then_kills_the_wrapper(self):
-        log = []
-        proc = self._Proc(log)
-
-        def fake_run(argv, **kwargs):
-            log.append("taskkill")
-            assert argv == ["taskkill", "/F", "/T", "/PID", "99"]
-            return subprocess.CompletedProcess(argv, 0, "", "")
-
-        kill_process_tree(proc, nt=True, run=fake_run)
-
-        # taskkill /T needs the parent alive to walk the tree - then the
-        # wrapper itself is swept up.
-        assert log == ["taskkill", "kill"]

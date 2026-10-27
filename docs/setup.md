@@ -10,9 +10,12 @@ dev image, and the `pipeline.yaml` contract.
 
 Install a compliant Docker engine with **Engine API ≥ 1.43** (Engine 24):
 
-- **macOS / Windows** - [Docker Desktop](https://www.docker.com/products/docker-desktop/).
-  On Windows, ensure **Linux containers mode** is active (Docker Desktop →
-  Settings → General → "Use the WSL 2 based engine" / Linux containers).
+- **macOS** - [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+- **Windows** - WSL2 with an Ubuntu distro. Enable Docker Desktop's WSL
+  integration (or run Docker Engine inside the distro) and keep the repo on
+  the WSL filesystem (`~/dev/...`), not `/mnt/c`: bind-mounting a 9p path
+  into containers breaks permissions and is slow. Everything else is the
+  plain Linux setup.
 - **Linux** - Docker Engine, [OrbStack](https://orbstack.dev/),
   [Colima](https://github.com/abiosoft/colima), or a podman docker-compat
   machine.

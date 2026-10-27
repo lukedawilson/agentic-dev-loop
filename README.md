@@ -49,7 +49,7 @@ while a startup reaper reclaims containers leaked by a crashed run.
 | Requirement | Detail |
 | --- | --- |
 | Python | ≥ 3.12 |
-| Docker engine | Engine API ≥ 1.43 (Engine 24). Any compliant engine works - Docker Desktop, OrbStack, Colima, Rancher Desktop, podman docker-compat. On Windows, Linux-containers mode is required. |
+| Docker engine | Engine API ≥ 1.43 (Engine 24). Any compliant engine works - Docker Desktop, OrbStack, Colima, Rancher Desktop, podman docker-compat. On Windows, run under WSL2: the repo must live on the WSL filesystem, not /mnt/c. |
 | LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. |
 
 ```bash
@@ -537,7 +537,7 @@ agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run   # run the shipped pi
 - The shipped pipeline (`agentic-dev-loop/pipeline.yaml`) **dogfoods the tool on
   its own repo** - dev → test → review → qa → commit, with the engine's own
   three agent definitions in `sdk_agents/`.
-- CI: `ci.yml` (unit + integration suite, ubuntu + windows),
+- CI: `ci.yml` (unit + integration suite, ubuntu),
   `publish-image.yml` (multi-arch dev image, amd64 + arm64), `release.yml`
   (PyPI publishing).
 

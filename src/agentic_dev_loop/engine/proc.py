@@ -9,9 +9,7 @@ from __future__ import annotations
 
 import os
 import shlex
-import shutil
 import signal
-import subprocess
 from collections.abc import Mapping
 
 _SHELL_METACHARS = frozenset("&|;><$`~*?[]")
@@ -33,47 +31,21 @@ def split_command(command: str) -> list[str]:
     return shlex.split(command)
 
 
-def host_shell_execution(
-        command: str, *, nt: bool = os.name == "nt",
-        which=shutil.which) -> tuple[str | list[str], bool]:
-    """How the HOST (non-sandbox) path executes a shell-needing command.
-
-    POSIX: the raw string with ``shell=True`` (unchanged unit-2 behaviour).
-    Windows: ``shell=True`` is cmd.exe, which mangles ``$VAR`` expansion and
-    ``|`` pipelines (the CI-red hybrid failures) - prefer the discovered
-    POSIX ``sh`` (git-bash) via argv instead; fall back to ``shell=True``
-    only when no ``sh`` exists anywhere on PATH.
-    """
-    if not nt:
-        return command, True
-    sh = which("sh")
-    if sh:
-        return [sh, "-c", command], False
+def host_shell_execution(command: str) -> tuple[str, bool]:
+    """How the HOST (non-sandbox) path executes a shell-needing command:
+    the raw string with ``shell=True``. The engine targets Linux and WSL2
+    (which is plain Linux), so ``sh`` is always present."""
     return command, True
 
 
-def kill_process_tree(proc, *, nt: bool | None = None,
-                      run=subprocess.run) -> None:
+def kill_process_tree(proc) -> None:
     """Terminate `proc` and its descendants after a timeout.
 
-    POSIX: ``start_new_session`` made ``proc.pid`` the process-group id -
+    ``start_new_session`` made ``proc.pid`` the process-group id, so
     ``killpg`` reaps the whole group (a shell wrapper's children survive a
     plain ``kill``).
-
-    Windows: ``proc.kill()`` terminates only the direct child - a git-bash
-    ``sh -c`` wrapper's python child survives and keeps the pipes open, so
-    the follow-up ``communicate()`` blocks out the child's full lifetime.
-    ``taskkill /T`` walks the process tree while the parent is still alive,
-    then ``kill`` sweeps up anything left (CI-red: 9.5s timeout test).
     """
-    if nt is None:
-        nt = os.name == "nt"
-    if nt:
-        run(["taskkill", "/F", "/T", "/PID", str(proc.pid)],
-            capture_output=True, check=False)
-        proc.kill()
-    else:
-        os.killpg(proc.pid, signal.SIGKILL)
+    os.killpg(proc.pid, signal.SIGKILL)
 
 
 def is_pid_token(token: str) -> bool:

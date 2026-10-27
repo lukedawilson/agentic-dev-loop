@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dropped native Windows support. The engine now targets Linux and WSL2
+  (Windows users run under WSL2, which is plain Linux). The windows-latest
+  CI job and every Windows-specific code path and test were removed.
+
 ## [1.0.0a26] - 2026-10-27
 
 ### Added

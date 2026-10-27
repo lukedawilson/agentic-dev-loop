@@ -393,8 +393,8 @@ class TestCommandNode:
         """The host-path timeout must cut the WHOLE tree short, not just the
         direct child - a shell wrapper's grandchild that survives keeps the
         pipes open and the follow-up communicate() blocks out the full sleep
-        (CI-red 9.5s). kill_process_tree's per-OS branches are unit-pinned
-        in tests/test_proc.py::TestKillProcessTree."""
+        (CI-red 9.5s). kill_process_tree is unit-pinned in
+        tests/test_proc.py::TestKillProcessTree."""
         code, out, timed_out = _run_command(
             f'"{sys.executable}" -c "import time; time.sleep(30)"',
             tmp_path, 0.2)

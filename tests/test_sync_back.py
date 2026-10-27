@@ -338,9 +338,9 @@ class TestMergeOnConflictPartition:
         exp = _export(tmp_path, ws)
         (ws / "src" / "audit.md").write_text("base\n")
         (exp / "src" / "audit.md").write_text("base\nexport\n")
-        # Baseline comes from the real workspace bytes: write_text translates
-        # \n to os.linesep on Windows, so a fabricated sha256(b"base\n") would
-        # never match and would misclassify the copy as a merge conflict.
+        # Baseline comes from the real workspace bytes, so a fabricated
+        # sha256(b"base\n") would never match and would misclassify the
+        # copy as a merge conflict.
         baseline = {"src/audit.md": _digest(ws / "src" / "audit.md")}
         report = sync_back(exp, ws, ["src"], baseline=baseline,
                            merge_on_conflict=["src/audit.md"])
