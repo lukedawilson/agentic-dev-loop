@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a27] - 2026-10-27
+
 ### Changed
 
 - Dropped native Windows support. The engine now targets Linux and WSL2
