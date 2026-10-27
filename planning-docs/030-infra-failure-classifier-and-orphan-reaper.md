@@ -1,6 +1,6 @@
 # 030: Infra-failure classification and orphaned-container reaper
 
-> **Status: PROPOSED (2026-10-27)**
+> **Status: COMPLETED**
 
 ## Context
 

@@ -94,7 +94,8 @@
 | --- | --- |
 | BR-11.1 | Every failure - unknown mount/egress key, bad mode, malformed target, proxy application failure, sync conflict, container-create failure - is loud, naming the problem. |
 | BR-11.2 | No silent degradation: a step whose mount set or egress policy cannot be realised refuses to run. |
-| BR-11.3 | Error paths always destroy the created networks and containers. |
+| BR-11.3 | Error paths always destroy the created networks and containers; the startup reaper (030) extends cleanup to crash paths (a SIGKILLed CLI never reaches `close()`). |
+| BR-11.4 | Daemon-side exec failures are classified (docker exit 125, exit 126 with an I/O error, daemon error responses), raise AE-SBX-019, are sticky for the run, and fail the run without retry. |
 
 ## BR-12: Testability (Q7)
 

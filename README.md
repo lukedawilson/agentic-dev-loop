@@ -37,8 +37,10 @@ flowchart LR
 
 The fixed policies *are* the product: fail fast on missing config/secrets, no
 silent fallbacks, verdicts only from artifacts, bounded retries, per-attempt
-artifact hygiene, a single clean-worktree-gated commit point, and no default
-LLM timeout (agent runs are long).
+artifact hygiene, a single clean-worktree-gated commit point, no default LLM
+timeout (agent runs are long), and fail fast on a broken sandbox - daemon-side
+exec failures are classified and stop the run without an agent retry loop,
+while a startup reaper reclaims containers leaked by a crashed run.
 
 ## Installation
 
@@ -277,6 +279,123 @@ lines, the sandbox's new lines are appended in order, both sides converge, and
 the run continues with `[isolation] merged concurrent edits: ...` on the
 console.
 
+
+## Authoring a loop for your own repo
+
+A consumer repo needs two things written by hand - a pipeline file and the
+agent files it names - both committed before the first run (the host-boundary
+check refuses dirty tooling, and the `commit` step never commits it). Two
+reference layouts ship today: this repo dogfoods the engine on itself
+(python + pytest, no frontend, CLI-only qa), and the consumer repo carries
+the wider shape (.NET + npm frontend + a networked browser-probing qa step).
+
+```
+<repo>/agentic-dev-loop/pipeline.yaml
+<repo>/agentic-dev-loop/sdk_agents/dev.agent.md
+<repo>/agentic-dev-loop/sdk_agents/review.agent.md
+<repo>/agentic-dev-loop/sdk_agents/qa.agent.md
+```
+
+### The agent files
+
+Each `sdk_agents/<name>.agent.md` is a markdown prompt plus YAML frontmatter:
+`name` matches a step's `agent:` value; `tools` lists the tool names the step
+may use (`terminal` always; a repo can add more via extensions, e.g.
+`figma`).
+
+```markdown
+---
+name: review                 # matches a step's `agent:` value
+tools: [terminal]
+---
+# Review Agent
+## WORKFLOW                   # numbered steps
+## RULES                      # absolute never/always rules
+## SANDBOX NOTES              # the sandbox truth for THIS step
+## OUTPUT                     # the verdict contract
+```
+
+Three roles, three contracts:
+
+| Role | Verdict contract | Typical sandbox |
+| --- | --- | --- |
+| dev | none - the final response is captured as the `produces:` summary | rw mount, offline |
+| review | `VERDICT: APPROVED` / `VERDICT: NEEDS CHANGES` on the first content line | ro mount, offline |
+| qa | `VERDICT: PASS` / `VERDICT: FAIL`; map `unverifiable: UNVERIFIABLE` if you want a third way | shaped by the repo: rw + network + `class: browser` when it boots servers and drives a browser (the consumer repo); ro + offline when it probes the CLI only (this repo) |
+
+The conventions that make a good agent file - each one below exists because
+an agent burned budget learning it mid-run:
+
+- **State the sandbox truth in the prompt.** Every agent file carries a
+  `SANDBOX NOTES` section naming exactly what its step allows: mounts ro or
+  rw, network on or off, and which gates have already run. Never make the
+  agent discover it.
+- **Gates are the source of truth - cite the record, never re-run.** A
+  command the test gate, the editor-tests gate, or the dev summary reports
+  as run is coverage evidence, cited as `covered by <test>` or the gate
+  record. Review and qa never re-run builds or suites; qa maps every
+  acceptance criterion to existing coverage and probes only the remainder.
+- **dev enumerates its impossible set and stops at it.** The dev prompt
+  says: stop the moment your next step needs a command this sandbox cannot
+  run, and lists the set (package-manager fetches after a new pin, npm or
+  vitest offline, playwright downloads, database-category tests), one
+  attempt per command. That keeps the productive edit/build/test loop and
+  kills doomed retries. The set is toolchain-specific - write yours; this
+  repo's is a single bullet (no package managers), the consumer repo's is
+  four.
+- **Failure output returns as *Previous attempt feedback*.** Steps route
+  `on_fail: { goto: dev, retry: true }`, so gate failure output lands in
+  the dev agent's next context; the dev prompt makes every listed issue a
+  required fix.
+- **No git mutations, ever.** The `commit` step is the single commit point.
+- **`max_iterations` per role.** qa is bounded probing (60 in both
+  reference repos); dev is open-ended construction and stays uncapped
+  (the engine default).
+
+### The pipeline file
+
+The full field reference is above; this is the stage lineup and what to
+adapt per repo.
+
+| Stage | Kind | Typical shape | Why |
+| --- | --- | --- | --- |
+| dev | agent | rw, offline | does the work; edits are untracked |
+| restore | command | network + `presets: [package-registries]` | fetches what dev pinned (`deps_policy: open`) or the locked install; also the audit escalation point |
+| test | command | offline is fine (warm cache) | exit code is the verdict; the source of truth |
+| editor-tests | command | network + `presets: [package-registries]` | frontend suites that cannot run offline (`npm ci && npm test`). A separate step, never merged into `test`: the step name is the failure diagnosis, its timeout does not contend the backend suite's, and a retry re-runs only its own chain |
+| conformance | command | network + `presets: [package-registries]` | repo-specific fitness checks (the consumer repo: jscpd + DDD rules) |
+| review | agent | ro, offline | static conformance verdict |
+| qa | agent | per repo (see table above) | live-behaviour probes; `max_iterations: 60`; inject secrets only if the probes need them |
+| commit | action | host-side | the single commit point |
+
+Adaptation checklist for a new repo:
+
+1. `llm:` - model, `base_url`, `api_key_env`.
+2. `isolation:` - toolchain image override (the consumer repo pins a
+   toolchain image by digest) and `seccomp_profile: bundled:chromium-userns`
+   only if a stage runs Chromium.
+3. `caches:` - toolchain cache dirs as rw bind-mounts shared across runs
+   (`.nuget-packages`, `qa/node_modules`, `qa/.browsers`,
+   `frontend-editor/node_modules`); caches are never synced back.
+4. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
+5. `secrets:` - refs only, resolved from host env; each step opts in to the
+   refs it needs.
+6. `egress:` - `presets: [package-registries]` for fetch steps;
+   `class: browser` (broad-but-logged) for browser-tier qa only.
+7. `deps_policy:` and `lockfiles:` - see
+   [Dependency policy](#dependency-policy-locked-by-default).
+8. The dev prompt's impossible set - write it for your toolchain.
+9. `additional_files:` - the repo's `AGENTS.md`, coding standards, design
+   docs: shared context for every agent step.
+
+Validate before the first run - dry-run loads and prints the resolved plan
+with no LLM, no Docker, no state writes:
+
+```bash
+agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run
+```
+
+Then commit the tooling and run for real.
 
 ## Dependency policy (locked by default)
 
