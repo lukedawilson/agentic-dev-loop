@@ -33,11 +33,23 @@ jobs:
           python-version: "3.12"
       - run: pip install build
       - run: python -m build
+      - name: Skip if version already published
+        id: check-published
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if curl -fsS "https://pypi.org/pypi/agentic-dev-loop/${version}/json" >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+            echo "Version ${version} is already on PyPI; skipping publish and release."
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Attest build provenance
+        if: steps.check-published.outputs.already_published != 'true'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: "dist/*"
       - name: Publish to PyPI
+        if: steps.check-published.outputs.already_published != 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           attestations: true
@@ -51,6 +63,7 @@ jobs:
             substr($0, 1, length(target)) == target { found = 1; next }
           ' CHANGELOG.md > release-notes.md
       - name: GitHub Release
+        if: steps.check-published.outputs.already_published != 'true'
         uses: softprops/action-gh-release@v2
         with:
           body_path: release-notes.md
