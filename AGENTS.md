@@ -71,6 +71,15 @@ Enforced by `tests/test_repo_ascii.py` (every test run, CI included) and by
 a pre-commit hook (`.pre-commit-config.yaml` via `tools/check_no_em_dash.py`,
 active after `pre-commit install`).
 
+## Consumer name ban
+
+**NEVER mention a consumer by name anywhere in this repo, for any reason**:
+code, tests, docs, planning docs, agent prompts, commit messages, tags,
+branch names. Consumers are "the consumer" or "the consumer repo", never a
+name. This rule applies to committed history too: a leaked name is scrubbed
+out of history with a rebase (see planning-docs/026), not just edited at
+the tip.
+
 ## Debugging
 
 **Checking deployment status is absolutely forbidden.** Never run `gh run`,

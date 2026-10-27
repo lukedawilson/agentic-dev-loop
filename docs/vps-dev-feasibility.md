@@ -275,7 +275,7 @@ here as "check at purchase time", not a quote.
 3. **Dev box (new, dedicated, 4 vCPU / 8 GB / 80 GB)**: a generic loop-runner
    host, not a repo-specific one:
    - Designed ceiling of 4 concurrent AI-DLC loops across different repos
-     (agent-engine, the consumer repo, the consumer repo, future consumers), typical load 2, one
+     (agent-engine, the consumer repo, future consumers), typical load 2, one
      loop per repo at a time.
    - Generic toolchain: dotnet SDK 10, node LTS, uv, python3, jq, make, plus
      the Docker daemon for unit-5-era sandboxing (unit 7 later replaces it on

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- release.yml: tag pushes skip the PyPI publish and GitHub Release steps
+  when the version already exists on PyPI.
+
+### Changed
+
+- Consumer name ban added to AGENTS.md; three docs scrubbed of
+  consumer-name mentions (026 hardening).
+
 ## [1.0.0a25] - 2026-10-27
 
 ### Added

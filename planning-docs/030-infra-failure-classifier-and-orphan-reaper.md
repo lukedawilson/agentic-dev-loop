@@ -4,7 +4,7 @@
 
 ## Context
 
-The the consumer repo run 5367f0c488d8 (pipeline `sitebuilder-construction`) flapped for
+The consumer-repo run 5367f0c488d8 (pipeline `sitebuilder-construction`) flapped for
 17+ minutes: every terminal tool call failed with exit code 126 and stderr
 `openat etc/group: input/output error`, rendered to the agent as
 `[An error occurred during execution.]` plus the stderr text. The cause was

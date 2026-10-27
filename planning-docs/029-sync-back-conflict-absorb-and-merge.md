@@ -4,7 +4,7 @@
 
 ## Context
 
-On 2026-10-27 the the consumer repo unit-10 run (1db54eed) passed its restore step for the
+On 2026-10-27 the consumer-repo unit-10 run (1db54eed) passed its restore step for the
 first time (the a22 egress + NUGET_PACKAGES pipeline fixes work), then the engine
 raised AE-SBX-016 because both the loop's dev agent and a concurrent host session
 edited the same ten aidlc/planning docs. Everything after the raise was broken:
