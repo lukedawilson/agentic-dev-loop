@@ -1,6 +1,6 @@
 # 029: Sync-back conflict absorb, announce, and merge_on_conflict
 
-> Status: plan (not implemented)
+> **Status: COMPLETED**
 
 ## Context
 

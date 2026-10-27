@@ -34,8 +34,9 @@
 | BR-4.1 | After a step that declared rw paths, the engine syncs the export's changes back to the real repo, git-aware. |
 | BR-4.2 | Only declared-rw paths sync; ro paths cannot change and are never copied back. |
 | BR-4.3 | The sandbox is detached (step complete) before sync-back runs; sync-back is host-side. |
-| BR-4.4 | A sync conflict (real repo changed underneath) is a loud failure, never an overwrite. |
+| BR-4.4 (amended 2026-10-27, 029) | A sync conflict (real repo changed underneath) is announced on the console and a loud failure (`AE-SBX-016`), never an overwrite. The baseline is re-snapshotted before the raise and the host's version wins, so the divergence is absorbed once - the next sync-back runs clean instead of re-raising. |
 | BR-4.5 (028) | Declared `sync_excludes:` paths are scratch: never copied into the export and never synced (copy, delete, or conflict); excluded from both snapshots; entries validated at load. |
+| BR-4.6 (029) | A conflict on a declared `merge_on_conflict:` path is union-merged (three-way, host file plus export-only lines appended in export order): nothing is deleted, host and export converge on the same text, the baseline is re-snapshotted, the run continues, and the console prints a merge line. A both-sides-present merge path only; a deleted side stays a hard conflict. |
 
 ## BR-5: Egress enforcement (Q1)
 

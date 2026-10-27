@@ -20,6 +20,10 @@ agents_dir: sdk_agents               # resolved relative to the pipeline file's 
 # the consumer repos migrate to `locked` per 021 §3). `open` keeps the 018
 # restore behavior verbatim.
 deps_policy: open
+# 029 concurrent-edit merge: the aidlc audit log is append-only and edited by
+# both the loop (AI-DLC mandates audit.md logging) and the operator - union-merge
+# those edits instead of raising a sync-back conflict.
+merge_on_conflict: [aidlc-docs/audit.md]
 # 022 venv-boundary enforcement: keep the container-built sandbox venv OUT of
 # the workspace - it is bind-mounted in from this host dir at
 # {ws}/.venv-sandbox (rw), so `git add -A` sees no venv noise and the host

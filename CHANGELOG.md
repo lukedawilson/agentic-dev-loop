@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a24] - 2026-10-27
+
 ### Added
 
 - top-level `merge_on_conflict:` config list (029): concurrent host edits to a

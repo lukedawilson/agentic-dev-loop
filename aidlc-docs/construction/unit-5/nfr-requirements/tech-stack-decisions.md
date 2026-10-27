@@ -10,6 +10,7 @@
 | TS-6 | **rsync-style git-aware sync-back** | After rw steps, declared-rw changes sync back to the real repo; sandbox detached during sync; conflicts loud (F1, BR-4). |
 | TS-7 | **Pure-function core** | resolve_mount_set / assemble_egress_policy / match_target / plan_step_workspace / plan_sync_back / container_profile_key all pure; Docker/proxy transport isolated behind the existing Sandbox surface. (NFR-5.7, PBT targets from FD) |
 | TS-8 | **Proxy enforcement tests in existing CI** | Enforcement-behaviour tests (the proxy actually denying unmatched traffic) are portable (no root) and run in normal CI (ubuntu + windows matrix), never silently skipped; export/sync-back tested against real repos in existing jobs. No privileged job. (NFR-5.7) |
+| TS-9 | **Sync-back conflicts are one-off operator events, not agent errors** | A concurrent host edit is announced on the console and absorbed (host wins, baseline re-snapshotted) before `AE-SBX-016`; declared `merge_on_conflict:` paths union-merge instead of raising. The console (`_announce`) is the product surface - no logging library in src. (029, BR-4.4/BR-4.6) |
 
 ## Deferred
 

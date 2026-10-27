@@ -52,7 +52,8 @@ Behaviour: `profile_key()` yields the stable pool key (D-1); equal profiles ⇒ 
 | Field | Meaning |
 | --- | --- |
 | `synced_paths` | declared-rw paths copied back (BR-4.2) |
-| `conflicts` | loud on non-empty (BR-4.4) |
+| `conflicts` | loud on non-empty (BR-4.4; hard paths only after 029 partition) |
+| `merged_paths` | conflicts on declared `merge_on_conflict:` paths, union-merged by the engine (029) |
 | `step_id` / `timestamp` | audit linkage (BR-11, SECURITY-03) |
 
 ## New Entity (descent step 3)
@@ -70,7 +71,7 @@ The .git-free derivative the sandbox mounts. Owned and mutated by the engine (ma
 | Entity | Change |
 | --- | --- |
 | `StepConfig` (config.py) | gains `mounts` (list of `{path, mode}`) and `egress` (targets/preset/class); both `extra=forbid` validated at load. `network: bool` keeps meaning "step may use the network" - the egress policy now decides what it may reach. |
-| `PipelineConfig` (config.py) | gains top-level `caches` and `sync_excludes` (list[str], default `[]`, single strings coerced), validated at load with cross-field checks (028). |
+| `PipelineConfig` (config.py) | gains top-level `caches`, `sync_excludes` (028), and `merge_on_conflict` (029) - each list[str], default `[]`, single strings coerced, validated at load with cross-field checks (redundancy against excludes/caches). |
 | `DockerBackend` (engine/isolation.py) | the two-persistent-container model becomes the profile-keyed pool (BR-10); gains per-policy egress proxy management (BR-5) and export materialisation/sync-back orchestration. The `Sandbox` surface is unchanged (unit-3 extension seam). |
 | `IsolationConfig` | unchanged this unit (mount/egress live per-step); egress presets are engine data, toolchain caches are now `PipelineConfig` author data (028). |
 
@@ -82,7 +83,7 @@ The .git-free derivative the sandbox mounts. Owned and mutated by the engine (ma
 | `assemble_egress_policy` | `(step_egress) -> EgressPolicy` | preset expansion, class classification, validation (BR-7/8) |
 | `match_target` | `(hostname, policy) -> allowed | denied` | hostname matching at the proxy; unmatched = deny + logged (BR-6) |
 | `plan_step_workspace` | `(repo, cache_paths, platform, excludes) -> StepWorkspacePlan` | export layout + cache bind-mount list + existence checks + scratch excludes (BR-3/028) |
-| `plan_sync_back` | `(export_changes, declared_rw, cache_paths, excludes) -> SyncPlan` | git-aware, declared-rw only minus caches/excludes, conflict detection (BR-4/028) |
+| `plan_sync_back` | `(export_changes, declared_rw, cache_paths, excludes) -> SyncPlan` | git-aware, declared-rw only minus caches/excludes, conflict detection (BR-4/028). At sync-back runtime conflicts are partitioned into merge paths (declared `merge_on_conflict:`, union-merged) and hard paths (absorb + announce + raise) (029). |
 | `container_profile_key` | `(mount_set, policy) -> str` | stable pool key (D-1, BR-10) |
 
 All pure - the PBT-03 targets (serialisation round-trips, key stability, strict-default property, preset-expansion determinism, export-path invariants).

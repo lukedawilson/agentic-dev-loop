@@ -179,6 +179,7 @@ steps:
 | `deps_policy` | `locked` (default) or `open`. `locked` = the human-owned lockfile is the source of truth and the agent may not add dependencies; `open` = the bootstrap protocol (the agent may add exact-pinned manifest entries). See [Dependency policy](#dependency-policy-locked-by-default). |
 | `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
 | `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from the real workspace (auto-created if missing); `sync_excludes:` names scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
+| `merge_on_conflict:` | Top-level run-wide list of append-style logs (same path vocabulary as `sync_excludes:`, default `[]`). A concurrent host edit to a listed path is union-merged instead of raising: the host file wins and the sandbox's export-only lines are appended in order; both sides converge and the run continues. See [docs/setup.md](docs/setup.md). |
 
 ### Secrets (`secrets:`) - refs only, never values
 
@@ -262,6 +263,20 @@ steps:
   to exactly the declared hosts for that stage; the default stays network-off
   everywhere. Reserve it for stages that need it (QA, integration). The
   residual risks are documented in [docs/setup.md](docs/setup.md).
+
+### Sync-back conflicts (host edits during a run)
+
+Only declared-`rw` paths sync back to the real repo after a step. If the host
+also edits a declared-`rw` path while the step is running, sync-back prints
+`[isolation] sync-back conflict: ...` and raises `AE-SBX-016`; the host's
+version wins, the baseline is re-snapshotted, and the next step (even
+`echo hello`) runs clean instead of re-raising forever. For append-style logs
+edited by both sides (an audit log, say), declare them in the top-level
+`merge_on_conflict:` list: those paths are union-merged - the host keeps its
+lines, the sandbox's new lines are appended in order, both sides converge, and
+the run continues with `[isolation] merged concurrent edits: ...` on the
+console.
+
 
 ## Dependency policy (locked by default)
 
