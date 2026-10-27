@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a23] - 2026-10-27
+
+### Changed
+
+- test: remove flaky graph timeout e2e (Windows CI)
+- Uncommitted changes: .opencode/commands/migrate-pipeline.md, src/agentic_dev_loop/engine/isolation.py, tests/test_isolation.py
+
 ## [1.0.0a22] - 2026-10-26
 
 ### Changed

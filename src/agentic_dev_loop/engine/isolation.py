@@ -1307,6 +1307,16 @@ def resolve_image_ref(image: str, environ: Mapping[str, str] | None = None) -> s
     return image
 
 
+_MODULE_TAG = __name__.rsplit(".", 1)[-1]
+
+
+def _announce(msg: str) -> None:
+    """One-line console progress note for the eager startup phases. The tag is
+    derived from the emitting module's own name (what a logging library's
+    name field would record), never hardcoded."""
+    print(f"[{_MODULE_TAG}] {msg}", flush=True)
+
+
 def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
                     state_dir: str | Path,
                     runner: CommandRunner | None = None,
@@ -1323,6 +1333,7 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     direct Sandbox API (DockerBackend without an export + requests carrying
     ``mount_set=None``), which is integration-tests-only."""
     seccomp_profile = resolved_seccomp_profile(cfg)
+    _announce("probing docker daemon...")
     probe_docker(runner)
     profile = resolve_effective_profile(cfg.isolation)
     image = resolve_image_ref(profile.image)
@@ -1343,15 +1354,18 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
             cache_paths.append(SANDBOX_VENV_DIR)
     for cache in cfg.caches:
         (workspace / cache).mkdir(parents=True, exist_ok=True)
+    _announce("materialising workspace export...")
     ws = StepWorkspace.materialise(
         workspace, cache_paths, sys.platform, export_root,
         state_dir=str(state_dir), excludes=list(cfg.sync_excludes))
     export_root = str(ws.export_root)
     cache_mounts = ws.mount_points()[1:]  # skip the export root itself
+    _announce(f"export ready at {export_root}")
     # Repair console-script shebangs that bake a previous run's dead export
     # path (028): a venv built by export A must execute its ``bin/*`` scripts
     # when mounted into export B.
     venv_dir = Path(sandbox_venv_dir) if sandbox_venv_dir else workspace / SANDBOX_VENV_DIR
+    _announce("checking venv shebangs")
     repair_venv_shebangs(venv_dir, state_dir=state_dir, export_root=export_root)
 
     backend = DockerBackend(
@@ -1360,11 +1374,17 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
         export_root=export_root, cache_mounts=cache_mounts,
         sync_excludes=list(cfg.sync_excludes))
+    _announce(f"preparing sandbox image {image} (first pull can take a while)")
     backend.ensure_image()
+    _announce("sandbox image ready")
+    _announce("starting execution container...")
     backend.create_execution_container()
+    _announce("execution container started")
     if refresh is None:
         refresh = bool(cfg.isolation and cfg.isolation.refresh)
     for setup_cmd, stamp_key in _declared_setups(cfg, workspace):
+        _announce(f"provisioning setup (stamp {stamp_key[:8]})")
         backend.provision(setup_cmd, stamp_key, str(iso_state_dir / "stamps"),
                           force=refresh)
+    _announce("sandbox ready")
     return backend

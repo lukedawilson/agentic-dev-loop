@@ -1023,6 +1023,43 @@ class TestStartupSandbox:
         finally:
             sandbox.close()
 
+    def test_startup_announces_each_phase(self, tmp_path, monkeypatch, capsys):
+        """The eager startup is the long silent span between the CLI banner
+        and the first step's output. Every phase announces itself on the
+        console, tagged with the emitting module's own name."""
+        from agentic_dev_loop.engine import isolation
+        from agentic_dev_loop.engine.isolation import startup_sandbox
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path, with_setup=True)
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(
+            ok("1.54"),           # probe version
+            ok("linux"),          # probe ostype
+            ok(""),               # image inspect (pull)
+            ok(""),               # docker run -d --rm (exec container)
+            ok(""),               # docker run provision
+        )
+        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
+        try:
+            out = capsys.readouterr().out
+            tag = f"[{isolation.__name__.rsplit('.', 1)[-1]}]"
+            assert f"{tag} probing docker daemon" in out
+            assert f"{tag} materialising workspace export" in out
+            assert f"{tag} export ready at" in out
+            assert f"{tag} checking venv shebangs" in out
+            assert f"{tag} preparing sandbox image img:tag" in out
+            assert f"{tag} sandbox image ready" in out
+            assert f"{tag} starting execution container" in out
+            assert f"{tag} execution container started" in out
+            assert f"{tag} provisioning setup" in out
+            assert f"{tag} sandbox ready" in out
+        finally:
+            sandbox.close()
+
     def test_network_declaration_starts_second_container(self, tmp_path, monkeypatch):
         """014/unit-5: startup creates only the base network-none export
         container. The bridge-network container for a network-declaring step
