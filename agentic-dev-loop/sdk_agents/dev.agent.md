@@ -46,6 +46,10 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
   pre-installed environment. The dependency policy (which dependencies you
   may use, and what to declare when one is missing) is injected into your
   context by the engine; do not restate it here.
+- A command that fails because the sandbox blocks it (network fetches, in
+  practice) will fail the same way on retry - do not retry. Note it in your
+  final response and move on; the restore gate has network access and fetches
+  newly pinned dependencies.
 
 ## CONVENTIONS
 

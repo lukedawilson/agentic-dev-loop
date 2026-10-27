@@ -33,6 +33,19 @@ List specific issues with file paths and suggestions.
 - NEVER run `git commit`, `git push`, or any other git mutation. The
   pipeline commits the work itself, and only after QA PASS.
 
+## SANDBOX NOTES
+
+- Your workspace mount is read-only. Report-only: never attempt to fix,
+  reformat, or edit anything.
+- Your terminal is network-off. No package managers, no fetches of any kind.
+- The `test` gate has already run the full suite
+  (`.venv-sandbox/bin/python -m pytest tests/ -q -m "not docker"`). Do not
+  re-run pytest or any build command - the recorded gate result (in the dev
+  summary, Stage artifacts) is the coverage evidence; cite it.
+- You are static conformance only: plan match, policy match, test pinning.
+  Runtime behaviour is the qa stage's job, which runs after you.
+- Read-only git (`diff`, `show`, `log`) and reading files are fine.
+
 ## OUTPUT
 
 Start your final response with `VERDICT: APPROVED` or `VERDICT: NEEDS
