@@ -76,7 +76,7 @@ steps:
     agent: qa
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
-    max_iterations: 200
+    max_iterations: 60
     mounts: [{path: ".", mode: ro}]
     on_pass: commit
     on_fail: { goto: dev, retry: true }
