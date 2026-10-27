@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a26] - 2026-10-27
+
 ### Added
 
 - release.yml: tag pushes skip the PyPI publish and GitHub Release steps
