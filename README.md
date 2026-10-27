@@ -42,6 +42,20 @@ timeout (agent runs are long), and fail fast on a broken sandbox - daemon-side
 exec failures are classified and stop the run without an agent retry loop,
 while a startup reaper reclaims containers leaked by a crashed run.
 
+## Supported platforms
+
+The engine is plain Linux under the hood and runs wherever a compliant
+Docker engine does:
+
+| Platform | Support |
+| --- | --- |
+| **Linux** | Native. Docker Engine, OrbStack, Colima, or podman with docker compat. |
+| **macOS** | Native. Docker Desktop, OrbStack, or Colima. |
+| **Windows** | Via **WSL2** (Ubuntu distro). Enable Docker Desktop's WSL integration (or run Docker Engine inside the distro) and keep the repo on the WSL filesystem (`~/dev/...`), not `/mnt/c` - bind-mounting a 9p path into containers breaks permissions and is slow. |
+
+Native Windows (outside WSL2) is not supported: every Windows-specific code
+path and test was removed, and CI runs on Ubuntu only.
+
 ## Installation
 
 **Prerequisites**
