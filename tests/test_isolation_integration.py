@@ -3,17 +3,20 @@ reason when no daemon or integration image is present; never silently skipped
 in CI (the workflows pre-install Docker and the image)."""
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import subprocess
+import sys
 
 import pytest
 
 from agentic_dev_loop.core.config import IsolationConfig, MountSpec
 from agentic_dev_loop.engine.egress_policy import EgressPolicy
 from agentic_dev_loop.engine.isolation import (
-    DockerBackend, SandboxExecutionRequest, SandboxError,
-    SubprocessRunner, probe_docker, read_stamp, resolve_effective_profile,
-    write_stamp,
+    CONTAINER_REGISTRY, DockerBackend, SandboxExecutionRequest, SandboxError,
+    SubprocessRunner, probe_docker, process_start, read_stamp,
+    reap_orphaned_containers, resolve_effective_profile, write_stamp,
 )
 from agentic_dev_loop.engine.mounts import resolve_mount_set
 from agentic_dev_loop.engine.step_workspace import StepWorkspace
@@ -356,3 +359,33 @@ class TestExportAndMountsE2E:
             assert (ws / "src" / "a.py").read_text() == "changed"
         finally:
             b.close()
+
+
+class TestReaperE2E:
+    """030: the startup reaper removes a leaked exec container whose owning
+    pid is dead, and leaves the registry pruned (missing containers are
+    tolerated via the rm -f exit-code-ignoring contract)."""
+
+    def test_reaper_removes_orphaned_exec_container(self, backend, tmp_path):
+        b, _ws = backend
+        name = b._container
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        registry = b._iso_state_dir / CONTAINER_REGISTRY
+        registry.parent.mkdir(parents=True, exist_ok=True)
+        with registry.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "run_id": b._run_id,
+                "name": name,
+                "pid": proc.pid,
+                "process_start": process_start(proc.pid),
+                "created_at": "now",
+            }) + "\n")
+
+        reap_orphaned_containers(b._iso_state_dir, SubprocessRunner())
+
+        inspect = SubprocessRunner().run(
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"],
+            timeout=30)
+        assert name not in inspect.stdout

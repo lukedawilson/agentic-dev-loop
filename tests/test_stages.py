@@ -15,6 +15,7 @@ from openhands.sdk import LLM
 from openhands.sdk.conversation.state import ConversationExecutionStatus
 
 from agentic_dev_loop.core.config import PipelineConfig
+from agentic_dev_loop.engine.isolation import SandboxError
 from agentic_dev_loop.engine.registry import Registry, default_registry
 from agentic_dev_loop.engine.stages import (
     ARTIFACT_CONTEXT_CAP, Runtime, _run_command, build_context,
@@ -731,6 +732,17 @@ class TestRunAgent:
         result = runtime.run_agent("dev", "msg")
         assert result.ok and result.truncated
 
+    def test_infra_error_fails_run_without_retry(self, runtime, monkeypatch):
+        self._write_agent(runtime)
+        runtime.sandbox.infra_error = SandboxError("AE-SBX-019: boom")
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.Conversation",
+            lambda **kw: FakeConversation(ConversationExecutionStatus.FINISHED, **kw))
+        result = runtime.run_agent("dev", "msg")
+        assert result.ok is False
+        err = (runtime.state_dir / "last-error.md").read_text()
+        assert "AE-SBX-019" in err
+
 
 class TestSandboxedCommandNode:
     """Command steps route through the Sandbox (BR-1.1); git mutations are
@@ -779,6 +791,22 @@ class TestSandboxedCommandNode:
         node = make_command_node(rt, cfg.steps[1])
         update = node(make_state())
         # blocked is blocked - a hard failure, never a retry cycle
+        assert update == {"failed": True, "failed_step": "test"}
+        assert "notes" not in update
+
+    def test_sandbox_infra_raise_fails_without_retry(self, runtime, fake_sandbox):
+        def boom(request):
+            raise SandboxError("AE-SBX-019: sandbox infrastructure failure")
+
+        fake_sandbox.script(boom)
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "test"},
+            {"name": "test", "command": "true",
+             "on_pass": "success", "on_fail": {"goto": "dev", "retry": True}},
+        ])
+        rt = dataclasses.replace(runtime, cfg=cfg)
+        node = make_command_node(rt, cfg.steps[1])
+        update = node(make_state())
         assert update == {"failed": True, "failed_step": "test"}
         assert "notes" not in update
 

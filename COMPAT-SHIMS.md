@@ -50,3 +50,18 @@ is a **callable returning `Sequence[ToolDefinition]`** (`agents.py`).
   tool (the `terminal` name stops delegating to the SDK's `TerminalTool`).
 - **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_terminal_seam_still_present`
   fails loudly when the seam disappears (same upgrade procedure as the shims).
+
+## STUCK fast-stop (unit-5, plan 030)
+
+`SandboxTerminalExecutor.__call__` writes `ConversationExecutionStatus.STUCK`
+on the SDK conversation when the sandbox raises its sticky infra error, so
+the SDK run loop breaks within one iteration instead of flapping to
+`max_iterations` (D3). This is a reliance on undocumented loop behaviour: the
+SDK docstring says tool executors must not mutate shared conversation state,
+so it is pinned here.
+
+- **Version range**: `openhands-sdk==1.17.0` (tested).
+- **Removal criterion**: the SDK grows a supported stop mechanism for tools,
+  or `LocalConversation.run` stops checking STUCK in its break condition.
+- **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_run_loop_still_breaks_on_stuck`
+  fails loudly when the run loop no longer breaks on STUCK.

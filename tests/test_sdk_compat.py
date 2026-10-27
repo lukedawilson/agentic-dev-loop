@@ -88,3 +88,21 @@ def test_canary_sdk_terminal_seam_still_present():
         "The SDK's register_tool no longer accepts a callable factory - the "
         "per-run terminal re-registration in agents.py is dead. Replace it and "
         "update COMPAT-SHIMS.md.")
+
+
+def test_canary_sdk_run_loop_still_breaks_on_stuck():
+    """Canary for the D3 fast-stop reliance (COMPAT-SHIMS.md): passes while
+    the SDK's LocalConversation.run breaks on STUCK; fails once the run loop
+    stops checking STUCK - SandboxTerminalExecutor's STUCK write (agents.py)
+    is then dead and must be replaced with a supported stop mechanism."""
+    import inspect
+
+    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+
+    src = inspect.getsource(LocalConversation.run)
+    assert "ConversationExecutionStatus.STUCK" in src, (
+        "The SDK's LocalConversation.run no longer checks STUCK in its break "
+        "condition - the D3 fast-stop reliance in SandboxTerminalExecutor "
+        "(agents.py) is dead. Adopt the SDK's supported stop mechanism and "
+        "update COMPAT-SHIMS.md."
+    )

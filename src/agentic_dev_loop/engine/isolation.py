@@ -89,6 +89,11 @@ SANDBOX_VENV_PYTHON = ".venv-sandbox/bin/python"
 # of silently mutating a host-owned throwaway venv.
 HOST_ONLY_DIRS = (".venv",)
 
+# 030 infra-failure classifier + orphan-container reaper (D1/D4).
+_EIO_PATTERN = re.compile(r"input/output error|I/O error", re.IGNORECASE)
+CONTAINER_REGISTRY = "container-registry.jsonl"
+_CONTAINER_NAME_RE = re.compile(r"^[0-9a-f]{32}-exec(-[0-9a-f]{16})?(-net)?$")
+
 
 class SandboxError(RuntimeError):
     """A loud fail-fast sandbox failure; the message names the problem and
@@ -213,6 +218,25 @@ def container_profile_key(mount_set: MountSet, policy: EgressPolicy) -> str:
     }
     return hashlib.sha256(
         json.dumps(canonical, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def classify_infra_failure(exit_code: int | None, stderr: str, stdout: str) -> str | None:
+    """Classify a daemon-side exec failure (030, D1). Returns a short reason
+    string when the failure is Docker/VM infrastructure and None for a routine
+    command failure. Pure - no I/O.
+
+    Only the Docker CLI contract is trusted here: exit 125 means the docker
+    client itself failed; exit 126 means the contained command could not be
+    invoked, and combined with an EIO read error it proves the guest image was
+    unreadable; a daemon error prefix in stderr cannot come from the
+    container's command (the CLI prints it before the command runs)."""
+    if exit_code == 125:
+        return "docker CLI exit 125 (daemon-side error)"
+    if exit_code == 126 and _EIO_PATTERN.search(f"{stderr} {stdout}"):
+        return "exit 126 with an I/O error: the guest could not load the command"
+    if exit_code in (1, 125, 126) and "Error response from daemon:" in stderr:
+        return "docker daemon error response"
+    return None
 
 
 @dataclass(frozen=True)
@@ -623,6 +647,8 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
     payload = [
         "docker", "run", "--detach", "--rm", "--name",
         name or exec_container_name(run_id, network),
+        "--label", "agentic-dev-loop=true",
+        "--label", f"agentic-dev-loop.run={run_id}",
         "--network", "bridge" if network else "none",
     ]
     if network:
@@ -762,6 +788,13 @@ class Sandbox(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
+    @property
+    def infra_error(self) -> SandboxError | None:
+        """The sticky sandbox infra failure (030, D1/D2), or None. Backends
+        that classify daemon-side failures override this; the default keeps
+        every other Sandbox implementation healthy-sandbox compatible."""
+        return None
+
 
 def _guard_git(request: SandboxExecutionRequest,
                git_mutations_blocked: bool) -> None:
@@ -833,12 +866,20 @@ class DockerBackend(Sandbox):
             Path(sandbox_venv_dir).mkdir(parents=True, exist_ok=True)
         self._started = False
         self._network_started = False
+        # 030: the first classified infra failure, sticky for the rest of the
+        # run (D1/D2). None until the exec path proves itself broken.
+        self._infra_error: SandboxError | None = None
 
     @property
     def export_root(self) -> str | None:
         """The materialised .git-free export root (BR-2); None when no export
         was materialised (the legacy workspace model)."""
         return self._export_root
+
+    @property
+    def infra_error(self) -> SandboxError | None:
+        """The sticky infra failure raised by the last classified exec (030)."""
+        return self._infra_error
 
     # -- infrastructure (startup) -------------------------------------------
 
@@ -891,6 +932,7 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
+        self._register_container(self._container)
         self._started = True
         if not self._network_enabled:
             return
@@ -907,6 +949,7 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-013: networked container run failed: "
                 f"{net_res.stderr.strip() or net_res.stdout.strip()}")
+        self._register_container(self._network_container)
         self._network_started = True
 
     def _create_base_export_container(self) -> None:
@@ -925,6 +968,7 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
+        self._register_container(self._container)
         self._started = True
         if not self._baseline:
             self._baseline = _snapshot(Path(self._export_root),
@@ -972,6 +1016,8 @@ class DockerBackend(Sandbox):
     # -- execution ----------------------------------------------------------
 
     def run(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:
+        if self._infra_error is not None:
+            raise self._infra_error
         _guard_git(request, self._profile.git_mutations_blocked)
         if request.mount_set is None:
             return self._run_legacy(request)
@@ -1022,6 +1068,8 @@ class DockerBackend(Sandbox):
 
     def _exec(self, request: SandboxExecutionRequest,
               container: str) -> SandboxExecutionResult:
+        if self._infra_error is not None:
+            raise self._infra_error
         start = time.monotonic()
         exec_argv = ["docker", "exec"]
         for key, value in request.env.items():
@@ -1038,11 +1086,29 @@ class DockerBackend(Sandbox):
         result = SandboxExecutionResult(
             exit_code=res.exit_code, stdout=res.stdout, stderr=res.stderr,
             duration_seconds=duration, backend="docker", timed_out=timed_out)
-        self._audit(request, result, container)
         if res.exit_code is None:
-            raise SandboxError(
+            self._audit(request, result, container)
+            err = SandboxError(
                 f"AE-SBX-012: Docker daemon lost mid-run: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
+            self._infra_error = err
+            raise err
+        reason = classify_infra_failure(res.exit_code, res.stderr, res.stdout)
+        self._audit(request, result, container, infra_reason=reason)
+        if reason is not None:
+            tail = (res.stderr or res.stdout or "").strip()[-2000:]
+            message = (
+                f"AE-SBX-019: sandbox infrastructure failure: {reason}. The "
+                "exec container cannot run commands; this is a Docker "
+                "engine/VM problem, not a command failure. Check the engine "
+                "health (docker info, docker system df) and restart Docker "
+                "Desktop if the VM reports I/O errors (docs/setup.md)."
+            )
+            if tail:
+                message += f" {tail}"
+            err = SandboxError(message)
+            self._infra_error = err
+            raise err
         return result
 
     def _start_profile(self, key: tuple[str, bool], mount_set: MountSet,
@@ -1072,6 +1138,7 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
+        self._register_container(name)
         return _ProfileContainer(name=name, mount_set=mount_set,
                                  egress_policy=policy, proxy=proxy,
                                  started=True)
@@ -1181,6 +1248,28 @@ class DockerBackend(Sandbox):
             if prof.proxy is not None:
                 prof.proxy.stop()
         self._pool.clear()
+        self._prune_registry()
+
+    def _register_container(self, name: str) -> None:
+        """Record one successfully created exec container in the host registry
+        (030, D4). Best-effort: a broken registry only disables reaping, it
+        never fails the run."""
+        _append_registry_record(self._iso_state_dir, {
+            "run_id": self._run_id,
+            "name": name,
+            "pid": os.getpid(),
+            "process_start": process_start(os.getpid()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+    def _prune_registry(self) -> None:
+        """Drop this run's registry entries after close() removed the
+        containers (030, D4). Tolerates a missing registry file."""
+        entries = _read_registry(self._iso_state_dir)
+        if not entries:
+            return
+        remaining = [e for e in entries if e.get("run_id") != self._run_id]
+        _write_registry(self._iso_state_dir, remaining)
 
     # -- internal -----------------------------------------------------------
 
@@ -1197,8 +1286,9 @@ class DockerBackend(Sandbox):
                 "failed; refusing to continue")
 
     def _audit(self, request: SandboxExecutionRequest,
-               result: SandboxExecutionResult, container: str) -> None:
-        append_audit_record(self._iso_state_dir, {
+               result: SandboxExecutionResult, container: str,
+               *, infra_reason: str | None = None) -> None:
+        record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "pipeline": request.pipeline or "",
             "step": request.step or "",
@@ -1208,7 +1298,10 @@ class DockerBackend(Sandbox):
             "exit_code": result.exit_code,
             "timed_out": result.timed_out,
             "duration_seconds": result.duration_seconds,
-        })
+        }
+        if infra_reason is not None:
+            record["infra_reason"] = infra_reason
+        append_audit_record(self._iso_state_dir, record)
 
 
 # ---------------------------------------------------------------------------
@@ -1298,6 +1391,119 @@ def clean_stamps(state_dir: Path) -> int:
     for f in files:
         f.unlink()
     return len(files)
+
+
+# ---------------------------------------------------------------------------
+# Orphan-container registry + reaper (030, D4) - host-side only
+# ---------------------------------------------------------------------------
+
+
+def process_start(pid: int) -> str | None:
+    """``ps -o lstart= -p <pid>`` - the owning CLI process's start time. None
+    when ``ps`` is unavailable or the pid is gone. Recorded at create time and
+    re-read at reap time to defeat pid recycling."""
+    try:
+        res = subprocess.run(["ps", "-o", "lstart=", "-p", str(pid)],
+                             capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if res.returncode != 0:
+        return None
+    return res.stdout.strip()
+
+
+def _read_registry(state_dir: Path) -> list[dict]:
+    path = Path(state_dir) / CONTAINER_REGISTRY
+    if not path.is_file():
+        return []
+    entries: list[dict] = []
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                entries.append(entry)
+    except OSError:
+        return []
+    return entries
+
+
+def _write_registry(state_dir: Path, entries: list[dict]) -> None:
+    path = Path(state_dir) / CONTAINER_REGISTRY
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        with tmp.open("w", encoding="utf-8") as fh:
+            for entry in entries:
+                fh.write(json.dumps(entry, sort_keys=True) + "\n")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def _append_registry_record(state_dir: Path, record: dict) -> None:
+    path = Path(state_dir) / CONTAINER_REGISTRY
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _pid_alive_matches(pid: int, recorded_start: str | None) -> bool:
+    """True when the recorded owning CLI process still owns the container: the
+    pid exists and, when a start time was recorded, the process at that pid
+    started at the same time (defeats pid recycling)."""
+    if not _pid_alive(pid):
+        return False
+    if recorded_start is None:
+        return True
+    current = process_start(pid)
+    if current is None:
+        return True  # cannot verify the start time - never reap a live pid
+    return current == recorded_start
+
+
+def reap_orphaned_containers(state_dir: str | Path,
+                             runner: CommandRunner | None = None) -> None:
+    """Startup orphan reaper (030, D4): remove exec containers whose owning
+    CLI process is gone (crashed before close()). Exact by construction - only
+    engine registry names are touched, and a live owner (pid alive with the
+    same start time) is left alone. Best-effort: never raises."""
+    runner = runner or _default_runner
+    entries = _read_registry(Path(state_dir))
+    if not entries:
+        return
+    remaining: list[dict] = []
+    for entry in entries:
+        name = entry.get("name")
+        if not isinstance(name, str) or not _CONTAINER_NAME_RE.match(name):
+            # Defense in depth: a corrupted registry entry is never an engine
+            # container, so leave it (and its entry) untouched.
+            remaining.append(entry)
+            continue
+        pid = entry.get("pid")
+        if isinstance(pid, int) and _pid_alive_matches(
+                pid, entry.get("process_start")):
+            remaining.append(entry)
+            continue
+        runner.run(["docker", "rm", "-f", name], timeout=60)
+        _announce(f"reaped orphaned sandbox container {name}")
+    _write_registry(Path(state_dir), remaining)
 
 
 # ---------------------------------------------------------------------------
@@ -1399,6 +1605,9 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     profile = resolve_effective_profile(cfg.isolation)
     image = resolve_image_ref(profile.image)
     iso_state_dir = isolation_state_dir(cfg)
+    # 030, D4: reap exec containers leaked by a previous run's crash before
+    # creating anything new (exact registry + pid liveness, never heuristics).
+    reap_orphaned_containers(iso_state_dir, runner)
     needs_network = any(step.network for step in cfg.steps)
     sandbox_venv_dir = resolve_sandbox_venv_dir(
         cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)

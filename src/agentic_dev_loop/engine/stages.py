@@ -107,6 +107,12 @@ class Runtime:
             conv.send_message(message)
             conv.run()
 
+            # 030, D1/D2: a sticky infra failure must fail the run with no
+            # retry - check before any capture/verdict path would schedule an
+            # unclear-retry. The existing except turns this into ok=False.
+            if self.sandbox is not None and self.sandbox.infra_error is not None:
+                raise self.sandbox.infra_error
+
             truncated = conv.state.execution_status != ConversationExecutionStatus.FINISHED
 
             if step is not None and (step.artifact is not None or step.produces):

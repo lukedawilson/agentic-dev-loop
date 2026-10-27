@@ -135,6 +135,32 @@ class TestSandboxTerminalExecutor:
         with pytest.raises(SandboxError, match="AE-SBX-008"):
             ex(TerminalAction(command="git commit -m x"), None)
 
+    def test_infra_error_sets_stuck_and_reraised(self, fake_sandbox, tmp_path):
+        from openhands.sdk.conversation.state import ConversationExecutionStatus
+        from openhands.tools.terminal import TerminalAction
+
+        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
+
+        err = SandboxError("AE-SBX-019: sandbox infrastructure failure")
+        fake_sandbox.infra_error = err
+
+        def boom(request):
+            raise err
+
+        fake_sandbox.script(boom)
+
+        class State:
+            execution_status = None
+
+        class Conv:
+            state = State()
+
+        conv = Conv()
+        ex = SandboxTerminalExecutor(fake_sandbox, workspace=str(tmp_path), env={})
+        with pytest.raises(SandboxError, match="AE-SBX-019"):
+            ex(TerminalAction(command="echo hi"), conv)
+        assert conv.state.execution_status == ConversationExecutionStatus.STUCK
+
     def test_timeout_propagates(self, fake_sandbox, tmp_path):
         from openhands.tools.terminal import TerminalAction
 

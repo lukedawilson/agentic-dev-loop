@@ -15,7 +15,8 @@ from openhands.tools.file_editor import FileEditorTool  # noqa: F401 - registers
 from openhands.tools.task_tracker import TaskTrackerTool  # noqa: F401 - registers "task_tracker"
 from openhands.tools.terminal import TerminalTool  # noqa: F401 - registers "terminal"
 
-from .isolation import SandboxExecutionRequest, command_argv, resolve_sandbox_env
+from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
+                        resolve_sandbox_env)
 
 if TYPE_CHECKING:
     from openhands.sdk.agent.agent import Agent
@@ -96,7 +97,21 @@ class SandboxTerminalExecutor(ToolExecutor):
             env=self._env, timeout=action.timeout,
             pipeline=self._pipeline, step=self._step, network=self._network,
             mount_set=self._mount_set, egress_policy=self._egress_policy)
-        result = self._sandbox.run(request)
+        try:
+            result = self._sandbox.run(request)
+        except SandboxError as exc:
+            # 030, D3: a sticky infra failure proves the exec path is dead, so
+            # tell the SDK run loop to break this step instead of flapping to
+            # max_iterations. See COMPAT-SHIMS.md for the reliance + canary.
+            if (conversation is not None
+                    and exc is self._sandbox.infra_error):
+                from openhands.sdk.conversation.state import (
+                    ConversationExecutionStatus,
+                )
+                conversation.state.execution_status = (
+                    ConversationExecutionStatus.STUCK
+                )
+            raise
         output = result.stdout + result.stderr
         return TerminalObservation.from_text(
             output, is_error=not result.succeeded and not result.is_timeout,

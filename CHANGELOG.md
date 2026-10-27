@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- infra-failure classification (030): daemon-side exec failures (docker exit
+  125, exit 126 with an I/O error, daemon error responses) now raise
+  AE-SBX-019 and are sticky for the run, failing it without an agent retry
+  loop; a startup reaper removes exec containers leaked by a crashed run via a
+  host-side registry + pid liveness check, and engine containers carry
+  `agentic-dev-loop` labels.
+
+### Changed
+
+- AE-SBX-012 (daemon lost mid-run) is now sticky like AE-SBX-019: one daemon
+  loss proves the exec path is dead, so every subsequent exec fails instantly.
+
 ## [1.0.0a24] - 2026-10-27
 
 ### Added

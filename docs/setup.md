@@ -266,10 +266,16 @@ Every fail-fast error points here (`AE-SBX-<NNN>`):
 | AE-SBX-013 | networked container create/route failure | inspect the docker error; a step declared `network: true` but no bridge container started (§3) |
 | AE-SBX-014 | invalid sandbox venv could not be removed | remove the invalid venv at the path named in the error and re-run (§4) |
 | AE-SBX-015 | `sandbox_venv_dir` resolves inside the workspace | set it to a path outside the workspace (§3) |
+| AE-SBX-019 | sandbox infrastructure failure (daemon-side) | check `docker info` / `docker system df`; restart Docker Desktop if the VM reports I/O errors |
 
 The audit trail of every sandboxed execution is at
 `~/.agentic-dev-loop/state/sandbox-audit.jsonl` (rotates at 5 MB); run state
 is under `~/.agentic-dev-loop/runs/`.
+
+The orphan-container reaper keeps a host-side registry at
+`~/.agentic-dev-loop/state/container-registry.jsonl` and, at startup, removes
+engine exec containers whose owning process is gone (a crashed run can no
+longer leak `sleep infinity` containers).
 
 **Linux-host note**: containers run as root inside the container, so
 bind-mounted writes can land root-owned in your workspace. Recover with

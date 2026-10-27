@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,16 +20,17 @@ from agentic_dev_loop.core.config import MountSpec
 from agentic_dev_loop.engine.egress_policy import EgressPolicy, TargetEntry
 from agentic_dev_loop.engine.mounts import MountSet, resolve_mount_set
 from agentic_dev_loop.engine.isolation import (
-    AUDIT_MAX_BYTES, CmdResult, DEFAULT_DEV_IMAGE, DEFAULT_DEV_IMAGE_REF,
-    DockerBackend, EffectiveProfile, ProbeResult, SandboxError,
-    SandboxExecutionRequest, SandboxExecutionResult, append_audit_record,
-    clean_stamps, container_profile_key, docker_create_payload,
-    docker_provision_payload, exec_container_name, is_git_mutation,
-    mount_set_docker_flags, probe_docker, read_stamp, remove_sandbox_venv,
-    resolve_effective_profile, resolve_image_ref, resolve_sandbox_env,
-    resolve_sandbox_venv_dir, select_backend, setup_stamp_key,
-    translate_mount_path, venv_probe_argv, venv_probe_command,
-    venv_probe_state, write_stamp,
+    AUDIT_MAX_BYTES, CONTAINER_REGISTRY, CmdResult, DEFAULT_DEV_IMAGE,
+    DEFAULT_DEV_IMAGE_REF, DockerBackend, EffectiveProfile, ProbeResult,
+    SandboxError, SandboxExecutionRequest, SandboxExecutionResult,
+    append_audit_record, classify_infra_failure, clean_stamps,
+    container_profile_key, docker_create_payload, docker_provision_payload,
+    exec_container_name, is_git_mutation, mount_set_docker_flags,
+    probe_docker, process_start, read_stamp, reap_orphaned_containers,
+    remove_sandbox_venv, resolve_effective_profile, resolve_image_ref,
+    resolve_sandbox_env, resolve_sandbox_venv_dir, select_backend,
+    setup_stamp_key, translate_mount_path, venv_probe_argv,
+    venv_probe_command, venv_probe_state, write_stamp,
 )
 
 
@@ -975,6 +978,49 @@ class TestStartupSandbox:
             "isolation": {"state_dir": str(tmp_path / "iso-state")},
         })
 
+    def test_startup_reaps_orphaned_containers(self, tmp_path, monkeypatch):
+        """030: the reaper runs at startup, before any container creation, and
+        removes a leaked exec container whose owning pid is dead."""
+        from agentic_dev_loop.engine.isolation import (CONTAINER_REGISTRY,
+                                                       startup_sandbox)
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path)
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-exec"
+        iso = tmp_path / "iso-state"
+        iso.mkdir(parents=True, exist_ok=True)
+        (iso / CONTAINER_REGISTRY).write_text(
+            json.dumps({"run_id": "dead", "name": name, "pid": proc.pid,
+                        "process_start": process_start(proc.pid),
+                        "created_at": "now"}) + "\n")
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(
+            ok("1.54"),  # probe version
+            ok("linux"),  # probe ostype
+            ok(""),  # reaper: docker rm -f
+            ok(""),  # image inspect
+            ok(""),  # docker run (exec container)
+        )
+        sandbox = startup_sandbox(cfg, workspace=ws,
+                                  state_dir=tmp_path / "run-state",
+                                  runner=runner)
+        try:
+            rm_calls = [c for c in runner.calls if c[:2] == ["docker", "rm"]]
+            assert ["docker", "rm", "-f", name] in rm_calls
+            remaining = [
+                json.loads(line)
+                for line in (iso / CONTAINER_REGISTRY).read_text().splitlines()
+                if line.strip()
+            ]
+            assert all(entry["name"] != name for entry in remaining)
+        finally:
+            sandbox.close()
+
     def test_state_dir_required(self, tmp_path, monkeypatch):
         """The run state_dir is mandatory: the runtime always resolves a
         mount set for steps, so enforcement needs the materialised export
@@ -1884,3 +1930,182 @@ class TestDeclaredCachesAndSyncExcludes:
             assert first == target
         finally:
             sandbox.close()
+
+
+# ---------------------------------------------------------------------------
+# 030: infra-failure classifier + orphan-container reaper
+# ---------------------------------------------------------------------------
+
+
+class TestClassifier:
+    @pytest.mark.parametrize("exit_code,stderr,stdout", [
+        (126, "openat etc/group: input/output error", ""),
+        (126, "I/O error", "some stdout"),
+        (125, "", ""),
+        (1, "Error response from daemon: conflict", ""),
+        (126, "Error response from daemon: exec failed", ""),
+    ])
+    def test_infra_failures_classified(self, exit_code, stderr, stdout):
+        assert classify_infra_failure(exit_code, stderr, stdout) is not None
+
+    @pytest.mark.parametrize("exit_code,stderr,stdout", [
+        (127, "sh: missing: not found", ""),
+        (1, "input/output error", ""),
+        (126, "cannot execute binary", ""),
+        (1, "read-only file system", ""),
+        (1, "permission denied", ""),
+        (137, "", ""),
+        (124, "", ""),
+        (0, "input/output error", ""),
+        (1, "", ""),
+        (2, "", ""),
+        (2, "Error response from daemon: conflict", ""),
+    ])
+    def test_routine_failures_not_classified(self, exit_code, stderr, stdout):
+        assert classify_infra_failure(exit_code, stderr, stdout) is None
+
+
+class TestExec:
+    def test_infra_eio_raises_and_is_sticky(self, tmp_path):
+        runner = FakeRunner(CmdResult(126, "", "openat etc/group: input/output error"))
+        backend = _backend(tmp_path, runner)
+        backend._container = "c1"
+        backend._started = True
+        req = SandboxExecutionRequest(argv=["echo", "hi"],
+                                      cwd=str(tmp_path / "ws"), env={})
+        with pytest.raises(SandboxError, match="AE-SBX-019"):
+            backend.run(req)
+        assert len(runner.calls) == 1
+        audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text().strip()
+        rec = json.loads(audit)
+        assert rec["exit_code"] == 126
+        assert rec["infra_reason"]
+        # sticky: the next run raises instantly, never spawning docker again
+        with pytest.raises(SandboxError, match="AE-SBX-019"):
+            backend.run(req)
+        assert len(runner.calls) == 1
+
+    def test_routine_exit_1_returned_and_not_sticky(self, tmp_path):
+        runner = FakeRunner(CmdResult(1, "", "boom"))
+        backend = _backend(tmp_path, runner)
+        backend._container = "c1"
+        backend._started = True
+        req = SandboxExecutionRequest(argv=["false"], cwd=str(tmp_path / "ws"),
+                                      env={})
+        result = backend.run(req)
+        assert result.exit_code == 1
+        assert backend.infra_error is None
+        backend.run(req)
+        assert len(runner.calls) == 2
+
+    def test_daemon_lost_is_sticky(self, tmp_path):
+        runner = FakeRunner(CmdResult(None, "", "lost"))
+        backend = _backend(tmp_path, runner)
+        backend._container = "c1"
+        backend._started = True
+        req = SandboxExecutionRequest(argv=["true"], cwd=str(tmp_path / "ws"),
+                                      env={})
+        with pytest.raises(SandboxError, match="AE-SBX-012"):
+            backend.run(req)
+        assert len(runner.calls) == 1
+        with pytest.raises(SandboxError, match="AE-SBX-012"):
+            backend.run(req)
+        assert len(runner.calls) == 1
+
+
+class TestCreatePayloadLabels:
+    def _profile(self):
+        return EffectiveProfile(True, True, True, True, True, "img", "4g", 2.0)
+
+    def test_create_payload_carries_identification_labels(self, tmp_path):
+        p = docker_create_payload(run_id="r1", image="img",
+                                  profile=self._profile(),
+                                  workspace=str(tmp_path))
+        assert "--label" in p
+        labels = [p[i + 1] for i, a in enumerate(p) if a == "--label"]
+        assert "agentic-dev-loop=true" in labels
+        assert "agentic-dev-loop.run=r1" in labels
+
+
+class TestReaper:
+    def _entry(self, name, pid, process_start=None):
+        return {"run_id": "r", "name": name, "pid": pid,
+                "process_start": process_start, "created_at": "now"}
+
+    def _write(self, state_dir, entries):
+        path = Path(state_dir) / CONTAINER_REGISTRY
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            for entry in entries:
+                fh.write(json.dumps(entry) + "\n")
+
+    def _read(self, state_dir):
+        path = Path(state_dir) / CONTAINER_REGISTRY
+        if not path.is_file():
+            return []
+        return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+    def test_dead_pid_reaped_and_pruned(self, tmp_path):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-exec"
+        self._write(tmp_path / "state", [self._entry(name, proc.pid)])
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == [["docker", "rm", "-f", name]]
+        assert self._read(tmp_path / "state") == []
+
+    def test_live_pid_left_alone(self, tmp_path):
+        name = f"{'b' * 32}-exec"
+        entry = self._entry(name, os.getpid(), process_start(os.getpid()))
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == []
+        assert self._read(tmp_path / "state") == [entry]
+
+    def test_concurrent_run_entry_left_alone(self, tmp_path):
+        name = f"{'c' * 32}-exec-{'d' * 16}-net"
+        entry = self._entry(name, os.getpid(), process_start(os.getpid()))
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == []
+        assert self._read(tmp_path / "state") == [entry]
+
+    def test_malformed_name_skipped(self, tmp_path):
+        entry = self._entry("not-an-engine-name", os.getpid(), None)
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == []
+        assert self._read(tmp_path / "state") == [entry]
+
+    def test_missing_container_tolerated(self, tmp_path):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'e' * 32}-exec"
+        self._write(tmp_path / "state", [self._entry(name, proc.pid)])
+        runner = FakeRunner(fail(1, "No such container"))
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == [["docker", "rm", "-f", name]]
+        assert self._read(tmp_path / "state") == []
+
+    def test_no_registry_is_a_noop(self, tmp_path):
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == []
+        assert not (tmp_path / "state" / CONTAINER_REGISTRY).exists()
+
+    def test_close_prunes_own_registry_entries(self, tmp_path):
+        runner = FakeRunner(ok(""), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._container = "c1"
+        backend._started = True
+        own = {"run_id": backend._run_id, "name": f"{'f' * 32}-exec",
+               "pid": os.getpid(), "process_start": None, "created_at": "now"}
+        other = {"run_id": "other-run", "name": f"{'a' * 32}-exec",
+                 "pid": os.getpid(), "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", [own, other])
+        backend.close()
+        assert self._read(tmp_path / "state") == [other]

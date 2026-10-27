@@ -112,6 +112,15 @@ class FakeSandbox(Sandbox):
         self.closed = False
         self.git_mutations_blocked = git_mutations_blocked
         self.handler = None
+        self._infra_error = None
+
+    @property
+    def infra_error(self):
+        return self._infra_error
+
+    @infra_error.setter
+    def infra_error(self, value):
+        self._infra_error = value
 
     def script(self, handler) -> None:
         self.handler = handler
