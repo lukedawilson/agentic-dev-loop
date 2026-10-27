@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from agentic_dev_loop.engine.sync_back import sync_back
+from agentic_dev_loop.engine.sync_back import merge_append_only, sync_back
 
 
 def _digest(p):
@@ -222,3 +222,126 @@ class TestSyncExcludes:
         assert a.to_copy == ("src/a.py",)
         assert a.to_delete == ()
         assert a.conflicts == ()
+
+
+class TestMergeAppendOnly:
+    def test_identical_sides_are_noop(self):
+        assert merge_append_only("a\nb\n", "a\nb\n") == "a\nb\n"
+
+    def test_host_only_lines_survive(self):
+        assert merge_append_only("a\nb\nhost\n", "a\nb\n") == "a\nb\nhost\n"
+
+    def test_export_only_lines_appended_in_order(self):
+        assert merge_append_only(
+            "a\nb\n", "a\nb\nexport1\nexport2\n") == "a\nb\nexport1\nexport2\n"
+
+    def test_both_appended_tails_union(self):
+        assert merge_append_only(
+            "a\nb\nhost-new\n", "a\nb\nexport-new\n") == "a\nb\nhost-new\nexport-new\n"
+
+    def test_deletions_never_applied_and_duplicates_kept(self):
+        assert merge_append_only("a\nb\n", "a\nb\na\n") == "a\nb\na\n"
+
+    def test_empty_host_is_export_text(self):
+        assert merge_append_only("", "a\n") == "a\n"
+
+    def test_no_export_only_lines_returns_host_verbatim(self):
+        host = "a\nb"
+        assert merge_append_only(host, "a\nb") is host
+
+
+class TestMergeOnConflictPartition:
+    def test_merge_conflict_partitioned_and_non_conflicting_copied(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "audit.md").write_text("base\nhost-line\n")
+        (exp / "src" / "audit.md").write_text("base\nexport-line\n")
+        (exp / "src" / "a.py").write_text("changed-a")
+        baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest(),
+                    "src/a.py": _digest(ws / "src" / "a.py")}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["src/audit.md"])
+        assert report.conflicts == ()
+        assert report.merged_paths == ("src/audit.md",)
+        assert "src/a.py" in report.synced_paths
+        assert (ws / "src" / "a.py").read_text() == "changed-a"
+        # merge paths are merged by the engine, not by the planner
+        assert (ws / "src" / "audit.md").read_text() == "base\nhost-line\n"
+        assert (exp / "src" / "audit.md").read_text() == "base\nexport-line\n"
+
+    def test_non_merge_conflict_still_loud_and_atomic(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "a.py").write_text("agent-change")
+        (ws / "src" / "a.py").write_text("external-change")
+        baseline = {"src/a.py": hashlib.sha256(b"orig-a").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["other.md"])
+        assert report.conflicts == ("src/a.py",)
+        assert report.merged_paths == ()
+        assert report.synced_paths == ()
+
+    def test_mixed_merge_and_hard_keeps_non_merge_atomic(self, tmp_path):
+        """A hard conflict leaves the non-merge copy/delete atomic, but the
+        merge path is still reported so the caller can union-merge it first."""
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "audit.md").write_text("base\nhost-line\n")
+        (exp / "src" / "audit.md").write_text("base\nexport-line\n")
+        (exp / "src" / "b.py").write_text("agent-b")
+        (ws / "src" / "b.py").write_text("external-b")
+        baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest(),
+                    "src/b.py": hashlib.sha256(b"orig-b").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["src/audit.md"])
+        assert report.conflicts == ("src/b.py",)
+        assert report.merged_paths == ("src/audit.md",)
+        assert report.synced_paths == ()
+
+    def test_wildcard_merge_match(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "build.log").write_text("base\nhost\n")
+        (exp / "src" / "build.log").write_text("base\nexport\n")
+        baseline = {"src/build.log": hashlib.sha256(b"base\n").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["*.log"])
+        assert report.conflicts == ()
+        assert report.merged_paths == ("src/build.log",)
+
+    def test_export_deleted_merge_path_is_hard_conflict(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "audit.md").write_text("host\n")
+        baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["src/audit.md"])
+        assert report.conflicts == ("src/audit.md",)
+        assert report.merged_paths == ()
+        assert report.synced_paths == ()
+        assert (ws / "src" / "audit.md").read_text() == "host\n"
+
+    def test_host_deleted_merge_path_is_hard_conflict(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "audit.md").write_text("export\n")
+        baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["src/audit.md"])
+        assert report.conflicts == ("src/audit.md",)
+        assert report.merged_paths == ()
+        assert report.synced_paths == ()
+        assert not (ws / "src" / "audit.md").exists()
+
+    def test_export_only_change_on_merge_path_still_copies(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "audit.md").write_text("base\n")
+        (exp / "src" / "audit.md").write_text("base\nexport\n")
+        baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline,
+                           merge_on_conflict=["src/audit.md"])
+        assert report.conflicts == ()
+        assert report.merged_paths == ()
+        assert "src/audit.md" in report.synced_paths
+        assert (ws / "src" / "audit.md").read_text() == "base\nexport\n"

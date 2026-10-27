@@ -446,6 +446,10 @@ class PipelineConfig(BaseModel):
     # "no sync-back excludes".
     caches: list[str] = []
     sync_excludes: list[str] = []
+    # 029: append-style logs that sync-back union-merges on a concurrent
+    # edit instead of raising. Same declared-path vocabulary as
+    # ``sync_excludes:``.
+    merge_on_conflict: list[str] = []
 
     @field_validator("deps_policy")
     @classmethod
@@ -460,7 +464,7 @@ class PipelineConfig(BaseModel):
     def _coerce_lockfiles(cls, v: Any) -> Any:
         return [v] if isinstance(v, str) else v
 
-    @field_validator("caches", "sync_excludes", mode="before")
+    @field_validator("caches", "sync_excludes", "merge_on_conflict", mode="before")
     @classmethod
     def _coerce_declared_paths(cls, v: Any) -> Any:
         return [v] if isinstance(v, str) else v
@@ -474,6 +478,11 @@ class PipelineConfig(BaseModel):
     @classmethod
     def _valid_sync_excludes(cls, v: list[str]) -> list[str]:
         return [_validate_declared_path(c, allow_wildcards=True) for c in v]
+
+    @field_validator("merge_on_conflict")
+    @classmethod
+    def _valid_merge_on_conflict(cls, v: list[str]) -> list[str]:
+        return [_validate_declared_path(m, allow_wildcards=True) for m in v]
 
     @field_validator("secrets", mode="before")
     @classmethod
@@ -577,6 +586,32 @@ class PipelineConfig(BaseModel):
                         f"sync_excludes entry {exclude!r} is redundant: it is "
                         f"already excluded as declared cache "
                         f"{('/'.join(cp))!r}")
+        return self
+
+    @model_validator(mode="after")
+    def _merge_avoid_excludes_and_caches(self) -> "PipelineConfig":
+        """029: a literal merge_on_conflict entry equal to or under a literal
+        sync_excludes entry or a literal caches entry is redundant - excluded
+        and cached paths never sync, so they can never conflict. Wildcard
+        merge entries are skipped (their overlap is fuzzy, 028 parity)."""
+        cache_parts = [relative_parts(c) for c in self.caches if relative_parts(c)]
+        exclude_parts = [relative_parts(e) for e in self.sync_excludes
+                         if not _has_wildcards(e) and relative_parts(e)]
+        for merge in self.merge_on_conflict:
+            if _has_wildcards(merge):
+                continue
+            mp = relative_parts(merge)
+            for cp in cache_parts:
+                if mp[:len(cp)] == cp:
+                    raise ValueError(
+                        f"merge_on_conflict entry {merge!r} is redundant: it is "
+                        f"already excluded as declared cache {('/'.join(cp))!r}")
+            for ep in exclude_parts:
+                if mp[:len(ep)] == ep:
+                    raise ValueError(
+                        f"merge_on_conflict entry {merge!r} is redundant: it is "
+                        f"already excluded by sync_excludes entry "
+                        f"{('/'.join(ep))!r}")
         return self
 
     @model_validator(mode="after")

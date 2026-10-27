@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 import shutil
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -43,8 +44,36 @@ class SyncBackReport:
 
     synced_paths: tuple[str, ...]
     conflicts: tuple[str, ...]
+    merged_paths: tuple[str, ...] = ()
     step_id: str | None = None
     timestamp: str = ""
+
+
+def merge_append_only(host_text: str, export_text: str) -> str:
+    """Union-merge two append-style logs (029): the host file wins for every
+    line it already contains (host order is preserved) and each export-only
+    line is appended in export order. Nothing is ever deleted, so both sides
+    converge on the line-level union; identical sides return the host text
+    unchanged.
+
+    Export-only is a multiset difference against the host, not a naive
+    ``difflib`` opcode filter: the common both-appended-tail case is a
+    ``replace`` opcode there, and a union must keep both tails."""
+    host_lines = host_text.splitlines()
+    export_lines = export_text.splitlines()
+    remaining: Counter[str] = Counter(host_lines)
+    extra: list[str] = []
+    for line in export_lines:
+        if remaining[line]:
+            remaining[line] -= 1
+        else:
+            extra.append(line)
+    if not extra:
+        return host_text
+    merged = "\n".join(host_lines + extra)
+    if host_text.endswith("\n") or export_text.endswith("\n"):
+        merged += "\n"
+    return merged
 
 
 def _parts(rel: str) -> tuple[str, ...]:
@@ -157,14 +186,20 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
               baseline: Mapping[str, str] | None = None,
               step_id: str | None = None,
               cache_paths: list[str] | tuple[str, ...] = (),
-              excludes: list[str] | tuple[str, ...] = ()) -> SyncBackReport:
+              excludes: list[str] | tuple[str, ...] = (),
+              merge_on_conflict: list[str] | tuple[str, ...] = ()) -> SyncBackReport:
     """Diff-copy declared-rw export changes into the real repo (ID-5).
 
     A conflict - a declared-rw path changed in the export AND in the real repo
     since materialisation - is a loud failure (BR-4.4): the report carries the
-    conflicts and nothing is copied. Otherwise declared-rw adds/modifies copy
-    host-side and declared-rw deletions remove host-side; ``.git``, the
-    bind-mounted caches, and declared sync-excludes are never touched."""
+    conflicts and nothing is copied. A ``merge_on_conflict:`` path (029) is
+    partitioned across every change kind: a both-sides-present conflict is
+    reported in ``merged_paths`` for the caller to union-merge, while a
+    one-side deletion (``added``/``deleted``) stays a hard conflict so the
+    append-only log is never silently resurrected or erased. Non-conflicting
+    adds/modifies still copy and deletions still remove host-side when no
+    hard conflict remains. ``.git``, the bind-mounted caches, and declared
+    sync-excludes are never touched."""
     export_root = Path(export_root)
     real_repo = Path(real_repo)
     baseline = dict(baseline or {})
@@ -191,10 +226,39 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
             else:
                 changes[rel] = "modified"
 
-    plan = plan_sync_back(changes, declared_rw, cache_paths, excludes)
-    if plan.conflicts:
+    merge_specs = list(merge_on_conflict or ())
+    merged_paths: list[str] = []
+    hard_conflicts: list[str] = []
+    plan_changes: dict[str, str] = {}
+    for rel, kind in changes.items():
+        if path_excluded(rel, merge_specs):
+            # Declared merge path (029). Union-merge only handles both sides
+            # present; a one-side deletion stays a hard conflict (raise +
+            # absorb, host wins) so a concurrent host/export delete can never
+            # silently resurrect or erase the append-only log.
+            if kind == "conflict":
+                merged_paths.append(rel)
+            elif kind in ("added", "deleted"):
+                hard_conflicts.append(rel)
+            else:
+                plan_changes[rel] = kind
+        elif kind == "conflict":
+            hard_conflicts.append(rel)
+        else:
+            plan_changes[rel] = kind
+
+    plan = plan_sync_back(plan_changes, declared_rw, cache_paths, excludes)
+    merged_paths = tuple(sorted(merged_paths))
+    hard_conflicts = tuple(sorted(hard_conflicts))
+
+    # A hard (non-merge) conflict keeps the BR-4.4 loud failure and the
+    # copy/delete stays atomic: nothing non-merge copies or deletes when one
+    # remains. Merge paths are still reported so the caller union-merges them
+    # first (029 step order: merge before the hard-conflict raise).
+    if hard_conflicts:
         return SyncBackReport(
-            synced_paths=(), conflicts=plan.conflicts, step_id=step_id,
+            synced_paths=(), conflicts=hard_conflicts,
+            merged_paths=merged_paths, step_id=step_id,
             timestamp=datetime.now(timezone.utc).isoformat())
 
     for rel in plan.to_copy:
@@ -207,5 +271,5 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
 
     return SyncBackReport(
         synced_paths=plan.to_copy + plan.to_delete,
-        conflicts=(), step_id=step_id,
+        conflicts=(), merged_paths=merged_paths, step_id=step_id,
         timestamp=datetime.now(timezone.utc).isoformat())

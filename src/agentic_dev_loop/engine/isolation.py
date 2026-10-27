@@ -43,7 +43,7 @@ from .mounts import Mount, MountSet
 from .proc import needs_shell, split_command
 from .seccomp import resolve_seccomp_profile
 from .step_workspace import StepWorkspace
-from .sync_back import SyncBackReport, _snapshot, sync_back
+from .sync_back import SyncBackReport, _snapshot, merge_append_only, sync_back
 
 # ---------------------------------------------------------------------------
 # Constants (KD-2 / ID-4)
@@ -791,7 +791,8 @@ class DockerBackend(Sandbox):
                  seccomp_profile: str | None = None,
                  export_root: str | None = None,
                  cache_mounts: list[tuple[str, str, str]] | None = None,
-                 sync_excludes: list[str] | None = None):
+                 sync_excludes: list[str] | None = None,
+                 merge_on_conflict: list[str] | None = None):
         self._image = image
         self._workspace = workspace
         self._iso_state_dir = Path(iso_state_dir)  # host-only (audit)
@@ -818,6 +819,9 @@ class DockerBackend(Sandbox):
         # 028: run-wide sync-back excludes (scratch paths - skipped from both
         # the export copy and every snapshot).
         self._sync_excludes = list(sync_excludes or ())
+        # 029: append-style logs union-merged on a concurrent-edit conflict
+        # instead of raising (host wins, export-only lines appended).
+        self._merge_on_conflict = list(merge_on_conflict or ())
         self._baseline: dict[str, str] = {}
         # The profile-keyed pool (D-1/BR-10): profile key -> running container.
         self._pool: dict[tuple[str, bool], _ProfileContainer] = {}
@@ -1072,19 +1076,75 @@ class DockerBackend(Sandbox):
                                  egress_policy=policy, proxy=proxy,
                                  started=True)
 
+    def _reset_export_to_host(self, rel: str) -> None:
+        """Absorb one hard-conflict path: the host wins, so the export is
+        reset to match it. A host-side deletion removes the export file; any
+        other host state is copied back (preserving symlinks)."""
+        host_path = Path(self._workspace) / rel
+        export_path = Path(self._export_root) / rel
+        if not host_path.exists() and not host_path.is_symlink():
+            export_path.unlink(missing_ok=True)
+            return
+        export_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(host_path, export_path, follow_symlinks=False)
+
     def _sync_back(self, mount_set: MountSet) -> None:
         """Sync declared-rw export changes back to the real repo (BR-4/F1),
-        git-aware, host-side, with the sandbox step already complete. A
-        conflict (the real repo changed underneath) is a loud failure."""
+        git-aware, host-side, with the sandbox step already complete.
+
+        029: a conflict on a declared ``merge_on_conflict:`` path is
+        union-merged (host wins, export-only lines appended) and does not
+        raise. A conflict on any other path - including a declared merge path
+        one side deleted - is announced, absorbed (the host wins and the
+        export is reset to it), and then still raises AE-SBX-016 scoped to
+        those hard paths, so the next sync-back runs clean. Merge paths are
+        union-merged first, before any hard-conflict raise."""
         report: SyncBackReport = sync_back(
             self._export_root, self._workspace, list(mount_set.rw_paths()),
             baseline=self._baseline, step_id=None,
-            cache_paths=self._cache_paths, excludes=self._sync_excludes)
+            cache_paths=self._cache_paths, excludes=self._sync_excludes,
+            merge_on_conflict=self._merge_on_conflict)
+
+        # 029 step 2: union-merge declared merge paths first, so a mixed
+        # merge+hard conflict still converges the append-style logs before
+        # the hard paths raise.
+        for rel in report.merged_paths:
+            host_path = Path(self._workspace) / rel
+            export_path = Path(self._export_root) / rel
+            host_text = host_path.read_text(encoding="utf-8")
+            export_text = export_path.read_text(encoding="utf-8")
+            merged = merge_append_only(host_text, export_text)
+            appended = len(merged.splitlines()) - len(host_text.splitlines())
+            host_path.write_text(merged, encoding="utf-8")
+            export_path.write_text(merged, encoding="utf-8")
+            _announce(
+                f"merged concurrent edits: {rel} "
+                f"({appended} sandbox lines appended)")
+            append_audit_record(self._iso_state_dir, {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "event": "sync_back_merge",
+                "path": rel,
+                "appended_lines": appended,
+            })
+
         if report.conflicts:
+            # fix 1 + fix 2: absorb the divergence once (host wins on every
+            # hard path, reset the export to match) and announce before the
+            # raise, so the next exec - even `echo hello` - runs clean.
+            for rel in report.conflicts:
+                self._reset_export_to_host(rel)
+            _announce(
+                f"sync-back conflict: {', '.join(report.conflicts)} - the "
+                "workspace changed underneath; edits to these paths will "
+                "not sync")
+            self._baseline = _snapshot(Path(self._export_root),
+                                       self._cache_paths,
+                                       self._sync_excludes)
             raise SandboxError(
                 f"AE-SBX-016: sync-back conflict in "
                 f"{', '.join(report.conflicts)} - the real repo changed "
-                f"underneath; resolve before retrying (BR-4.4)")
+                f"underneath; edits to these paths will not sync (BR-4.4)")
+
         self._baseline = _snapshot(Path(self._export_root),
                                    self._cache_paths,
                                    self._sync_excludes)
@@ -1092,6 +1152,7 @@ class DockerBackend(Sandbox):
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "sync_back",
             "synced_paths": list(report.synced_paths),
+            "merged_paths": list(report.merged_paths),
         })
 
     def close(self) -> None:
@@ -1373,7 +1434,8 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         profile=profile, runner=runner, network=needs_network,
         sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
         export_root=export_root, cache_mounts=cache_mounts,
-        sync_excludes=list(cfg.sync_excludes))
+        sync_excludes=list(cfg.sync_excludes),
+        merge_on_conflict=list(cfg.merge_on_conflict))
     _announce(f"preparing sandbox image {image} (first pull can take a while)")
     backend.ensure_image()
     _announce("sandbox image ready")

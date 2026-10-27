@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- top-level `merge_on_conflict:` config list (029): concurrent host edits to a
+  declared append-style log are union-merged (host wins, export-only lines
+  appended in order) instead of raising; both sides converge and the run
+  continues.
+
+### Changed
+
+- sync-back conflicts are now announced on the console and absorbed: the
+  host's version wins, the baseline is re-snapshotted before the
+  `AE-SBX-016` raise, so the next sync-back runs clean instead of wedging.
+- BR-4.4 amended and BR-4.6 added (029 merge semantics).
+
+### Breaking
+
+- `AE-SBX-016` wording now says the conflicted edits will not sync (and the
+  conflict is absorbed), instead of asking the operator to resolve before
+  retrying.
+
 ## [1.0.0a23] - 2026-10-27
 
 ### Changed

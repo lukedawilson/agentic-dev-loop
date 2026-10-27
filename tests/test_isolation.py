@@ -1609,6 +1609,202 @@ class TestUnit5RuntimeEnforcement:
             backend.close()
 
 
+    def test_sync_back_merge_path_converges_and_no_raise(self, tmp_path, capsys):
+        """029: a conflict on a declared merge path is union-merged: host and
+        export converge, the baseline is re-snapshotted, and no raise occurs."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "audit.md").write_text("base\nhost-line\n")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "audit.md").write_text("base\nexport-line\n")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False, export_root=str(export),
+            merge_on_conflict=["src/audit.md"])
+        backend._baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            backend.run(req)
+            merged = "base\nhost-line\nexport-line\n"
+            assert (ws / "src" / "audit.md").read_text() == merged
+            assert (export / "src" / "audit.md").read_text() == merged
+            out = capsys.readouterr().out
+            assert ("[isolation] merged concurrent edits: src/audit.md "
+                    "(1 sandbox lines appended)") in out
+            audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text()
+            assert "sync_back_merge" in audit
+            assert "src/audit.md" in audit
+            # the baseline was re-snapshotted: a subsequent sync is clean
+            backend.run(req)
+        finally:
+            backend.close()
+
+    def test_sync_back_conflict_absorbs_baseline_for_next_sync(self, tmp_path,
+                                                              capsys):
+        """029 fixes 1+2: a hard conflict announces once, discards the
+        conflicted exec's edit (host wins), re-snapshots the baseline, and the
+        next sync-back with no new changes runs clean."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("external")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("agent")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False, export_root=str(export))
+        backend._baseline = {"src/a.py": hashlib.sha256(b"orig").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            with pytest.raises(SandboxError, match="AE-SBX-016"):
+                backend.run(req)
+            assert (ws / "src" / "a.py").read_text() == "external"
+            assert (export / "src" / "a.py").read_text() == "external"
+            out = capsys.readouterr().out
+            assert ("[isolation] sync-back conflict: src/a.py - the workspace "
+                    "changed underneath; edits to these paths will not sync") in out
+            backend.run(req)  # absorbed: no new changes, no raise
+        finally:
+            backend.close()
+
+    def test_conflict_raise_lists_only_hard_paths(self, tmp_path, capsys):
+        """029: a mixed merge+hard conflict merges the append-style log first
+        and then raises AE-SBX-016 scoped to the hard paths only."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "audit.md").write_text("base\nhost-line\n")
+        (ws / "src" / "b.py").write_text("external-b")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "audit.md").write_text("base\nexport-line\n")
+        (export / "src" / "b.py").write_text("agent-b")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False, export_root=str(export),
+            merge_on_conflict=["src/audit.md"])
+        backend._baseline = {
+            "src/audit.md": hashlib.sha256(b"base\n").hexdigest(),
+            "src/b.py": hashlib.sha256(b"orig-b").hexdigest(),
+        }
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            with pytest.raises(SandboxError) as exc:
+                backend.run(req)
+            assert "src/b.py" in str(exc.value)
+            assert "audit.md" not in str(exc.value)
+            merged = "base\nhost-line\nexport-line\n"
+            assert (ws / "src" / "audit.md").read_text() == merged
+            assert (export / "src" / "audit.md").read_text() == merged
+            out = capsys.readouterr().out
+            assert ("[isolation] merged concurrent edits: src/audit.md "
+                    "(1 sandbox lines appended)") in out
+            assert ("[isolation] sync-back conflict: src/b.py - the workspace "
+                    "changed underneath; edits to these paths will not sync") in out
+        finally:
+            backend.close()
+
+
+    def test_merge_path_host_deleted_raises_and_absorb_removes_export(
+            self, tmp_path, capsys):
+        """029: a host-deleted declared merge path is a hard conflict - the
+        host wins, the export copy is unlinked, and AE-SBX-016 raises once."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "audit.md").write_text("export\n")
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False, export_root=str(export),
+            merge_on_conflict=["src/audit.md"])
+        backend._baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            with pytest.raises(SandboxError, match="AE-SBX-016"):
+                backend.run(req)
+            assert not (ws / "src" / "audit.md").exists()
+            assert not (export / "src" / "audit.md").exists()
+            out = capsys.readouterr().out
+            assert ("[isolation] sync-back conflict: src/audit.md - the "
+                    "workspace changed underneath") in out
+            backend.run(req)  # absorbed: no new changes, no raise
+        finally:
+            backend.close()
+
+    def test_merge_path_export_deleted_raises_and_absorb_restores_export(
+            self, tmp_path, capsys):
+        """029: an export-deleted declared merge path is a hard conflict - the
+        host wins, the export copy is restored, and AE-SBX-016 raises once."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "audit.md").write_text("host\n")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = DockerBackend(
+            image="img@sha256:abc", workspace=str(ws),
+            iso_state_dir=str(tmp_path / "state"),
+            profile=EffectiveProfile(True, True, True, True, True,
+                                     "img@sha256:abc", "4g", 2.0),
+            runner=runner, network=False, export_root=str(export),
+            merge_on_conflict=["src/audit.md"])
+        backend._baseline = {"src/audit.md": hashlib.sha256(b"base\n").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            with pytest.raises(SandboxError, match="AE-SBX-016"):
+                backend.run(req)
+            assert (ws / "src" / "audit.md").read_text() == "host\n"
+            assert (export / "src" / "audit.md").read_text() == "host\n"
+            out = capsys.readouterr().out
+            assert ("[isolation] sync-back conflict: src/audit.md - the "
+                    "workspace changed underneath") in out
+            backend.run(req)  # absorbed: no new changes, no raise
+        finally:
+            backend.close()
+
+
 class TestDeclaredCachesAndSyncExcludes:
     """028: ``caches:``/``sync_excludes:`` wiring into startup and the
     engine's removal of the hardcoded cache whitelist."""

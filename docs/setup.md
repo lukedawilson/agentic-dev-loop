@@ -187,6 +187,41 @@ sync_excludes: ["**/bin/**", "**/obj/**"]
   (non-fatal) naming the step and path - wildcard overlap is fuzzy, so it is
   a warning, not a hard failure.
 
+### Sync-back conflicts and merge_on_conflict (029)
+
+Only declared-`rw` paths sync back to the real repo. If the host edits a
+declared-`rw` path while a step is running, sync-back is a loud failure
+(`AE-SBX-016`), never an overwrite. Two fixes land on top of that guard:
+
+- **Absorb, not wedge.** The conflict is printed to the console
+  (`[isolation] sync-back conflict: ...`), the host's version wins, and the
+  baseline is re-snapshotted before the raise. The conflicted step's edits to
+  those paths never land; the next step - even `echo hello` - syncs clean
+  instead of re-raising the same conflict forever.
+- **Append-style logs can opt into a union merge.** Declare them in the
+  top-level `merge_on_conflict:` list:
+
+```yaml
+merge_on_conflict: [aidlc-docs/audit.md]
+```
+
+For a concurrent edit on a listed path the engine does a three-way union
+merge: the host file keeps its lines, the sandbox's export-only lines are
+appended in export order, and nothing is ever deleted. Both sides converge
+(host and export are written identically), the baseline is re-snapshotted,
+the run continues, and the console prints
+`[isolation] merged concurrent edits: <path> (<n> sandbox lines appended)`.
+
+Entries use the same vocabulary as `sync_excludes:` (literal = component
+prefix; wildcard = `fnmatch` on the full posix relpath; `*` spans separators).
+Single strings coerce to a one-item list. Validation rejects traversal,
+absolute paths, `.git`, host-only dirs, and a literal entry under a literal
+`sync_excludes:` or `caches:` entry (those paths never sync, so they can never
+conflict). Declaring a non-append file here is the pipeline author's
+responsibility - the merge only ever appends, it never reconciles in-place
+edits.
+
+
 ## 4. Caching
 
 Every `setup:` hook is **stamp-cached** in
