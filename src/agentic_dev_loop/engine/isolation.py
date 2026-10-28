@@ -144,6 +144,7 @@ class SandboxExecutionResult:
     duration_seconds: float
     backend: str  # "docker"
     timed_out: bool = False
+    wrote_workspace: bool = False  # declared-rw paths changed (032)
 
     @property
     def succeeded(self) -> bool:
@@ -1068,8 +1069,15 @@ class DockerBackend(Sandbox):
                 "failing closed (BR-11.3): no networked execution runs "
                 "without egress enforcement")
         result = self._exec(request, prof.name)
+        report: SyncBackReport | None = None
         if mount_set.rw_paths() and self._export_root is not None:
-            self._sync_back(mount_set)
+            report = self._sync_back(mount_set)
+        if report is not None and (report.synced_paths or report.merged_paths):
+            result = SandboxExecutionResult(
+                exit_code=result.exit_code, stdout=result.stdout,
+                stderr=result.stderr, duration_seconds=result.duration_seconds,
+                backend=result.backend, timed_out=result.timed_out,
+                wrote_workspace=True)
         return result
 
     def _exec(self, request: SandboxExecutionRequest,
@@ -1161,7 +1169,7 @@ class DockerBackend(Sandbox):
         export_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(host_path, export_path, follow_symlinks=False)
 
-    def _sync_back(self, mount_set: MountSet) -> None:
+    def _sync_back(self, mount_set: MountSet) -> SyncBackReport | None:
         """Sync declared-rw export changes back to the real repo (BR-4/F1),
         git-aware, host-side, with the sandbox step already complete.
 
@@ -1227,6 +1235,7 @@ class DockerBackend(Sandbox):
             "synced_paths": list(report.synced_paths),
             "merged_paths": list(report.merged_paths),
         })
+        return report
 
     def close(self) -> None:
         """Best-effort stop + rm; idempotent (BR-8.3). With ``--rm`` the

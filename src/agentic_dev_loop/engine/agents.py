@@ -66,7 +66,9 @@ class SandboxTerminalExecutor(ToolExecutor):
     def __init__(self, sandbox: "Sandbox", *, workspace: str = "",
                  env: dict[str, str] | None = None,
                  pipeline: str | None = None, step: str | None = None,
-                 network: bool = False, mount_set=None, egress_policy=None):
+                 network: bool = False, mount_set=None, egress_policy=None,
+                 terminal_timeout: float | None = None,
+                 on_terminal_result=None):
         self._sandbox = sandbox
         self._workspace = workspace
         self._env = env or {}
@@ -75,6 +77,8 @@ class SandboxTerminalExecutor(ToolExecutor):
         self._network = network
         self._mount_set = mount_set
         self._egress_policy = egress_policy
+        self._terminal_timeout = terminal_timeout
+        self._on_terminal_result = on_terminal_result
 
     def __call__(self, action, conversation=None):
         from openhands.tools.terminal import TerminalObservation
@@ -92,9 +96,12 @@ class SandboxTerminalExecutor(ToolExecutor):
                 command=action.command, exit_code=None, timeout=False,
                 metadata=CmdOutputMetadata(exit_code=-1))
 
+        timeout = action.timeout
+        if timeout is None and self._terminal_timeout is not None:
+            timeout = self._terminal_timeout
         request = SandboxExecutionRequest(
             argv=command_argv(action.command), cwd=self._workspace,
-            env=self._env, timeout=action.timeout,
+            env=self._env, timeout=timeout,
             pipeline=self._pipeline, step=self._step, network=self._network,
             mount_set=self._mount_set, egress_policy=self._egress_policy)
         try:
@@ -112,6 +119,9 @@ class SandboxTerminalExecutor(ToolExecutor):
                     ConversationExecutionStatus.STUCK
                 )
             raise
+        if self._on_terminal_result is not None:
+            self._on_terminal_result(
+                action.command, result.exit_code, result.wrote_workspace)
         output = result.stdout + result.stderr
         return TerminalObservation.from_text(
             output, is_error=not result.succeeded and not result.is_timeout,
@@ -130,6 +140,8 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
                               step: str | None = None,
                               network: bool = False,
                               mount_set=None, egress_policy=None,
+                              terminal_timeout: float | None = None,
+                              on_terminal_result=None,
                               secrets: dict[str, str] | None = None) -> None:
     """Per-run re-registration of the `terminal` name (KD-4): a callable
     factory that builds the SDK terminal with a `SandboxTerminalExecutor`.
@@ -147,6 +159,8 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
             executor=SandboxTerminalExecutor(
                 sandbox, workspace=workspace, env=resolved_env,
                 pipeline=pipeline, step=step, network=network,
-                mount_set=mount_set, egress_policy=egress_policy))
+                mount_set=mount_set, egress_policy=egress_policy,
+                terminal_timeout=terminal_timeout,
+                on_terminal_result=on_terminal_result))
 
     register_tool("terminal", factory)

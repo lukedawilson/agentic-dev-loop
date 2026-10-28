@@ -2,7 +2,7 @@
 
 > **Status: PLANNED**
 
-Independent of 032-034; can land first or last.
+Independent of 032-036; can land first or last.
 
 ## Scope
 

@@ -90,6 +90,33 @@ def test_canary_sdk_terminal_seam_still_present():
         "update COMPAT-SHIMS.md.")
 
 
+def test_canary_sdk_turn_level_pause_seam_still_present():
+    """Canary for the 032 turn-level stop-when-green seam (COMPAT-SHIMS.md):
+    passes while the SDK still accepts ``callbacks`` on LocalConversation,
+    passes agent-sourced events to them via ``agent.step(on_event=...)``, and
+    breaks its run loop on PAUSED; fails once any of those disappear - the
+    _StopWhenController pause loop is then dead and must be replaced with the
+    SDK's supported turn-level pause mechanism."""
+    import inspect
+
+    from openhands.sdk.conversation.impl.local_conversation import LocalConversation
+
+    assert "callbacks" in inspect.signature(LocalConversation.__init__).parameters, (
+        "The SDK's LocalConversation no longer accepts `callbacks=` - the 032 "
+        "turn-level stop-when-green seam in src/agentic_dev_loop/engine/stages.py "
+        "is dead. Adopt the SDK's supported pause mechanism and update "
+        "COMPAT-SHIMS.md.")
+    run_src = inspect.getsource(LocalConversation.run)
+    assert "on_event=self._on_event" in run_src, (
+        "The SDK's LocalConversation.run no longer passes its composed callback "
+        "to agent.step - the 032 callback seam no longer receives agent-sourced "
+        "events. Update COMPAT-SHIMS.md.")
+    assert "ConversationExecutionStatus.PAUSED" in run_src, (
+        "The SDK's LocalConversation.run no longer breaks on PAUSED - the 032 "
+        "one-turn run loop in src/agentic_dev_loop/engine/stages.py is dead. "
+        "Adopt the SDK's supported pause mechanism and update COMPAT-SHIMS.md.")
+
+
 def test_canary_sdk_run_loop_still_breaks_on_stuck():
     """Canary for the D3 fast-stop reliance (COMPAT-SHIMS.md): passes while
     the SDK's LocalConversation.run breaks on STUCK; fails once the run loop

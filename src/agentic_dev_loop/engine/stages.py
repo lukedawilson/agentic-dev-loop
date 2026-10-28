@@ -20,6 +20,7 @@ pipeline config; the fixed policies stay here, not in config:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import traceback
@@ -54,6 +55,74 @@ LAST_ERROR = "last-error.md"
 ARTIFACT_CONTEXT_CAP = 24_000  # chars per artifact injected into a step's context
 
 
+class _StopWhenController:
+    """Turn-level stop-when-green observation (032).
+
+    Pure per-event state machine - no knowledge of how the conversation is
+    driven. ``on_event`` is a SDK conversation callback: it records the most
+    recent matching terminal observation and any subsequent file-editor
+    write, and pauses the conversation after every agent-sourced event so the
+    caller can drive one turn at a time.
+    """
+
+    NUDGE = "Step complete: produce your final response now"
+    _WRITE_COMMANDS = frozenset({"create", "str_replace", "insert", "undo_edit"})
+
+    def __init__(self, spec) -> None:
+        self._pattern = re.compile(spec.green_command)
+        self.post_green_turns = spec.post_green_turns
+        self.green_hit = False
+        self.writes_since_green = False
+        self.nudged = False
+        self.post_nudge_turns = 0
+        self.conversation = None
+
+    def attach(self, conversation) -> None:
+        self.conversation = conversation
+
+    @property
+    def green_signal(self) -> bool:
+        return self.green_hit and not self.writes_since_green
+
+    def on_event(self, event) -> None:
+        if self.conversation is None:
+            return
+        from openhands.sdk.event import ObservationEvent
+
+        if isinstance(event, ObservationEvent):
+            self._record_observation(event)
+        if getattr(event, "source", None) == "agent":
+            from openhands.sdk.conversation.state import (
+                ConversationExecutionStatus,
+            )
+            self.conversation.state.execution_status = (
+                ConversationExecutionStatus.PAUSED
+            )
+
+    def on_terminal_result(self, command: str | None, exit_code: int | None,
+                           wrote_workspace: bool) -> None:
+        """Feed the sandbox terminal result channel (032): a matching green
+        command is the signal; any other terminal write resets it."""
+        if command is not None and self._pattern.search(command):
+            self.green_hit = exit_code == 0
+            self.writes_since_green = False
+        elif wrote_workspace:
+            self.writes_since_green = True
+
+    def _record_observation(self, event) -> None:
+        observation = event.observation
+        tool_name = event.tool_name
+        if tool_name == "terminal":
+            command = getattr(observation, "command", None)
+            if command is not None and self._pattern.search(command):
+                self.green_hit = getattr(observation, "exit_code", None) == 0
+                self.writes_since_green = False
+        elif tool_name == "file_editor":
+            command = getattr(observation, "command", None)
+            if command in self._WRITE_COMMANDS and not observation.is_error:
+                self.writes_since_green = True
+
+
 @dataclass
 class Runtime:
     """Everything stage nodes need that isn't in LoopState: pipeline config,
@@ -85,6 +154,10 @@ class Runtime:
         try:
             from openhands.sdk.conversation.state import ConversationExecutionStatus
 
+            controller = None
+            if step is not None and step.stop_when is not None:
+                controller = _StopWhenController(step.stop_when)
+
             if self.sandbox is not None:
                 if step is not None:
                     cwd, mount_set, egress_policy = _step_sandbox(self, step)
@@ -99,13 +172,24 @@ class Runtime:
                     network=step.network if step is not None else False,
                     mount_set=mount_set,
                     egress_policy=egress_policy,
+                    terminal_timeout=(step.terminal_timeout
+                                      if step is not None else None),
+                    on_terminal_result=(controller.on_terminal_result
+                                        if controller is not None else None),
                     secrets=(step_secret_env(self.cfg, step, self.secrets)
                              if step is not None else None))
             agent = load_agent(self.agents_dir, agent_name, self.llm)
+            callbacks = [controller.on_event] if controller is not None else None
             conv = Conversation(agent=agent, workspace=str(self.workspace),
-                                max_iteration_per_run=max_iterations)
+                                max_iteration_per_run=max_iterations,
+                                callbacks=callbacks)
+            if controller is not None:
+                controller.attach(conv)
             conv.send_message(message)
-            conv.run()
+            if controller is not None:
+                self._run_stop_when_loop(conv, controller, max_iterations)
+            else:
+                conv.run()
 
             # 030, D1/D2: a sticky infra failure must fail the run with no
             # retry - check before any capture/verdict path would schedule an
@@ -143,6 +227,40 @@ class Runtime:
         finally:
             if conv is not None:
                 conv.close()
+
+    def _run_stop_when_loop(self, conv, controller: _StopWhenController,
+                            max_iterations: int) -> None:
+        """Drive one turn at a time so a green signal can inject the nudge
+        and enforce the post-nudge turn budget. The controller's callback
+        pauses the SDK run loop after every agent-sourced event, so each
+        ``conv.run()`` here advances exactly one agent turn."""
+        from openhands.sdk.conversation.state import ConversationExecutionStatus
+
+        turns = 0
+        while True:
+            conv.run()
+            status = conv.state.execution_status
+            if status in (ConversationExecutionStatus.FINISHED,
+                          ConversationExecutionStatus.STUCK,
+                          ConversationExecutionStatus.ERROR):
+                break
+
+            turns += 1
+            if turns >= max_iterations:
+                conv.state.execution_status = ConversationExecutionStatus.ERROR
+                break
+
+            if not controller.nudged and controller.green_signal:
+                conv.send_message(controller.NUDGE)
+                controller.nudged = True
+                if controller.post_green_turns == 0:
+                    break
+                continue
+
+            if controller.nudged:
+                controller.post_nudge_turns += 1
+                if controller.post_nudge_turns >= controller.post_green_turns:
+                    break
 
 
 def prompt_dir(runtime: Runtime) -> str:

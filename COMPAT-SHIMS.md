@@ -65,3 +65,22 @@ so it is pinned here.
   or `LocalConversation.run` stops checking STUCK in its break condition.
 - **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_run_loop_still_breaks_on_stuck`
   fails loudly when the run loop no longer breaks on STUCK.
+
+## Turn-level pause seam (032 stop-when-green)
+
+`_StopWhenController.on_event` (stages.py) runs as a user `callbacks=` entry on
+`LocalConversation` and pauses after every agent-sourced event by writing
+`ConversationExecutionStatus.PAUSED` to `conversation.state`; the one-turn run
+loop (`Runtime._run_stop_when_loop`) relies on `LocalConversation.run` breaking
+on PAUSED and on the SDK passing its composed callback to
+`agent.step(on_event=...)` so the callback sees agent events. This is a reliance
+on undocumented loop and callback behaviour (same class as the STUCK fast-stop
+above), so it is pinned here.
+
+- **Version range**: `openhands-sdk==1.17.0` (tested).
+- **Removal criterion**: the SDK grows a supported turn-level pause/stop
+  mechanism, `LocalConversation.run` stops checking PAUSED in its break
+  condition, or the SDK stops passing user callbacks to `agent.step`.
+- **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_turn_level_pause_seam_still_present`
+  fails loudly when the callback kwarg, the `on_event=self._on_event` wiring,
+  or the PAUSED break disappears.

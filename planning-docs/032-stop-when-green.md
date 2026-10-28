@@ -65,7 +65,7 @@ and the consumer repo:
   into the SDK conversation (per-event subscription or a step-by-step run
   loop); the exact API is confirmed during implementation, with polling
   the conversation state from the run thread as fallback. This hook is
-  shared plumbing: 034's finalize nudge reuses it.
+  shared plumbing: 036's finalize nudge reuses it.
 
 ### 3. Terminal timeout knob (engine)
 

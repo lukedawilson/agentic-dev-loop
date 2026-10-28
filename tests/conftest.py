@@ -130,13 +130,18 @@ class FakeSandbox(Sandbox):
         if self.git_mutations_blocked and is_git_mutation(request.argv):
             raise SandboxError(
                 f"AE-SBX-008: git mutation {' '.join(request.argv[:2])!r} blocked")
+        wrote_workspace = False
         if self.handler is not None:
-            code, output, timed_out = self.handler(request)
+            handled = self.handler(request)
+            code, output, timed_out = handled[:3]
+            if len(handled) > 3:
+                wrote_workspace = handled[3]
         else:
             code, output, timed_out = _exec_host(request)
         return SandboxExecutionResult(
             exit_code=code, stdout=output, stderr="",
-            duration_seconds=0.0, backend="fake", timed_out=timed_out)
+            duration_seconds=0.0, backend="fake", timed_out=timed_out,
+            wrote_workspace=wrote_workspace)
 
     def close(self) -> None:
         self.closed = True

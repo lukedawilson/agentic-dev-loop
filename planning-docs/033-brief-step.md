@@ -44,8 +44,10 @@ brief.
   env_facts: [<strings>] }`. The engine resolves the include list (unit
   doc resolution already exists in the aidlc extension) and hands it to
   the brief agent as its task message. `env_facts` carries the stable
-  environment facts (no .git in the export, package cache paths, offline
-  rules) so the brief agent never discovers them by running commands.
+  environment facts so the brief agent never discovers them by running
+  commands. Each entry is one line pairing a fact with the behavior it
+  implies; worked example: `"the workspace is an export with no .git;
+  verify with find/ls, never git status"`.
 - Capture and injection are existing machinery: the brief's final
   response is captured to `attempt-brief.md` (capture-first) and 027
   injects it into the steps that declare it (dev and review in the
@@ -73,7 +75,11 @@ unit plan, which do happen.
 New `agentic-dev-loop/sdk_agents/brief.agent.md`: tools `[terminal]`,
 strict section template (D3), one-pass rule ("read the listed inputs,
 emit the brief, finish - do not explore, do not verify, do not read
-anything not listed"), bounded by the step's `max_iterations: 12`.
+anything not listed"), bounded by the step's `max_iterations: 12`. The
+template's environment-facts section carries each `env_facts` entry
+verbatim, fact and implied behavior together (worked example: "the
+workspace is an export with no .git; verify with find/ls, never git
+status").
 
 ### 5. Consumer pipeline (tooling path)
 
