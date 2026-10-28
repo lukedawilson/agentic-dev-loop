@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a29] - 2026-10-28
+
+### Changed
+
+- docs: mark 032 completed and document stop-when-green fields
+- feat: construct plan 032-stop-when-green.md (agent dev loop)
+- docs(dev): mandate test-first workflow in the dev prompt
+- docs(plan): brief created once per run, hash-gated regeneration
+- feat(dev): stop-when-green and long-running-command rules
+
 ## [1.0.0a28] - 2026-10-28
 
 ### Changed
