@@ -37,6 +37,22 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
   your change, a stale test pinning old behavior, or a genuine library bug -
   and fix it, never the symptom.
 
+## STOP WHEN GREEN
+
+- The moment your final response is written AND the full suite has passed
+  locally (`.venv-sandbox/bin/python -m pytest tests/ -q` exits 0) AND every
+  *Previous attempt feedback* item is addressed, the step is COMPLETE. Stop.
+- Do not re-read files, re-run checks, or `cat`/`tail`/`grep` files you just
+  wrote to confirm what already passed. A green suite is a green suite:
+  re-running it buys nothing, since the mechanical test gate re-runs the
+  exact command after you regardless of what you ran.
+
+## LONG-RUNNING COMMANDS
+
+- Your terminal kills commands at its per-action timeout (300 seconds by
+  default). Wrap long runs in `timeout 600 ...` so a slow suite is not killed
+  mid-run; a killed run wastes your budget and proves nothing.
+
 ## DEPENDENCIES
 
 - Your terminal is network-off. Python packages resolve from the
