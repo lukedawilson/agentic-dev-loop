@@ -21,8 +21,15 @@ from pathlib import Path
 _DOC_SUFFIXES = (".md", ".yaml", ".yml", ".txt")
 
 
-def resolve_unit_docs(docs_dir: Path | str, unit_slug: str) -> dict[str, str]:
+def resolve_unit_docs_with_sources(
+        docs_dir: Path | str, unit_slug: str
+        ) -> tuple[dict[str, str], dict[str, Path]]:
+    """Resolve one AI-DLC unit into (docs, sources). ``docs`` maps each
+    doc's workspace-relative key to its content; ``sources`` maps the same
+    key to its on-disk file so the brief regeneration gate can re-read it
+    (033 D4)."""
     docs: dict[str, str] = {}
+    sources: dict[str, Path] = {}
     docs_dir = Path(docs_dir)
     unit_slug = unit_slug.strip()
 
@@ -47,6 +54,7 @@ def resolve_unit_docs(docs_dir: Path | str, unit_slug: str) -> dict[str, str]:
         if file.is_file() and file.suffix in _DOC_SUFFIXES:
             key = file.relative_to(unit_dir).as_posix()
             docs[key] = file.read_text(encoding="utf-8")
+            sources[key] = file
 
     # At this point docs holds only unit-dir files - an empty load means the
     # pipeline would build context from inception docs alone (the 2026-07-19
@@ -63,6 +71,7 @@ def resolve_unit_docs(docs_dir: Path | str, unit_slug: str) -> dict[str, str]:
         for file in sorted(inception.iterdir()):
             if file.is_file() and file.suffix in (".md", ".txt"):
                 docs[f"inception/{file.name}"] = file.read_text(encoding="utf-8")
+                sources[f"inception/{file.name}"] = file
 
     # The unit's code-generation plans are the build spec - absent is fine,
     # present is how the spec reaches agents.
@@ -70,7 +79,13 @@ def resolve_unit_docs(docs_dir: Path | str, unit_slug: str) -> dict[str, str]:
     if plans_dir.is_dir():
         for file in sorted(plans_dir.glob(f"{unit_slug}-*-code-generation-plan.md")):
             docs[f"plans/{file.name}"] = file.read_text(encoding="utf-8")
+            sources[f"plans/{file.name}"] = file
 
+    return docs, sources
+
+
+def resolve_unit_docs(docs_dir: Path | str, unit_slug: str) -> dict[str, str]:
+    docs, _ = resolve_unit_docs_with_sources(docs_dir, unit_slug)
     return docs
 
 
@@ -115,6 +130,13 @@ class AidlcDocumentLoader:
     def resolve(self, args: argparse.Namespace) -> tuple[dict[str, str], str]:
         unit = args.aidlc_unit or get_current_unit(self.docs_dir)
         return resolve_unit_docs(self.docs_dir, unit), f"unit {unit}"
+
+    def sources(self, args: argparse.Namespace) -> dict[str, Path]:
+        """Source path for every resolved doc key (033): the regeneration
+        gate re-reads these from disk so a mid-run unit-plan edit is detected."""
+        unit = args.aidlc_unit or get_current_unit(self.docs_dir)
+        _, sources = resolve_unit_docs_with_sources(self.docs_dir, unit)
+        return sources
 
 
 class AidlcExtension:

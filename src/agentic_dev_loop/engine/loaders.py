@@ -71,6 +71,12 @@ class PlanDocumentLoader:
         docs = resolve_plan_docs(args.plan)
         return docs, f"plan {args.plan.name}"
 
+    def sources(self, args: argparse.Namespace) -> dict[str, Path]:
+        """Source path for every resolved doc key (033): the regeneration
+        gate re-reads these from disk so a mid-run plan edit is detected."""
+        path = Path(args.plan)
+        return {path.name: path}
+
 
 def select_loader(registry: Registry, args: argparse.Namespace) -> DocumentLoader | None:
     """The document-loader coexistence model - load many, invoke one:
@@ -103,11 +109,15 @@ def select_loader(registry: Registry, args: argparse.Namespace) -> DocumentLoade
 
 
 def resolve_docs(cfg: PipelineConfig, base: Path, registry: Registry,
-                 args) -> tuple[DocumentLoader | None, dict[str, str], str]:
+                 args) -> tuple[DocumentLoader | None, dict[str, str], str,
+                                dict[str, str]]:
     """Select and invoke the document loader, then append the pipeline's
     additional_files (resolved relative to the pipeline file's dir;
-    listed-but-missing fails fast). Returns (loader, docs, subject)."""
+    listed-but-missing fails fast). Returns (loader, docs, subject,
+    doc_sources) - the source path for every loader/additional_files doc key
+    so the brief regeneration gate can re-read them from disk (033 D4)."""
     loader = select_loader(registry, args)
+    sources: dict[str, str] = {}
     if loader is not None:
         docs, subject = loader.resolve(args)
         if not docs:
@@ -116,6 +126,10 @@ def resolve_docs(cfg: PipelineConfig, base: Path, registry: Registry,
             raise RuntimeError(
                 f"Document loader {loader.name!r} returned no docs - "
                 "refusing to build context from nothing")
+        loader_sources = getattr(loader, "sources", None)
+        if callable(loader_sources):
+            for name, path in loader_sources(args).items():
+                sources[name] = str(Path(path).resolve())
     else:
         docs, subject = {}, cfg.name
     for rel in cfg.additional_files:
@@ -123,4 +137,5 @@ def resolve_docs(cfg: PipelineConfig, base: Path, registry: Registry,
         if not path.is_file():
             raise FileNotFoundError(f"additional_files entry not found: {path}")
         docs[path.name] = path.read_text(encoding="utf-8")
-    return loader, docs, subject
+        sources[path.name] = str(path.resolve())
+    return loader, docs, subject, sources

@@ -63,6 +63,7 @@ def _script_test(*behaviors):
 
 def _passing_scripts(fake_agents, **overrides):
     scripts = {
+        "brief": [("write", "attempt-brief.md", "Brief digest.\n")],
         "dev": [("write", "implementation-summary.md", "Implemented the fix.\n")],
         "review": [("write", "review-findings.md",
                     "Looks good.\n\nVERDICT: APPROVED\n")],
@@ -96,6 +97,11 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
         example_pipeline.read_text().replace(
             "agents_dir: sdk_agents", "agents_dir: sdk_agents\nstate_dir: .pr", 1))
     (repo / "README.md").write_text("# README\n")
+    # 033 brief_inputs.include resolves against the workspace root - the
+    # shipped example lists these repo-rule files, so the consumer copy must
+    # carry them (the real repo does).
+    (repo / "AGENTS.md").write_text("# Repo rules\n")
+    (repo / "coding-standards-ddd.yaml").write_text("standards: true\n")
     monkeypatch.chdir(repo)
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)
@@ -130,7 +136,7 @@ class TestHistoricalFixtures:
              "## CI analysis\n\nEverything is fine.\n\n**VERDICT: PASS**\n")])
         rc = main([str(consumer_repo / "agentic-dev-loop" / "pipeline.yaml"), "--plan", "plan.md", "--no-viz"])
         assert rc == 0
-        assert fake_agents.agents_called() == ["dev", "review", "qa"]
+        assert fake_agents.agents_called() == ["brief", "dev", "review", "qa"]
         assert "feat: construct plan plan.md (agent dev loop)" in _log(
             consumer_repo)
 
@@ -211,7 +217,7 @@ class TestCommandGate:
     def test_gate_passes_through(self, consumer_repo, fake_agents):
         _passing_scripts(fake_agents)
         assert self._run(consumer_repo) == 0
-        assert fake_agents.agents_called() == ["dev", "review", "qa"]
+        assert fake_agents.agents_called() == ["brief", "dev", "review", "qa"]
         assert "feat: construct plan plan.md (agent dev loop)" in _log(
             consumer_repo)
 
@@ -220,7 +226,7 @@ class TestCommandGate:
         _passing_scripts(fake_agents)
         _script_test(("fail", "2 failed, 1 passed in 0.05s\n"), ("pass",))
         assert self._run(consumer_repo) == 0
-        assert fake_agents.agents_called() == ["dev", "dev", "review", "qa"]
+        assert fake_agents.agents_called() == ["brief", "dev", "dev", "review", "qa"]
         second_dev = fake_agents.messages_for("dev")[1]
         assert "2 failed, 1 passed" in second_dev
         assert "test output (attempt 1)" in second_dev
@@ -237,7 +243,7 @@ class TestCommandGate:
         _passing_scripts(fake_agents)
         _script_test(("fail", "boom\n"))
         assert self._run(consumer_repo) != 0
-        assert fake_agents.agents_called() == ["dev"] * 10
+        assert fake_agents.agents_called() == ["brief"] + ["dev"] * 10
         assert "(agent dev loop)" not in _log(consumer_repo)
 
 

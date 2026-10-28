@@ -28,8 +28,9 @@ from .secrets import resolve_secrets, scan_env_files
 from .registry import (Registry, default_registry, load_extensions,
                        validate_action_mounts_egress, validate_action_network)
 from .stages import (Runtime, clear_attempt_artifacts,
-                     make_action_node, make_agent_node, make_bump_node,
-                     make_command_node, make_router, success_node)
+                     make_action_node, make_agent_node, make_brief_node,
+                     make_bump_node, make_command_node, make_router,
+                     success_node)
 
 CHECKPOINT_DB = "loop-checkpoints.sqlite"  # under state_dir, one DB per workspace
 
@@ -47,6 +48,7 @@ class LoopState(TypedDict):
     every other key is last-write-wins."""
     subject: str
     docs: dict[str, str]
+    doc_sources: dict[str, str]        # doc key -> source path (033 regeneration gate)
     artifacts: Annotated[dict[str, str], _merge_artifacts]  # step name -> artifact text
     attempt: int
     max_attempts: int
@@ -61,6 +63,7 @@ class LoopState(TypedDict):
     step_verdicts: dict[str, str | None]  # per-step pass/fail/None(unclear)
     retry_target: str | None           # where the bump node loops back to
     thread_id: str
+    brief_hashes: Annotated[dict[str, str], _merge_artifacts]  # step name -> input hash (033)
 
 
 def build_graph(runtime: Runtime, checkpointer=None):
@@ -83,7 +86,10 @@ def build_graph(runtime: Runtime, checkpointer=None):
     graph = StateGraph(LoopState)
     for step in runtime.cfg.steps:
         if step.kind == "agent":
-            node = make_agent_node(runtime, step)
+            if step.brief_inputs is not None:
+                node = make_brief_node(runtime, step)
+            else:
+                node = make_agent_node(runtime, step)
         elif step.kind == "command":
             node = make_command_node(runtime, step)
         else:
@@ -178,14 +184,15 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
     if resume:
         initial = None  # state (docs/subject/artifacts) comes from the checkpoint
     else:
-        _loader, docs, subject = resolve_docs(cfg, base, registry, args)
+        _loader, docs, subject, doc_sources = resolve_docs(cfg, base, registry, args)
         # A fresh run owns state_dir: drop cross-run leftovers (a previous
         # failure's last-error.md, stale artifacts) so nothing mistakes
         # them for this run's output. --resume keeps them.
-        clear_attempt_artifacts(runtime)
+        clear_attempt_artifacts(runtime, exempt_run_scoped=False)
         initial: LoopState = {
             "subject": subject,
             "docs": docs,
+            "doc_sources": doc_sources,
             "artifacts": {},
             "attempt": 1,
             "max_attempts": max_attempts,
@@ -204,6 +211,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             "step_verdicts": {},
             "retry_target": None,
             "thread_id": thread_id,
+            "brief_hashes": {},
         }
     bus = viz_bus
     with SqliteSaver.from_conn_string(db) as saver:

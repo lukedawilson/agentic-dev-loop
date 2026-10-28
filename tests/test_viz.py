@@ -149,7 +149,7 @@ class TestTopologyMermaid:
         cfg = load_config(SELF_PIPELINE)
         source, nodes = topology_mermaid(cfg)
 
-        chain = ["dev", "restore", "test", "review", "qa", "commit", "success"]
+        chain = ["brief", "dev", "restore", "test", "review", "qa", "commit", "success"]
         for src, dst in zip(chain, chain[1:]):
             assert f"{src} --> {dst};" in source
 

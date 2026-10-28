@@ -335,6 +335,39 @@ class StopWhenSpec(BaseModel):
         return v
 
 
+class BriefInputsSpec(BaseModel):
+    """Optional ``brief_inputs:`` on an agent step (033): the closed input
+    list a brief agent digests once per run. ``include`` is repo-relative
+    paths/globs (wildcards allowed); ``env_facts`` are the stable environment
+    facts handed to the agent verbatim so it never discovers them by running
+    commands. Both accept a single string or a list; unknown keys fail at
+    load."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    include: list[str] = []
+    env_facts: list[str] = []
+
+    @field_validator("include", "env_facts", mode="before")
+    @classmethod
+    def _coerce_list(cls, v: Any) -> Any:
+        return [v] if isinstance(v, str) else v
+
+    @field_validator("include")
+    @classmethod
+    def _valid_include(cls, v: list[str]) -> list[str]:
+        return [_validate_declared_path(p, allow_wildcards=True) for p in v]
+
+    @field_validator("env_facts")
+    @classmethod
+    def _valid_env_facts(cls, v: list[str]) -> list[str]:
+        for fact in v:
+            if not isinstance(fact, str) or not fact.strip():
+                raise ValueError(
+                    "brief_inputs.env_facts entries must be non-empty strings")
+        return v
+
+
 class StepConfig(BaseModel):
     """One pipeline step. Its type IS the key it carries: exactly one of
     `agent`, `action`, or `command` - empty values do not count, anything
@@ -354,6 +387,7 @@ class StepConfig(BaseModel):
     timeout: float | None = Field(default=None, gt=0)  # seconds, command steps only
     terminal_timeout: float | None = Field(default=None, gt=0)  # seconds, agent steps only (032)
     stop_when: StopWhenSpec | None = None  # agent steps only (032)
+    brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
     network: bool = False  # per-stage egress (command/agent + sandbox actions; host-side actions reject at registry time)
@@ -425,6 +459,20 @@ class StepConfig(BaseModel):
         if self.stop_when is not None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'stop_when' requires 'agent'"
+            )
+        if self.brief_inputs is not None and self.agent is None:
+            raise ValueError(
+                f"step {self.name!r}: 'brief_inputs' requires 'agent'"
+            )
+        if (self.brief_inputs is not None
+                and (self.artifact is not None or self.verdicts is not None)):
+            raise ValueError(
+                f"step {self.name!r}: 'brief_inputs' is only valid on a "
+                "produces-only agent step"
+            )
+        if self.brief_inputs is not None and not self.produces:
+            raise ValueError(
+                f"step {self.name!r}: 'brief_inputs' requires 'produces'"
             )
         if self.setup is not None and self.command is None and self.agent is None:
             raise ValueError(

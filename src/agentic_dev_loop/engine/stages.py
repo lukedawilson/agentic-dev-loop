@@ -19,6 +19,7 @@ pipeline config; the fixed policies stay here, not in config:
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import subprocess
@@ -33,6 +34,7 @@ from openhands.sdk import Conversation
 
 from .agents import load_agent, register_sandbox_terminal
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
+from agentic_dev_loop.core.paths import _has_wildcards
 from .deps import extension_message, parse_missing_dependencies, policy_injection
 from .egress_policy import assemble_egress_policy
 from .isolation import SandboxExecutionRequest, command_argv, resolve_sandbox_env
@@ -406,12 +408,150 @@ def declared_artifacts(cfg: PipelineConfig) -> list[str]:
     return files
 
 
-def clear_attempt_artifacts(runtime: Runtime) -> None:
+def run_scoped_artifacts(cfg: PipelineConfig) -> list[str]:
+    """Artifacts that live for the whole run, not one attempt (033).
+
+    A ``brief_inputs:`` step is the documented pattern: its digest is
+    created once at run start and reused by every attempt, so its declared
+    outputs are exempt from per-attempt hygiene."""
+    files = []
+    for step in cfg.steps:
+        if step.brief_inputs is None:
+            continue
+        files.extend(step.produces)
+        if step.artifact is not None:
+            files.append(step.artifact)
+    return files
+
+
+def clear_attempt_artifacts(runtime: Runtime, *,
+                            exempt_run_scoped: bool = True) -> None:
     """Per-attempt hygiene (fixed policy): delete every declared
     artifact/produces file + last-error.md so stale files from earlier
-    attempts or runs can't be mistaken for this attempt's output."""
+    attempts or runs can't be mistaken for this attempt's output.
+
+    Run-scoped artifacts (033) survive attempt starts and are deleted at run
+    start instead - pass ``exempt_run_scoped=False`` for that run-start sweep.
+    """
+    keep = set(run_scoped_artifacts(runtime.cfg)) if exempt_run_scoped else set()
     for name in [*declared_artifacts(runtime.cfg), LAST_ERROR]:
+        if name in keep:
+            continue
         (runtime.state_dir / name).unlink(missing_ok=True)
+
+
+def _resolve_include_spec(workspace: Path, spec: str) -> list[Path]:
+    """Resolve one ``brief_inputs.include`` entry to files, sorted by their
+    workspace-relative posix path. Literal entries must name an existing file;
+    wildcard entries must match at least one file (no silent fallback)."""
+    if _has_wildcards(spec):
+        matches = sorted(
+            (p for p in workspace.glob(spec) if p.is_file()),
+            key=lambda p: p.relative_to(workspace).as_posix())
+    else:
+        path = workspace / spec
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"brief_inputs include entry not found: {spec}")
+        matches = [path]
+    if not matches:
+        raise FileNotFoundError(
+            f"brief_inputs include entry matched no files: {spec}")
+    return matches
+
+
+def resolve_brief_inputs(runtime: Runtime, step: StepConfig
+                         ) -> tuple[dict[str, str], list[str]]:
+    """Resolve ``brief_inputs.include`` against the workspace into
+    ``{workspace-relative-path: content}`` and return the env-facts list."""
+    if step.brief_inputs is None:
+        return {}, []
+    included: dict[str, str] = {}
+    for spec in step.brief_inputs.include:
+        for path in _resolve_include_spec(runtime.workspace, spec):
+            key = path.relative_to(runtime.workspace).as_posix()
+            included.setdefault(key, path.read_text(encoding="utf-8"))
+    return included, list(step.brief_inputs.env_facts)
+
+
+def validate_brief_inputs(workspace: Path, step: StepConfig) -> None:
+    """Fail fast on ``brief_inputs.include`` entries that name no files (033).
+
+    The no-silent-fallback rule demands these surface at load/--dry-run time,
+    not on the brief step's first run."""
+    if step.brief_inputs is None:
+        return
+    for spec in step.brief_inputs.include:
+        _resolve_include_spec(workspace, spec)
+
+
+def _resolved_loader_docs(docs: dict[str, str] | None,
+                          doc_sources: dict[str, str] | None) -> dict[str, str]:
+    """The loader/`additional_files` docs for the brief hash and message.
+
+    When source paths are known (033 D4), re-read them from disk so a
+    mid-run edit to the unit plan or an additional file changes the hash -
+    the run-start snapshot alone would miss it. Doc keys without a tracked
+    source keep their snapshot content (third-party loaders)."""
+    if not doc_sources:
+        return dict(docs or {})
+    resolved = dict(docs or {})
+    for name, source in doc_sources.items():
+        resolved[name] = Path(source).read_text(encoding="utf-8")
+    return resolved
+
+
+def _brief_sections(runtime: Runtime, step: StepConfig,
+                    docs: dict[str, str] | None,
+                    doc_sources: dict[str, str] | None = None
+                    ) -> tuple[dict[str, str], list[str]]:
+    """The brief's full resolved input set: the loader docs (unit plan,
+    additional_files) re-read from disk where their sources are known, merged
+    with the closed include-file set, plus the env-facts list. Duplicate
+    names are de-duplicated; the loader doc already carries that input, so
+    the include copy is not repeated."""
+    sections: dict[str, str] = {}
+    for name, content in _resolved_loader_docs(docs, doc_sources).items():
+        sections.setdefault(name, content)
+    included, env_facts = resolve_brief_inputs(runtime, step)
+    for name, content in included.items():
+        sections.setdefault(name, content)
+    return sections, env_facts
+
+
+def brief_inputs_hash(runtime: Runtime, step: StepConfig,
+                      docs: dict[str, str] | None = None,
+                      doc_sources: dict[str, str] | None = None) -> str:
+    """Hash the resolved brief inputs (033): loader docs + include-file
+    contents + env facts. Used by the regeneration gate - a change re-runs the
+    brief step, otherwise the existing digest is reused without an LLM call."""
+    sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
+    digest = hashlib.sha256()
+    for key in sorted(sections):
+        digest.update(key.encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(sections[key].encode("utf-8"))
+        digest.update(b"\0")
+    for fact in env_facts:
+        digest.update(fact.encode("utf-8"))
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def build_brief_context(runtime: Runtime, step: StepConfig,
+                        docs: dict[str, str],
+                        doc_sources: dict[str, str] | None = None) -> str:
+    """Assemble the brief agent's task message (033): the resolved unit/plan
+    docs (re-read from disk where sources are known), the closed
+    ``brief_inputs.include`` file set, and the env-facts block. Prior verdicts
+    and feedback are deliberately absent - the notes channel delivers them per
+    attempt."""
+    sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
+    parts = [f"## {name}\n\n{content}" for name, content in sections.items()]
+    if env_facts:
+        parts.append("## Environment facts\n\n"
+                     + "\n".join(f"- {fact}" for fact in env_facts))
+    return "\n\n".join(parts)
 
 
 def _unclear_target(runtime: Runtime, step: StepConfig) -> str:
@@ -551,6 +691,70 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                                         result.truncated, max_iterations,
                                         parsed.error.value)],
                 "retry_target": _unclear_target(runtime, step)}
+
+    return node
+
+
+def make_brief_node(runtime: Runtime, step: StepConfig):
+    """Node closure for a ``brief_inputs:`` agent step (033).
+
+    The brief is an ordinary capture-applying agent step with one extra rule:
+    it runs once per input set. The resolved inputs are hashed when the brief
+    is written; on re-entry with an unchanged hash and an existing digest the
+    LLM call is skipped entirely. A changed include file or env fact re-runs
+    the step and refreshes the hash. Prior verdicts and feedback never enter
+    the brief message - they already reach dev/review through the notes
+    channel."""
+    captures = step.artifact is not None or bool(step.produces)
+
+    def node(state: dict) -> dict:
+        attempt = state["attempt"]
+        subject = state["subject"]
+        max_iterations = step.max_iterations or DEFAULT_MAX_ITERATIONS
+
+        try:
+            current_hash = brief_inputs_hash(runtime, step, state["docs"],
+                                             state.get("doc_sources"))
+            if (state.get("artifacts", {}).get(step.name) is not None
+                    and state.get("brief_hashes", {}).get(step.name) == current_hash):
+                print(f"[{subject}] {step.name} brief inputs unchanged - reusing.",
+                      flush=True)
+                merged = {**state["step_verdicts"], step.name: "pass"}
+                return {"step_verdicts": merged, "failed": False}
+            message = build_brief_context(runtime, step, state["docs"],
+                                          state.get("doc_sources"))
+        except Exception:
+            err = redact_values(traceback.format_exc(), runtime.secrets.values())
+            print(err[-4000:], file=sys.stderr, flush=True)
+            runtime.state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime.state_dir / LAST_ERROR).write_text(
+                f"# Brief step failed\n\n```\n{err[-4000:]}\n```\n",
+                encoding="utf-8")
+            return {"failed": True, "failed_step": step.name}
+
+        print(f"[{subject}] Running {step.agent} agent...", flush=True)
+        result = runtime.run_agent(step.agent, message,
+                                    max_iterations=max_iterations, step=step)
+        if not result.ok:
+            print(f"[{subject}] {step.name} agent failed on attempt {attempt}.",
+                  flush=True)
+            return {"failed": True, "failed_step": step.name}
+
+        if result.capture_error is not None:
+            print(f"[{subject}] {step.name} agent produced no final response on "
+                  f"attempt {attempt}, retrying.", flush=True)
+            merged = {**state["step_verdicts"], step.name: None}
+            return {"step_verdicts": merged,
+                    "notes": [_unclear_note(runtime, step, attempt, None,
+                                            result.truncated, max_iterations)],
+                    "retry_target": _unclear_target(runtime, step)}
+
+        merged = {**state["step_verdicts"], step.name: "pass"}
+        update = {"step_verdicts": merged, "failed": False}
+        if captures and result.response is not None:
+            update["artifacts"] = {step.name: result.response}
+            update["brief_hashes"] = {step.name: current_hash}
+        return update
 
     return node
 
@@ -748,9 +952,27 @@ def make_bump_node(runtime: Runtime):
 
     def node(state: dict) -> dict:
         clear_attempt_artifacts(runtime)
-        return {"attempt": state["attempt"] + 1,
-                "step_verdicts": {},
-                "failed": False}
+        update = {"attempt": state["attempt"] + 1,
+                  "step_verdicts": {},
+                  "failed": False}
+        # 033 regeneration gate: if a brief step's resolved inputs changed
+        # since it was written (a mid-run edit to AGENTS.md or the unit plan),
+        # re-enter that brief step so it regenerates once and refreshes its
+        # hash. Unchanged inputs keep the failing step's retry_target.
+        for step in runtime.cfg.steps:
+            if step.brief_inputs is None:
+                continue
+            try:
+                current = brief_inputs_hash(runtime, step,
+                                            state.get("docs", {}),
+                                            state.get("doc_sources"))
+            except Exception:
+                update["retry_target"] = step.name
+                break
+            if state.get("brief_hashes", {}).get(step.name) != current:
+                update["retry_target"] = step.name
+                break
+        return update
 
     return node
 
