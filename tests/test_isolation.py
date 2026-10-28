@@ -2109,3 +2109,43 @@ class TestReaper:
         self._write(tmp_path / "state", [own, other])
         backend.close()
         assert self._read(tmp_path / "state") == [other]
+
+
+def test_declared_setups_includes_agent_steps(tmp_path):
+    import yaml
+
+    from agentic_dev_loop.core.config import load_config
+    from agentic_dev_loop.engine.isolation import _declared_setups
+
+    (tmp_path / "uv.lock").write_text("")
+    data = {
+        "name": "t",
+        "llm": {"model": "m", "api_key_env": "K"},
+        "agents_dir": "agents",
+        "lockfiles": ["uv.lock"],
+        "steps": [
+            {"name": "dev", "agent": "dev",
+             "setup": "cd frontend-editor && npm ci", "on_pass": "success"},
+            {"name": "t", "command": "make", "setup": "echo warm",
+             "on_pass": "success"},
+        ],
+    }
+    p = tmp_path / "pipeline.yaml"
+    p.write_text(yaml.safe_dump(data))
+    cfg = load_config(p)
+    assert set(dict(_declared_setups(cfg, tmp_path))) == {
+        "cd frontend-editor && npm ci", "echo warm"}
+
+
+def test_provision_payload_mounts_declared_caches():
+    payload = docker_provision_payload(
+        run_id="run1",
+        image="img",
+        workspace="/ws",
+        setup_cmd="cd frontend-editor && npm ci",
+        cache_mounts=[
+            ("/host/fe/node_modules", "/ws/frontend-editor/node_modules", "rw"),
+        ],
+    )
+    assert "-v" in payload
+    assert "/host/fe/node_modules:/ws/frontend-editor/node_modules" in payload

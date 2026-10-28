@@ -186,7 +186,7 @@ steps:
 | `agent:` / `command:` / `action:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
-| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox (command steps, network ON, stamp-cached); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
+| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox before the step runs (command or agent steps; network ON; stamp-cached, re-runs when the pipeline's lockfiles change); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
 | `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [Secrets](#secrets--refs-only-never-values). |
 | `isolation:` (optional) | Configures the sandbox - image override, resource caps, `allow_git_mutations`, `seccomp_profile`. It can never disable it. See [browser sandbox](docs/browser-sandbox.md). |
@@ -194,7 +194,7 @@ steps:
 | `extensions_dir` | Where consumer `extensions:` modules resolve - defaults to `~/.agentic-dev-loop/extensions`, **outside** the workspace. Workspace-resident extension/tool modules are refused at load. |
 | `deps_policy` | `locked` (default) or `open`. `locked` = the human-owned lockfile is the source of truth and the agent may not add dependencies; `open` = the bootstrap protocol (the agent may add exact-pinned manifest entries). See [Dependency policy](#dependency-policy-locked-by-default). |
 | `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
-| `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from the real workspace (auto-created if missing); `sync_excludes:` names scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
+| `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from the real workspace (auto-created if missing); a `setup:` hook can warm them (the provision container carries the same cache mounts); `sync_excludes:` names scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
 | `merge_on_conflict:` | Top-level run-wide list of append-style logs (same path vocabulary as `sync_excludes:`, default `[]`). A concurrent host edit to a listed path is union-merged instead of raising: the host file wins and the sandbox's export-only lines are appended in order; both sides converge and the run continues. See [docs/setup.md](docs/setup.md). |
 
 ### Secrets (`secrets:`) - refs only, never values
@@ -390,7 +390,8 @@ Adaptation checklist for a new repo:
    only if a stage runs Chromium.
 3. `caches:` - toolchain cache dirs as rw bind-mounts shared across runs
    (`.nuget-packages`, `qa/node_modules`, `qa/.browsers`,
-   `frontend-editor/node_modules`); caches are never synced back.
+   `frontend-editor/node_modules`); caches are never synced back, and a
+   step's `setup:` hook runs with them mounted so it can warm them.
 4. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
 5. `secrets:` - refs only, resolved from host env; each step opts in to the
    refs it needs.

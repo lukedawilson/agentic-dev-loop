@@ -489,15 +489,19 @@ class TestStepEnvAndSetup:
                           "on_pass": "success"}]
         assert _load(tmp_path, data).steps[0].setup is not None
 
-    @pytest.mark.parametrize("step", [
-        {"name": "x", "agent": "dev", "setup": "npm i"},
-        {"name": "x", "action": "commit", "setup": "npm i"},
-    ])
-    def test_setup_rejected_on_non_command_steps(self, tmp_path, step):
+    def test_setup_allowed_on_agent_step(self, tmp_path):
         data = _base()
-        data["steps"] = [step | {"on_pass": "success"}]
-        with pytest.raises(ValidationError,
-                           match="'setup' is only allowed on 'command' steps"):
+        data["steps"] = [{"name": "dev", "agent": "dev", "setup": "npm i",
+                          "on_pass": "success"}]
+        assert _load(tmp_path, data).steps[0].setup == "npm i"
+
+    def test_setup_rejected_on_action_step(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "x", "action": "commit", "setup": "npm i",
+                          "on_pass": "success"}]
+        with pytest.raises(
+                ValidationError,
+                match="'setup' is only allowed on 'command' or 'agent' steps"):
             _load(tmp_path, data)
 
     def test_env_round_trip(self, tmp_path):

@@ -699,11 +699,14 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
 
 def docker_provision_payload(*, run_id: str, image: str, workspace: str,
                              setup_cmd: str,
-                             sandbox_venv_dir: str | None = None) -> list[str]:
+                             sandbox_venv_dir: str | None = None,
+                             cache_mounts: list[tuple[str, str, str]]
+                             | None = None) -> list[str]:
     """Exact ``docker run --rm`` argv for the provision container (§3.4).
     Network ON (default bridge), rw rootfs, --cap-drop ALL, mount set
-    {workspace} + host-only masks (022); --user host uid:gid (AE-SBX-009) with
-    HOME=/tmp."""
+    {workspace} + host-only masks (022) + the declared cache paths (028, rw
+    bind mounts so a ``setup:`` hook can warm them); --user host uid:gid
+    (AE-SBX-009) with HOME=/tmp."""
     payload = [
         "docker", "run", "--rm", "--name", f"{run_id}-provision",
         "--network", "bridge", "--cap-drop", "ALL",
@@ -713,6 +716,8 @@ def docker_provision_payload(*, run_id: str, image: str, workspace: str,
     if user is not None:
         payload.extend(["--user", user, "--env", "HOME=/tmp"])
     payload.extend(_sandbox_mounts(workspace, sandbox_venv_dir))
+    for source, target, _mode in (cache_mounts or []):
+        payload += ["-v", f"{source}:{target}"]
     payload.extend([
         "--workdir", workspace,
         image, "sh", "-c", setup_cmd,
@@ -995,7 +1000,8 @@ class DockerBackend(Sandbox):
                 return
         payload = docker_provision_payload(
             run_id=self._run_id, image=self._image, workspace=self._workspace,
-            setup_cmd=setup_cmd, sandbox_venv_dir=self._sandbox_venv_dir)
+            setup_cmd=setup_cmd, sandbox_venv_dir=self._sandbox_venv_dir,
+            cache_mounts=self._cache_mounts)
         res = self._runner.run(payload, timeout=PROVISION_TIMEOUT_SECONDS)
         if res.exit_code != 0:
             tail = (res.stdout or res.stderr or "")[-4000:]
@@ -1541,7 +1547,9 @@ def _file_digest(p: Path) -> str:
 def _declared_setups(cfg: PipelineConfig, workspace: Path):
     hashes = _lockfile_hashes(workspace)
     for step in cfg.steps:
-        if step.command is not None and step.setup is not None:
+        if step.setup is not None and (
+            step.command is not None or step.agent is not None
+        ):
             yield step.setup, setup_stamp_key(step.setup, hashes)
 
 

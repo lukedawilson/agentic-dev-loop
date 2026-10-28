@@ -386,9 +386,9 @@ class StepConfig(BaseModel):
             raise ValueError(
                 f"step {self.name!r}: 'timeout' requires 'command'"
             )
-        if self.setup is not None and self.command is None:
+        if self.setup is not None and self.command is None and self.agent is None:
             raise ValueError(
-                f"step {self.name!r}: 'setup' is only allowed on 'command' steps"
+                f"step {self.name!r}: 'setup' is only allowed on 'command' or 'agent' steps"
             )
         # `network` is NOT rejected here: the schema can't tell a host-side
         # built-in action (e.g. `commit`, which must never take egress) from

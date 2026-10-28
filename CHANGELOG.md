@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a28] - 2026-10-28
+
+### Changed
+
+- Fix broken prose and add planning docs
+- Uncommitted changes: README.md, docs/run-time-analysis-containerised-loop.md, src/agentic_dev_loop/core/config.py, src/agentic_dev_loop/engine/isolation.py, tests/test_config.py, tests/test_isolation.py
+
 ## [1.0.0a27] - 2026-10-27
 
 ### Changed
