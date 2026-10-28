@@ -37,6 +37,12 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
   your change, a stale test pinning old behavior, or a genuine library bug -
   and fix it, never the symptom.
 
+## TEST-FIRST
+
+- Work test-driven: write the failing test before the implementation, then
+  make it pass, then refactor (red, green, refactor). Never write
+  implementation code before a test exists to pin its behavior.
+
 ## STOP WHEN GREEN
 
 - The moment your final response is written AND the full suite has passed
