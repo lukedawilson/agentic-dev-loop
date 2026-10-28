@@ -409,7 +409,7 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                     update["artifacts"] = {step.name: result.response}
                 return update
             if verdict == "unverifiable":
-                print(f"[{subject}] {step.name} qa verdict: UNVERIFIABLE "
+                print(f"[{subject}] {step.name} verdict: UNVERIFIABLE "
                       f"(moves on).", flush=True)
                 update = {"step_verdicts": merged, "failed": False}
                 if captures and result.response is not None:
