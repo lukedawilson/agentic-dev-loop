@@ -153,6 +153,8 @@ steps:
   - name: dev
     agent: dev
     produces: implementation-summary.md
+    terminal_timeout: 900
+    stop_when: { green_command: ".venv-sandbox/bin/python -m pytest tests/ -q", post_green_turns: 2 }
     on_pass: test
 
   - name: test
@@ -185,6 +187,8 @@ steps:
 | --- | --- |
 | `agent:` / `command:` / `action:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
+| `stop_when:` | Optional agent-step termination: `{ green_command: <argv regex>, post_green_turns: <int, default 2> }`. When the agent's most recent terminal observation matching `green_command` exits 0 and no workspace writes have happened since, the engine injects one nudge turn, allows `post_green_turns` further turns, then closes the conversation. Absent = run to finish. |
+| `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox before the step runs (command or agent steps; network ON; stamp-cached, re-runs when the pipeline's lockfiles change); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |

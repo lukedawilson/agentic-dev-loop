@@ -1,6 +1,6 @@
 # 032-stop-when-green.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 ## Scope
 
