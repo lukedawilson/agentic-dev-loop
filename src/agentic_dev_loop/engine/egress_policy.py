@@ -10,11 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from agentic_dev_loop.core.config import (
-    EgressSpec, parse_egress_port, parse_egress_target,
-)
-from .presets import expand_presets
-
 ALLOWLIST = "allowlist"
 # The explicit broad-but-logged browser class (BR-7): no target filtering,
 # every connection logged host-side.
@@ -32,6 +27,7 @@ class TargetEntry:
 
     @classmethod
     def from_spec(cls, spec: str) -> "TargetEntry":
+        from agentic_dev_loop.core.config import parse_egress_target
         host, port = parse_egress_target(spec)
         return cls(host=host, port=port)
 
@@ -51,6 +47,7 @@ class EgressPolicy:
     policy_class: str = ALLOWLIST
 
     def to_spec(self) -> EgressSpec:
+        from agentic_dev_loop.core.config import EgressSpec
         cls = None if self.policy_class == ALLOWLIST else BROWSER
         return EgressSpec(
             class_=cls,
@@ -72,6 +69,7 @@ def assemble_egress_policy(egress: EgressSpec | None) -> EgressPolicy:
     cls = egress.class_ or ALLOWLIST
     if cls == BROWSER:
         return EgressPolicy(policy_class=BROWSER)
+    from .presets import expand_presets
     entries: list[TargetEntry] = []
     if egress.presets:
         for spec in expand_presets(egress.presets):
@@ -79,6 +77,18 @@ def assemble_egress_policy(egress: EgressSpec | None) -> EgressPolicy:
     for spec in egress.targets:
         entries.append(TargetEntry.from_spec(spec))
     return EgressPolicy(targets=tuple(entries), policy_class=ALLOWLIST)
+
+
+def _parse_port(spec: str, port: str) -> int | None:
+    """Validate a target port (BR-6.3), standalone-safe (no engine package)."""
+    if port == "":
+        raise ValueError(f"malformed egress target {spec!r}: empty port")
+    if not port.isdigit():
+        raise ValueError(f"malformed egress target {spec!r}: port {port!r} not numeric")
+    n = int(port)
+    if not 1 <= n <= 65535:
+        raise ValueError(f"malformed egress target {spec!r}: port {n} out of range")
+    return n
 
 
 def _split_host_port(hostname: str) -> tuple[str, int | None]:
@@ -91,7 +101,7 @@ def _split_host_port(hostname: str) -> tuple[str, int | None]:
         host = value[1:end]
         rest = value[end + 1:]
         if rest.startswith(":"):
-            return host, parse_egress_port(hostname, rest[1:])
+            return host, _parse_port(hostname, rest[1:])
         return host, None
     if value.count(":") == 1:
         host, port = value.rsplit(":", 1)

@@ -203,3 +203,163 @@ def test_connect_headers_drained_not_tunnelled():
             p.stop()
     finally:
         upstream.close()
+
+
+class _HostRecordingHandler(http.server.BaseHTTPRequestHandler):
+    received_hosts: list[str] = []
+
+    def do_GET(self):
+        _HostRecordingHandler.received_hosts.append(self.headers.get("Host"))
+        body = b"host-header-recorded"
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+def test_dial_rewrite_forward_preserves_host_header():
+    """D8: a configured dial rewrite applies only at the upstream dial site -
+    the policy input and the Host header keep the original hostname."""
+    import http.server
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0),
+                                             _HostRecordingHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        port = server.server_address[1]
+        policy = EgressPolicy(
+            targets=(TargetEntry(host="host.docker.internal"),))
+        p = EgressProxy(
+            policy=policy,
+            dial_rewrites={"host.docker.internal": "127.0.0.1"})
+        p.start()
+        try:
+            req = (f"GET http://host.docker.internal:{port}/ HTTP/1.1\r\n"
+                   "Host: host.docker.internal\r\n\r\n").encode()
+            resp = _send_raw(p._port, req)
+            assert b"200" in resp and b"host-header-recorded" in resp
+            assert _HostRecordingHandler.received_hosts == [
+                "host.docker.internal"]
+            assert any(e.hostname == "host.docker.internal" and e.allowed
+                       for e in p.events)
+        finally:
+            p.stop()
+    finally:
+        server.shutdown()
+
+
+def test_dial_rewrite_connect_reaches_local_upstream():
+    """D8: a CONNECT for the host alias with an explicit rewrite to
+    127.0.0.1 reaches a local upstream; the enforcement event is recorded."""
+    upstream = _RawTcpServer()
+    try:
+        policy = EgressPolicy(
+            targets=(TargetEntry(host="host.docker.internal"),))
+        p = EgressProxy(
+            policy=policy,
+            dial_rewrites={"host.docker.internal": "127.0.0.1"})
+        p.start()
+        try:
+            tunnel = b"tunnel-bytes-after-200"
+            payload = (
+                f"CONNECT host.docker.internal:{upstream.port} HTTP/1.1\r\n"
+                "\r\n"
+            ).encode() + tunnel
+            with socket.create_connection(("127.0.0.1", p._port),
+                                          timeout=5.0) as s:
+                s.sendall(payload)
+                s.settimeout(5.0)
+                buf = b""
+                while b"\r\n\r\n" not in buf:
+                    chunk = s.recv(65536)
+                    if not chunk:
+                        break
+                    buf += chunk
+            assert b"200 Connection Established" in buf
+            deadline = time.monotonic() + 5.0
+            while (time.monotonic() < deadline
+                   and len(upstream.received) < len(tunnel)):
+                time.sleep(0.05)
+            assert bytes(upstream.received) == tunnel
+            assert any(e.hostname == "host.docker.internal" and e.allowed
+                       for e in p.events)
+        finally:
+            p.stop()
+    finally:
+        upstream.close()
+
+
+def test_event_file_writer(tmp_path):
+    """The event-file writer used by the container-mode entrypoint appends one
+    JSON enforcement record per connection decision."""
+    import json
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Target)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        port = server.server_address[1]
+        events = tmp_path / "events.jsonl"
+        policy = EgressPolicy(targets=(TargetEntry(host="127.0.0.1"),))
+        p = EgressProxy(policy=policy, event_file=events)
+        p.start()
+        try:
+            req = (f"GET http://127.0.0.1:{port}/ HTTP/1.1\r\n"
+                   "Host: 127.0.0.1\r\n\r\n").encode()
+            _send_raw(p._port, req)
+        finally:
+            p.stop()
+        lines = events.read_text().splitlines()
+        assert lines
+        rec = json.loads(lines[0])
+        assert rec["hostname"] == "127.0.0.1"
+        assert rec["allowed"] is True
+    finally:
+        server.shutdown()
+
+
+def test_container_entrypoint_writes_events_file(tmp_path):
+    """The standalone container-mode entrypoint serves the policy and writes
+    enforcement events to the mounted file (exercised out-of-package)."""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parents[1] / "src" / "agentic_dev_loop" / "engine"
+    events = tmp_path / "events.jsonl"
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    policy_json = json.dumps({"class": "allowlist", "targets": []})
+    proc = subprocess.Popen(
+        [sys.executable, str(src / "egress_proxy.py"),
+         "--policy", policy_json, "--events", str(events),
+         "--host", "127.0.0.1", "--port", str(port)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        deadline = time.monotonic() + 5.0
+        connected = False
+        while time.monotonic() < deadline:
+            try:
+                with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                    connected = True
+                    break
+            except OSError:
+                time.sleep(0.05)
+        assert connected, "container-mode entrypoint did not bind"
+        resp = _send_raw(
+            port,
+            b"GET http://denied.example/ HTTP/1.1\r\n"
+            b"Host: denied.example\r\n\r\n")
+        assert b"403" in resp
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+    lines = events.read_text().splitlines()
+    assert lines
+    rec = json.loads(lines[0])
+    assert rec["hostname"] == "denied.example"
+    assert rec["allowed"] is False

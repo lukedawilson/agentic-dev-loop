@@ -25,7 +25,9 @@ from agentic_dev_loop.engine.isolation import (
     SandboxError, SandboxExecutionRequest, SandboxExecutionResult,
     append_audit_record, classify_infra_failure, clean_stamps,
     container_profile_key, docker_create_payload, docker_provision_payload,
-    exec_container_name, is_git_mutation, mount_set_docker_flags,
+    docker_proxy_payload, egress_events_path, exec_container_name,
+    is_git_mutation, merge_egress_events, mount_set_docker_flags,
+    proxy_container_name, proxy_url, run_network_name,
     probe_docker, process_start, read_stamp, reap_orphaned_containers,
     remove_sandbox_venv, resolve_effective_profile, resolve_image_ref,
     resolve_sandbox_env, resolve_sandbox_venv_dir, select_backend,
@@ -398,15 +400,16 @@ class TestPayloads:
         assert "--user" not in provision
 
     def test_networked_create_payload(self, tmp_path):
-        """014: `network: true` swaps the network mode AND the container name,
-        but nothing else - the networked container is otherwise identical
+        """038: `network: true` attaches to the per-run internal network and
+        never adds a host-gateway mapping; everything else stays identical
         (read-only, cap-dropped, single mount)."""
         ws = str(tmp_path)
         p = docker_create_payload(run_id="r1", image="img",
                                   profile=self._profile(), workspace=ws,
-                                  network=True)
-        assert "--network" in p and "bridge" in p
+                                  network=True, network_name="r1-net")
+        assert "--network" in p and "r1-net" in p
         assert "none" not in p
+        assert "--add-host" not in p
         assert "--name" in p and f"{p[p.index('--name') + 1]}" == "r1-exec-net"
         assert "--read-only" in p
         assert "--cap-drop" in p and "ALL" in p
@@ -689,21 +692,25 @@ class TestCreateExecutionContainer:
         assert len(runner.calls) == 1
 
     def test_networked_second_container_eagerly_created(self, tmp_path):
-        """014: when any step declares network, startup creates BOTH the
-        network-none container and a bridge-network container - zero infra
-        work is deferred to the run phase."""
-        runner = FakeRunner(ok("cid-none"), ok("cid-net"))
+        """038: a network-declaring startup creates the per-run internal
+        network, the network-none container, and the internal-network
+        container - zero infra work is deferred to the run phase."""
+        runner = FakeRunner(ok("net"), ok("cid-none"), ok("cid-net"))
         backend = _backend(tmp_path, runner, network=True)
         backend.create_execution_container()
-        assert len(runner.calls) == 2
-        none_argv, net_argv = runner.calls
+        assert len(runner.calls) == 3
+        net_create, none_argv, net_argv = runner.calls
+        assert net_create[:3] == ["docker", "network", "create"]
+        assert "--internal" in net_create and backend._run_net in net_create
         assert "--network" in none_argv and "none" in none_argv
         assert none_argv[none_argv.index("--name") + 1].endswith("-exec")
-        assert "--network" in net_argv and "bridge" in net_argv
+        assert "--network" in net_argv and backend._run_net in net_argv
+        assert "--add-host" not in net_argv
         assert net_argv[net_argv.index("--name") + 1].endswith("-exec-net")
 
     def test_networked_container_failure_is_loud_and_reclaims_main(self, tmp_path):
-        runner = FakeRunner(ok("cid-none"), fail(125, "network bridge unavailable"))
+        runner = FakeRunner(ok("net"), ok("cid-none"),
+                            fail(125, "network unavailable"))
         backend = _backend(tmp_path, runner, network=True)
         with pytest.raises(SandboxError, match="AE-SBX-013"):
             backend.create_execution_container()
@@ -1381,13 +1388,15 @@ class TestUnit5PayloadAdditions:
     def _profile(self):
         return EffectiveProfile(True, True, True, True, True, "img", "4g", 2.0)
 
-    def test_networked_payload_adds_host_gateway(self, tmp_path):
+    def test_networked_payload_uses_internal_network_no_host_gateway(self, tmp_path):
+        """038: sandbox containers have no host route and no host-gateway
+        alias; the proxy container alone keeps that mapping (D8)."""
         ws = str(tmp_path)
         p = docker_create_payload(run_id="r1", image="img",
                                   profile=self._profile(), workspace=ws,
-                                  network=True)
-        assert "--add-host" in p
-        assert p[p.index("--add-host") + 1] == "host.docker.internal:host-gateway"
+                                  network=True, network_name="r1-net")
+        assert "--network" in p and "r1-net" in p
+        assert "--add-host" not in p
 
     def test_network_none_payload_omits_host_gateway(self, tmp_path):
         ws = str(tmp_path)
@@ -1497,48 +1506,16 @@ class TestUnit5RuntimeEnforcement:
             sandbox.close()
 
     def test_profile_container_mounts_and_proxy_env(self, tmp_path):
-        """D-1 + BR-5: a step's mount set + egress policy key a pooled
-        container; the proxy env points at the host-gateway (never
-        127.0.0.1), and the exec cwd is the export root."""
+        """038: a step's mount set + egress policy key a pooled container;
+        the proxy env points at the proxy container's internal DNS name
+        (never 127.0.0.1 or the host-gateway), and the exec cwd is the
+        export root."""
         export = tmp_path / "export"
         (export / "src").mkdir(parents=True)
         (export / "src" / "a.py").write_text("x")
-        runner = FakeRunner(ok("cid"), ok(""))
-        backend = _backend(tmp_path, runner)
-        backend._export_root = str(export)
-        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
-        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
-        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
-                                      env={}, network=True, mount_set=ms,
-                                      egress_policy=pol)
-        try:
-            backend.run(req)
-            run_argv = runner.calls[0]
-            assert run_argv[:2] == ["docker", "run"]
-            assert f"{export}:{export}:ro" in run_argv
-            assert f"{export}/src:{export}/src" not in run_argv
-            proxy_envs = [a for a in run_argv
-                          if a.startswith("HTTP_PROXY=")
-                          or a.startswith("HTTPS_PROXY=")]
-            assert proxy_envs and all("host.docker.internal" in a
-                                      for a in proxy_envs)
-            assert run_argv[run_argv.index("--workdir") + 1] == str(export)
-            exec_argv = runner.calls[1]
-            assert exec_argv[:2] == ["docker", "exec"]
-            assert exec_argv[exec_argv.index("-w") + 1] == str(export)
-            # the profile container is pooled: a second run reuses it
-            backend.run(req)
-            assert len([c for c in runner.calls if c[:2] == ["docker", "run"]]) == 1
-        finally:
-            backend.close()
-
-    def test_proxy_death_fails_closed(self, tmp_path):
-        """BR-11.3: a networked profile whose egress proxy has died fails the
-        request loudly - the enforcement point being down is never a silent
-        degradation."""
-        export = tmp_path / "export"
-        (export / "src").mkdir(parents=True)
-        runner = FakeRunner(ok("cid"), ok(""))
+        runner = FakeRunner(
+            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""),
+            ok("true"), ok(""))
         backend = _backend(tmp_path, runner)
         backend._export_root = str(export)
         ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
@@ -1549,8 +1526,64 @@ class TestUnit5RuntimeEnforcement:
         try:
             backend.run(req)
             prof = next(iter(backend._pool.values()))
-            assert prof.proxy is not None
-            prof.proxy.stop()
+            proxy_name = prof.proxy_name
+            assert proxy_name is not None
+            net_create = runner.calls[0]
+            assert net_create[:3] == ["docker", "network", "create"]
+            assert "--internal" in net_create and backend._run_net in net_create
+            proxy_run = runner.calls[1]
+            assert proxy_run[:2] == ["docker", "run"]
+            assert "--network" in proxy_run and "bridge" in proxy_run
+            assert "--add-host" in proxy_run
+            assert "host.docker.internal:host-gateway" in proxy_run
+            connect = runner.calls[2]
+            assert connect == ["docker", "network", "connect",
+                               backend._run_net, proxy_name]
+            run_argv = runner.calls[3]
+            assert run_argv[:2] == ["docker", "run"]
+            assert "--network" in run_argv and backend._run_net in run_argv
+            assert "--add-host" not in run_argv
+            assert f"{export}:{export}:ro" in run_argv
+            assert f"{export}/src:{export}/src" not in run_argv
+            proxy_envs = [a for a in run_argv
+                          if a.startswith("HTTP_PROXY=")
+                          or a.startswith("HTTPS_PROXY=")]
+            assert proxy_envs and all(
+                f"http://{proxy_name}:3128" in a for a in proxy_envs)
+            assert run_argv[run_argv.index("--workdir") + 1] == str(export)
+            inspect = runner.calls[4]
+            assert inspect == ["docker", "inspect", "-f",
+                               "{{.State.Running}}", proxy_name]
+            exec_argv = runner.calls[5]
+            assert exec_argv[:2] == ["docker", "exec"]
+            assert exec_argv[exec_argv.index("-w") + 1] == str(export)
+            # the profile container is pooled: a second run reuses it
+            backend.run(req)
+            runs = [c for c in runner.calls if c[:2] == ["docker", "run"]]
+            assert len(runs) == 2  # proxy container + sandbox container
+        finally:
+            backend.close()
+
+    def test_proxy_death_fails_closed(self, tmp_path):
+        """BR-11.3 / AE-SBX-018: a networked profile whose proxy container
+        is reported dead fails the request loudly - the enforcement point
+        being down is never a silent degradation."""
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        runner = FakeRunner(
+            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""),
+            ok("false"))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        try:
+            backend.run(req)
+            prof = next(iter(backend._pool.values()))
+            assert prof.proxy_name is not None
             with pytest.raises(SandboxError, match="proxy"):
                 backend.run(req)
         finally:
@@ -2105,6 +2138,21 @@ class TestReaper:
         assert runner.calls == []
         assert self._read(tmp_path / "state") == [entry]
 
+    def test_dead_network_reaped_and_pruned(self, tmp_path):
+        """038: the per-run internal network is reaped by kind; its name
+        matches the network pattern, never the container pattern."""
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-net"
+        self._write(tmp_path / "state", [{
+            "run_id": "r", "name": name, "kind": "network",
+            "pid": proc.pid, "process_start": None, "created_at": "now",
+        }])
+        runner = FakeRunner()
+        reap_orphaned_containers(tmp_path / "state", runner)
+        assert runner.calls == [["docker", "network", "rm", name]]
+        assert self._read(tmp_path / "state") == []
+
     def test_malformed_name_skipped(self, tmp_path):
         entry = self._entry("not-an-engine-name", os.getpid(), None)
         self._write(tmp_path / "state", [entry])
@@ -2181,3 +2229,70 @@ def test_provision_payload_mounts_declared_caches():
     )
     assert "-v" in payload
     assert "/host/fe/node_modules:/ws/frontend-editor/node_modules" in payload
+
+
+class TestNetworkEgressEnforcement:
+    """038: internal-network topology, containerized proxy payload, teardown,
+    and enforcement-event merge into the audit log."""
+
+    def test_proxy_payload_carries_host_access_and_mounts(self, tmp_path):
+        payload = docker_proxy_payload(
+            run_id="r1", image="img", name="r1-proxy-abc",
+            policy_json=json.dumps({"class": "allowlist", "targets": []}),
+            dial_rewrites_json="{}",
+            events_host_path="/host/events.jsonl",
+            egress_proxy_host_path="/host/egress_proxy.py",
+            egress_policy_host_path="/host/egress_policy.py")
+        assert payload[:2] == ["docker", "run"]
+        assert "--network" in payload and "bridge" in payload
+        assert "--add-host" in payload
+        assert payload[payload.index("--add-host") + 1] == "host.docker.internal:host-gateway"
+        assert "/host/egress_proxy.py:/egress/egress_proxy.py:ro" in payload
+        assert "/host/egress_policy.py:/egress/egress_policy.py:ro" in payload
+        assert "/host/events.jsonl:/egress/events.jsonl" in payload
+        assert "python3" in payload and "/egress/egress_proxy.py" in payload
+        assert "--port" in payload and "3128" in payload
+
+    def test_close_removes_network_and_proxy_and_merges_events(self, tmp_path):
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        runner = FakeRunner(
+            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        backend.run(req)
+        prof = next(iter(backend._pool.values()))
+        proxy_name = prof.proxy_name
+        assert proxy_name is not None
+        backend._egress_events_path.parent.mkdir(parents=True, exist_ok=True)
+        backend._egress_events_path.write_text(
+            json.dumps({"hostname": "pypi.org", "allowed": True,
+                        "timestamp": "t"}) + "\n")
+        backend.close()
+        assert ["docker", "stop", "-t", "5", proxy_name] in runner.calls
+        assert ["docker", "rm", "-f", proxy_name] in runner.calls
+        assert ["docker", "network", "rm", backend._run_net] in runner.calls
+        audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text().splitlines()
+        merged = json.loads(audit[-1])
+        assert merged["event"] == "egress_enforcement"
+        assert merged["hostname"] == "pypi.org"
+        assert not backend._egress_events_path.exists()
+
+
+def test_merge_egress_events_merges_and_removes(tmp_path):
+    state = tmp_path / "state"
+    events = tmp_path / "events.jsonl"
+    events.write_text(
+        json.dumps({"hostname": "a", "allowed": True, "timestamp": "t"})
+        + "\ngarbage\n")
+    assert merge_egress_events(state, events) == 1
+    assert not events.exists()
+    audit = (state / "sandbox-audit.jsonl").read_text().splitlines()
+    rec = json.loads(audit[0])
+    assert rec["event"] == "egress_enforcement"
+    assert rec["hostname"] == "a"

@@ -41,8 +41,10 @@ ISOLATION = REPO_ROOT / "src" / "agentic_dev_loop" / "engine" / "isolation.py"
 # (012/019) stop the run before the agent can respond, and 013/017 are
 # engine-invariant/config errors that never describe a command the agent can
 # correct.
-AGENT_VISIBLE_CODES = {"AE-SBX-008", "AE-SBX-010", "AE-SBX-016", "AE-SBX-018"}
-INTERNAL_SANDBOX_CODES = {"AE-SBX-012", "AE-SBX-013", "AE-SBX-017", "AE-SBX-019"}
+AGENT_VISIBLE_CODES = {"AE-SBX-008", "AE-SBX-010", "AE-SBX-016",
+                        "AE-SBX-018", "AE-SBX-020"}
+INTERNAL_SANDBOX_CODES = {"AE-SBX-012", "AE-SBX-013", "AE-SBX-017", "AE-SBX-019",
+                            "AE-SBX-021"}
 
 _CODE_RE = re.compile(r"AE-SBX-\d{3}")
 
@@ -101,7 +103,8 @@ def _agent_path_error_codes() -> set[str]:
             for child in node.body:
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     if child.name in {"run", "_run_legacy", "_run_profile",
-                                      "_exec", "_start_profile", "_sync_back"}:
+                                      "_exec", "_start_profile",
+                                      "_start_proxy_container", "_sync_back"}:
                         target_nodes.append(child)
 
     found: set[str] = set()

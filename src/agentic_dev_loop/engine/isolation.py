@@ -37,8 +37,9 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from agentic_dev_loop.core.config import IsolationConfig, PipelineConfig
+from . import egress_policy as egress_policy_module
+from . import egress_proxy as egress_proxy_module
 from .egress_policy import EgressPolicy
-from .egress_proxy import EgressProxy
 from .mounts import Mount, MountSet
 from .proc import needs_shell, split_command
 from .seccomp import resolve_seccomp_profile
@@ -92,7 +93,15 @@ HOST_ONLY_DIRS = (".venv",)
 # 030 infra-failure classifier + orphan-container reaper (D1/D4).
 _EIO_PATTERN = re.compile(r"input/output error|I/O error", re.IGNORECASE)
 CONTAINER_REGISTRY = "container-registry.jsonl"
-_CONTAINER_NAME_RE = re.compile(r"^[0-9a-f]{32}-exec(-[0-9a-f]{16})?(-net)?$")
+# 038: engine containers now include the per-policy egress proxy containers;
+# the per-run internal network is reaped as its own kind.
+_CONTAINER_NAME_RE = re.compile(
+    r"^[0-9a-f]{32}-(exec(-[0-9a-f]{16})?(-net)?|proxy(-[0-9a-f]{16})?)$")
+_NETWORK_NAME_RE = re.compile(r"^[0-9a-f]{32}-net$")
+
+EGRESS_PROXY_PORT = 3128
+HOST_ACCESS_NETWORK = "bridge"
+EGRESS_EVENTS_PREFIX = "egress-events"
 
 
 class SandboxError(RuntimeError):
@@ -267,14 +276,29 @@ class _ProfileContainer:
     name: str
     mount_set: MountSet
     egress_policy: EgressPolicy
-    proxy: EgressProxy | None = None
+    proxy_name: str | None = None
     started: bool = False
 
 
-def _proxy_url(port: int) -> str:
-    """The container-reachable URL for a host-loopback proxy (ID-2): the
-    host-gateway mapping, never 127.0.0.1 (which is the container itself)."""
-    return f"http://host.docker.internal:{port}"
+def run_network_name(run_id: str) -> str:
+    """The per-run internal network name (038, D1)."""
+    return f"{run_id}-net"
+
+
+def proxy_container_name(run_id: str, profile_key: str) -> str:
+    """The container name (also its internal DNS name) for a per-policy proxy."""
+    return f"{run_id}-proxy-{profile_key}"
+
+
+def proxy_url(proxy_name: str, port: int = EGRESS_PROXY_PORT) -> str:
+    """The sandbox-reachable proxy URL: the proxy container's internal DNS
+    name on the internal network (038, D3). Never 127.0.0.1 or the host-gateway."""
+    return f"http://{proxy_name}:{port}"
+
+
+def egress_events_path(iso_state_dir: str | Path, run_id: str) -> Path:
+    """The mounted enforcement-events file for one run (038, D6)."""
+    return Path(iso_state_dir) / f"{EGRESS_EVENTS_PREFIX}-{run_id}.jsonl"
 
 
 def mount_set_docker_flags(export_root: str, mount_set: MountSet) -> list[str]:
@@ -599,7 +623,7 @@ def host_user_flag() -> str | None:
 
 def exec_container_name(run_id: str, network: bool = False) -> str:
     """The execution container name for a network mode. Networked requests
-    land in a second, bridge-network container; the default is the always-on
+    land in a container on the per-run internal network (038); the default is the always-on
     network-none container (014 per-stage networking)."""
     return f"{run_id}-exec-net" if network else f"{run_id}-exec"
 
@@ -624,6 +648,7 @@ def _sandbox_mounts(workspace: str, sandbox_venv_dir: str | None) -> list[str]:
 
 def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           workspace: str, network: bool = False,
+                          network_name: str | None = None,
                           sandbox_venv_dir: str | None = None,
                           seccomp_profile: str | None = None,
                           mount_set: MountSet | None = None,
@@ -632,8 +657,8 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           egress_proxy: str | None = None,
                           name: str | None = None) -> list[str]:
     """Exact ``docker run -d --rm`` argv for the execution container (§3.3, KD-8).
-    Mount set {workspace} + host-only masks (022); ``--network none`` (bridge
-    when ``network`` is true - 014 per-stage networking), --read-only,
+    Mount set {workspace} + host-only masks (022); ``--network none`` (the
+    per-run internal network when ``network`` is true - 038), --read-only,
     --cap-drop ALL; --user host uid:gid (host-owned bind mounts, AE-SBX-009
     root cause) with HOME=/tmp (the rootfs is read-only; /tmp is a 1777 tmpfs).
     ``--rm`` lets the daemon auto-remove the container the instant it exits,
@@ -654,12 +679,8 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
         name or exec_container_name(run_id, network),
         "--label", "agentic-dev-loop=true",
         "--label", f"agentic-dev-loop.run={run_id}",
-        "--network", "bridge" if network else "none",
+        "--network", (network_name or run_network_name(run_id)) if network else "none",
     ]
-    if network:
-        # unit-5 (ID-2): network-on containers reach the engine-run egress
-        # proxy via the host-gateway mapping - one mechanism on every platform.
-        payload += ["--add-host", "host.docker.internal:host-gateway"]
     payload += ["--read-only", "--cap-drop", "ALL"]
     if seccomp_profile is not None:
         payload.extend([
@@ -701,6 +722,41 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
     ])
     return payload
 
+
+
+def docker_proxy_payload(*, run_id: str, image: str, name: str,
+                         policy_json: str,
+                         dial_rewrites_json: str,
+                         events_host_path: str,
+                         egress_proxy_host_path: str,
+                         egress_policy_host_path: str,
+                         port: int = EGRESS_PROXY_PORT,
+                         host_network: str = HOST_ACCESS_NETWORK) -> list[str]:
+    """Exact argv for the containerized egress proxy (038, D2/D5). It is
+    created on the host-access network with a host-gateway mapping (D8), then
+    attached to the internal network so sandbox containers reach it only via
+    its internal DNS name. The policy is passed as JSON; the two engine
+    modules are bind-mounted read-only so the image does not need the engine
+    package installed."""
+    payload = [
+        "docker", "run", "--detach", "--rm", "--name", name,
+        "--label", "agentic-dev-loop=true",
+        "--label", f"agentic-dev-loop.run={run_id}",
+        "--network", host_network,
+        "--add-host", "host.docker.internal:host-gateway",
+        "-v", f"{egress_proxy_host_path}:/egress/egress_proxy.py:ro",
+        "-v", f"{egress_policy_host_path}:/egress/egress_policy.py:ro",
+        "-v", f"{events_host_path}:/egress/events.jsonl",
+        "--workdir", "/egress",
+        image,
+        "python3", "/egress/egress_proxy.py",
+        "--policy", policy_json,
+        "--events", "/egress/events.jsonl",
+        "--dial-rewrites", dial_rewrites_json,
+        "--host", "0.0.0.0",
+        "--port", str(port),
+    ]
+    return payload
 
 def docker_provision_payload(*, run_id: str, image: str, workspace: str,
                              setup_cmd: str,
@@ -821,12 +877,12 @@ def _request_digest(argv: list[str], cwd: str, env: dict[str, str]) -> str:
 
 
 class DockerBackend(Sandbox):
-    """Docker-based sandbox: a persistent network-none execution container per
-    run, plus - when any step declares ``network: true`` - a second
-    bridge-network container (eagerly created + started, Q2). ``docker exec``
-    per request routes to the container matching its network mode; both are
-    destroyed on close(). The injected ``runner`` callable is the unit-test
-    seam."""
+    """DockerBackend sandbox: a persistent network-none execution container per
+    run plus, when any step declares ``network: true``, a per-run internal
+    network (038, D1) and containerized per-policy egress proxies (D2).
+    Networked profile containers attach to the internal network with no host
+    route and reach the host only through their proxy; everything is destroyed
+    on close(). The injected ``runner`` callable is the unit-test seam."""
 
     def __init__(self, *, image: str, workspace: str, iso_state_dir: str,
                  profile: EffectiveProfile, runner: CommandRunner | None = None,
@@ -845,6 +901,12 @@ class DockerBackend(Sandbox):
         self._container = exec_container_name(self._run_id, network=False)
         self._network_container = exec_container_name(self._run_id, network=True)
         self._network_enabled = network
+        # 038: per-run internal network + containerized per-policy proxies.
+        self._run_net = run_network_name(self._run_id)
+        self._network_created = False
+        self._proxy_containers: list[str] = []
+        self._egress_events_path = egress_events_path(self._iso_state_dir,
+                                                      self._run_id)
         self._sandbox_venv_dir = sandbox_venv_dir  # 022 relocated venv (opt-in)
         self._seccomp_profile = seccomp_profile  # 023 userns allowlist (opt-in)
         # unit-5: the .git-free export + its cache bind-mounts (BR-2/BR-3).
@@ -929,6 +991,8 @@ class DockerBackend(Sandbox):
         probe (016) and the legacy default path; step execution then uses the
         profile-keyed pool (D-1). Without an export the legacy two-container
         model is retained (integration tests, no enforcement)."""
+        if self._network_enabled:
+            self._ensure_run_network()
         if self._export_root is not None:
             self._create_base_export_container()
             return
@@ -949,6 +1013,7 @@ class DockerBackend(Sandbox):
         net_payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=True,
+            network_name=self._run_net,
             sandbox_venv_dir=self._sandbox_venv_dir,
             seccomp_profile=self._seccomp_profile)
         net_res = self._runner.run(net_payload, timeout=60)
@@ -961,6 +1026,33 @@ class DockerBackend(Sandbox):
                 f"{net_res.stderr.strip() or net_res.stdout.strip()}")
         self._register_container(self._network_container)
         self._network_started = True
+
+    def _ensure_run_network(self) -> None:
+        """Create the per-run internal network once (038, D1/D6)."""
+        if self._network_created:
+            return
+        res = self._runner.run(
+            ["docker", "network", "create", "--internal",
+             "--label", "agentic-dev-loop=true",
+             "--label", f"agentic-dev-loop.run={self._run_id}",
+             self._run_net], timeout=60)
+        if res.exit_code != 0:
+            raise SandboxError(
+                f"AE-SBX-021: internal network create failed: "
+                f"{res.stderr.strip() or res.stdout.strip()}")
+        self._network_created = True
+        self._register_network(self._run_net)
+
+    def _register_network(self, name: str) -> None:
+        """Record the per-run network for the orphan reaper (038, D6)."""
+        _append_registry_record(self._iso_state_dir, {
+            "run_id": self._run_id,
+            "name": name,
+            "kind": "network",
+            "pid": os.getpid(),
+            "process_start": process_start(os.getpid()),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
 
     def _create_base_export_container(self) -> None:
         """Create the base export container (network-none, whole-tree rw) and
@@ -1067,11 +1159,17 @@ class DockerBackend(Sandbox):
                 "AE-SBX-013: networked execution requested but no networked "
                 "container is running - declare `network: true` on the step "
                 "(docs/setup.md §3)")
-        if request.network and prof.proxy is not None and not prof.proxy.is_alive:
-            raise SandboxError(
-                "AE-SBX-018: the egress proxy for this profile has stopped - "
-                "failing closed (BR-11.3): no networked execution runs "
-                "without egress enforcement")
+        if request.network:
+            if prof.proxy_name is None:
+                raise SandboxError(
+                    "AE-SBX-018: the egress proxy for this profile is missing - "
+                    "failing closed (BR-11.3): no networked execution runs "
+                    "without egress enforcement")
+            if not self._proxy_alive(prof.proxy_name):
+                raise SandboxError(
+                    "AE-SBX-018: the egress proxy for this profile has stopped - "
+                    "failing closed (BR-11.3): no networked execution runs "
+                    "without egress enforcement")
         result = self._exec(request, prof.name)
         report: SyncBackReport | None = None
         if mount_set.rw_paths() and self._export_root is not None:
@@ -1132,34 +1230,79 @@ class DockerBackend(Sandbox):
     def _start_profile(self, key: tuple[str, bool], mount_set: MountSet,
                        policy: EgressPolicy, network: bool) -> _ProfileContainer:
         """Create one profile container (D-1). A network-enabled profile gets
-        its per-policy egress proxy and is pointed at it via the host-gateway
-        mapping (ID-2); the proxy enforces the allowlist (BR-5/BR-6)."""
+        its containerized per-policy egress proxy on both networks (038, D2)."""
         name = f"{self._run_id}-exec-{key[0][:16]}"
         if network:
             name += "-net"
-        proxy: EgressProxy | None = None
-        proxy_url: str | None = None
+        proxy_name: str | None = None
+        proxy_url_value: str | None = None
         if network and self._export_root is not None:
-            proxy = EgressProxy(policy=policy)
-            proxy_url = _proxy_url(proxy.start())
+            proxy_name = proxy_container_name(self._run_id, key[0][:16])
+            self._start_proxy_container(proxy_name, policy)
+            proxy_url_value = proxy_url(proxy_name)
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=network,
+            network_name=self._run_net if network else None,
             sandbox_venv_dir=self._sandbox_venv_dir,
             seccomp_profile=self._seccomp_profile,
             mount_set=mount_set, export_root=self._export_root,
-            cache_mounts=self._cache_mounts, egress_proxy=proxy_url, name=name)
+            cache_mounts=self._cache_mounts, egress_proxy=proxy_url_value,
+            name=name)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
-            if proxy is not None:
-                proxy.stop()
+            if proxy_name is not None:
+                self._rm_container(proxy_name)
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
         self._register_container(name)
         return _ProfileContainer(name=name, mount_set=mount_set,
-                                 egress_policy=policy, proxy=proxy,
+                                 egress_policy=policy, proxy_name=proxy_name,
                                  started=True)
+
+    def _start_proxy_container(self, name: str, policy: EgressPolicy) -> None:
+        """Create one containerized proxy (038, D2/D5): host-access network
+        at create time, then attach the internal network; the events file is
+        pre-created so the single-file bind mount is a file, not a dir."""
+        self._ensure_run_network()
+        events_host = self._egress_events_path
+        events_host.parent.mkdir(parents=True, exist_ok=True)
+        events_host.touch(exist_ok=True)
+        policy_json = egress_proxy_module.policy_to_json(policy)
+        payload = docker_proxy_payload(
+            run_id=self._run_id, image=self._image, name=name,
+            policy_json=policy_json, dial_rewrites_json="{}",
+            events_host_path=str(events_host),
+            egress_proxy_host_path=str(Path(egress_proxy_module.__file__)),
+            egress_policy_host_path=str(Path(egress_policy_module.__file__)),
+            port=EGRESS_PROXY_PORT)
+        res = self._runner.run(payload, timeout=60)
+        if res.exit_code != 0:
+            raise SandboxError(
+                f"AE-SBX-020: egress proxy container run failed: "
+                f"{res.stderr.strip() or res.stdout.strip()}")
+        connect = self._runner.run(
+            ["docker", "network", "connect", self._run_net, name], timeout=60)
+        if connect.exit_code != 0:
+            self._rm_container(name)
+            raise SandboxError(
+                f"AE-SBX-020: egress proxy network attach failed: "
+                f"{connect.stderr.strip() or connect.stdout.strip()}")
+        self._register_container(name)
+        self._proxy_containers.append(name)
+
+    def _proxy_alive(self, name: str) -> bool:
+        """Query the daemon for proxy liveness (038 AE-SBX-018)."""
+        res = self._runner.run(
+            ["docker", "inspect", "-f", "{{.State.Running}}", name],
+            timeout=30)
+        return res.exit_code == 0 and res.stdout.strip() == "true"
+
+    def _rm_container(self, name: str) -> None:
+        """Best-effort stop + rm for a proxy container; never raises."""
+        self._runner.run(["docker", "stop", "-t", "5", name], timeout=60)
+        self._runner.run(["docker", "rm", "-f", name], timeout=60)
 
     def _reset_export_to_host(self, rel: str) -> None:
         """Absorb one hard-conflict path: the host wins, so the export is
@@ -1259,7 +1402,8 @@ class DockerBackend(Sandbox):
         daemon may already have auto-removed the container by the time close()
         runs, so a nonzero stop/rm exit code ("no such container") is treated
         as success, never raised (D2). Every pooled profile container and its
-        egress proxy are destroyed too (BR-10.2/BR-11.3)."""
+        proxy container are destroyed too (BR-10.2/BR-11.3), then the internal
+        network is removed and enforcement events are merged into the audit log."""
         if self._started:
             self._runner.run(["docker", "stop", "-t", "5", self._container],
                              timeout=60)
@@ -1277,9 +1421,14 @@ class DockerBackend(Sandbox):
                 self._runner.run(["docker", "stop", "-t", "5", prof.name],
                                  timeout=60)
                 self._runner.run(["docker", "rm", "-f", prof.name], timeout=60)
-            if prof.proxy is not None:
-                prof.proxy.stop()
         self._pool.clear()
+        for name in self._proxy_containers:
+            self._rm_container(name)
+        self._proxy_containers.clear()
+        if self._network_created:
+            self._runner.run(["docker", "network", "rm", self._run_net], timeout=60)
+            self._network_created = False
+        merge_egress_events(self._iso_state_dir, self._egress_events_path)
         self._prune_registry()
 
     def _register_container(self, name: str) -> None:
@@ -1405,6 +1554,31 @@ def append_audit_record(state_dir: Path, record: dict) -> None:
         fh.write(json.dumps(record, sort_keys=True) + "\n")
 
 
+def merge_egress_events(state_dir: Path, events_path: Path) -> int:
+    """Merge a run's containerized-proxy enforcement events into the audit
+    log (038, D6), then remove the events file. Returns the merged count."""
+    if not events_path.is_file():
+        return 0
+    count = 0
+    with events_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            record["event"] = "egress_enforcement"
+            append_audit_record(state_dir, record)
+            count += 1
+    try:
+        events_path.unlink()
+    except OSError:
+        pass
+    return count
+
+
 def read_stamp(stamp_dir: Path, stamp_key: str) -> bool:
     return (Path(stamp_dir) / stamp_key).exists()
 
@@ -1512,10 +1686,11 @@ def _pid_alive_matches(pid: int, recorded_start: str | None) -> bool:
 
 def reap_orphaned_containers(state_dir: str | Path,
                              runner: CommandRunner | None = None) -> None:
-    """Startup orphan reaper (030, D4): remove exec containers whose owning
-    CLI process is gone (crashed before close()). Exact by construction - only
-    engine registry names are touched, and a live owner (pid alive with the
-    same start time) is left alone. Best-effort: never raises."""
+    """Startup orphan reaper (030/038, D4/D6): remove exec/proxy containers
+    and the per-run internal network whose owning CLI process is gone (crashed
+    before close()). Exact by construction - only engine registry names are
+    touched, and a live owner (pid alive with the same start time) is left
+    alone. Best-effort: never raises."""
     runner = runner or _default_runner
     entries = _read_registry(Path(state_dir))
     if not entries:
@@ -1523,6 +1698,19 @@ def reap_orphaned_containers(state_dir: str | Path,
     remaining: list[dict] = []
     for entry in entries:
         name = entry.get("name")
+        kind = entry.get("kind", "container")
+        if kind == "network":
+            if not isinstance(name, str) or not _NETWORK_NAME_RE.match(name):
+                remaining.append(entry)
+                continue
+            pid = entry.get("pid")
+            if isinstance(pid, int) and _pid_alive_matches(
+                    pid, entry.get("process_start")):
+                remaining.append(entry)
+                continue
+            runner.run(["docker", "network", "rm", name], timeout=60)
+            _announce(f"reaped orphaned sandbox network {name}")
+            continue
         if not isinstance(name, str) or not _CONTAINER_NAME_RE.match(name):
             # Defense in depth: a corrupted registry entry is never an engine
             # container, so leave it (and its entry) untouched.

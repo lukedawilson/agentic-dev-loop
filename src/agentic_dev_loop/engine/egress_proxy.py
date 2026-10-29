@@ -8,13 +8,20 @@ request hostname (CONNECT target) per connection against the expanded policy
 
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
+import sys
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urlsplit
 
-from .egress_policy import EgressPolicy, match_target
+if __package__:
+    from .egress_policy import EgressPolicy, TargetEntry, match_target
+else:  # standalone container-mode entrypoint (run as a script)
+    from egress_policy import EgressPolicy, TargetEntry, match_target
 
 
 @dataclass(frozen=True)
@@ -33,6 +40,8 @@ class EgressProxy:
 
     policy: EgressPolicy
     events: list[EnforcementEvent] = field(default_factory=list)
+    dial_rewrites: dict[str, str] = field(default_factory=dict)
+    event_file: Path | None = None
 
     def __post_init__(self) -> None:
         self._server: asyncio.AbstractServer | None = None
@@ -138,7 +147,7 @@ class EgressProxy:
         # upstream answers with a decode alert - the restore step's SSL
         # TLSV1_ALERT_DECODE_ERROR).
         await _drain_headers(reader)
-        conn = await _open(host, port)
+        conn = await self._open(host, port)
         if conn is None:
             _write(writer, b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
             return
@@ -159,7 +168,7 @@ class EgressProxy:
             _write(writer, b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
             return
         self._record(host, True)
-        conn = await _open(host, port)
+        conn = await self._open(host, port)
         if conn is None:
             _write(writer, b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
             return
@@ -174,9 +183,23 @@ class EgressProxy:
         await _relay_both(reader, writer, upstream_reader, upstream_writer)
 
     def _record(self, hostname: str, allowed: bool) -> None:
-        self.events.append(EnforcementEvent(
+        event = EnforcementEvent(
             hostname=hostname, allowed=allowed,
-            timestamp=datetime.now(timezone.utc).isoformat()))
+            timestamp=datetime.now(timezone.utc).isoformat())
+        self.events.append(event)
+        if self.event_file is not None:
+            _append_event_file(self.event_file, event)
+
+    async def _open(self, host: str, port: int):
+        """Dial the upstream, applying the configured dial rewrite (D8).
+        ``match_target`` already ran against the original hostname, and the
+        request/Host header keep that hostname; only the upstream dial address
+        is rewritten."""
+        dial_host = self.dial_rewrites.get(host, host)
+        try:
+            return await asyncio.open_connection(dial_host, port)
+        except OSError:
+            return None
 
 
 def _parse_request_line(line: bytes) -> tuple[str, str, str]:
@@ -206,12 +229,6 @@ def _split_host_port(target: str) -> tuple[str, int]:
 def _write(writer: asyncio.StreamWriter, data: bytes) -> None:
     writer.write(data)
 
-
-async def _open(host: str, port: int):
-    try:
-        return await asyncio.open_connection(host, port)
-    except OSError:
-        return None
 
 
 async def _forward_headers(reader, upstream, host: str) -> None:
@@ -262,3 +279,63 @@ async def _relay(src, dst) -> None:
             dst.write_eof()
         except Exception:
             pass
+
+
+
+def _append_event_file(path: Path, event: EnforcementEvent) -> None:
+    """Append one enforcement event to the mounted JSONL file (best-effort:
+    a broken events file must never break enforcement)."""
+    record = {
+        "hostname": event.hostname,
+        "allowed": event.allowed,
+        "timestamp": event.timestamp,
+    }
+    try:
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
+    except OSError:
+        pass
+
+
+def policy_to_json(policy: EgressPolicy) -> str:
+    """Serialize a resolved policy for the container-mode entrypoint."""
+    return json.dumps({
+        "class": policy.policy_class,
+        "targets": [{"host": t.host, "port": t.port} for t in policy.targets],
+    }, sort_keys=True)
+
+
+def policy_from_json(text: str) -> EgressPolicy:
+    """Rebuild a resolved policy from the entrypoint's ``--policy`` JSON."""
+    data = json.loads(text)
+    return EgressPolicy(
+        targets=tuple(
+            TargetEntry(host=t["host"], port=t.get("port"))
+            for t in data.get("targets", [])),
+        policy_class=data.get("class", "allowlist"),
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Container-mode entrypoint: serve the policy on the internal network
+    and append enforcement events to a mounted file until SIGTERM."""
+    parser = argparse.ArgumentParser(description="agentic-dev-loop egress proxy")
+    parser.add_argument("--policy", required=True)
+    parser.add_argument("--events", required=True)
+    parser.add_argument("--dial-rewrites", default="{}")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=0)
+    args = parser.parse_args(argv)
+
+    proxy = EgressProxy(
+        policy=policy_from_json(args.policy),
+        dial_rewrites=json.loads(args.dial_rewrites),
+        event_file=Path(args.events),
+    )
+    proxy.start(host=args.host, port=args.port)
+    threading.Event().wait()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

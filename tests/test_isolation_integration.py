@@ -118,10 +118,10 @@ class TestGitGuardE2E:
 
 
 class TestNetworkedContainerE2E:
-    """014: `network: true` steps run in a second, bridge-network container.
-    The distinguishing observable is the interface set - network-none has only
-    loopback; the bridge container additionally gets a routable eth0. This is
-    deterministic (no external egress required)."""
+    """014: `network: true` steps run in a container on the per-run internal
+    network. The distinguishing observable is the interface set - network-none
+    has only loopback; the networked container additionally gets a routable
+    eth0. This is deterministic (no external egress required)."""
 
     @pytest.fixture
     def networked_backend(self, tmp_path):
