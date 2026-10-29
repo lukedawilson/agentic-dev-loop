@@ -118,6 +118,16 @@ agentic-dev-loop pipeline.yaml --resume <thread-id> --max-attempts 5
 
 Exit code is `0` on pipeline success, `1` otherwise.
 
+`agentic-dev-loop containers` inspects the engine's sandbox containers and
+networks from the host: the default list is read-only and resolves each
+engine-owned object to its owning run and a `live`, `orphaned`,
+`stale-entry`, or `unregistered` verdict; `containers --reap` removes only
+registry-owned orphans whose owner pid is dead (never unregistered names).
+A SIGTERM to a running pipeline still closes the sandbox (the graph's
+`finally` runs); SIGKILL is unhandleable, so its containers are reclaimed by
+the startup reaper on the next run or by `containers --reap`. Pass
+`--state-dir` to point at a custom `isolation.state_dir`.
+
 **What a run looks like** (the shipped self-loop example):
 
 ![The live graph view - pipeline stages with verdict badges, retry cycles, and per-stage consoles](docs/viz-screenshot.png)
