@@ -1585,6 +1585,38 @@ class TestUnit5RuntimeEnforcement:
         finally:
             backend.close()
 
+    def test_sync_back_host_added_skipped_and_audited(self, tmp_path):
+        """040: a real file absent from both the export and the baseline is a
+        host-side addition, not an agent deletion - it is left untouched and
+        the sync-back audit record names the skipped path."""
+        import hashlib
+
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("orig")
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        (export / "src" / "a.py").write_text("orig")
+        (ws / "src" / "host-added.py").write_text("host-side addition")
+
+        runner = FakeRunner(ok("cid"), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        backend._baseline = {"src/a.py": hashlib.sha256(b"orig").hexdigest()}
+        ms = resolve_mount_set([MountSpec(path="src", mode="rw")])
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=False, mount_set=ms,
+                                      egress_policy=EgressPolicy())
+        try:
+            backend.run(req)
+            assert (ws / "src" / "host-added.py").read_text() == "host-side addition"
+            audit = (tmp_path / "state" / "sandbox-audit.jsonl").read_text()
+            assert "sync_back" in audit
+            assert "host_added_paths" in audit
+            assert "src/host-added.py" in audit
+        finally:
+            backend.close()
+
     def test_whole_tree_rw_syncs_back_and_cache_untouched(self, tmp_path):
         """BR-4 + BR-3/F2: a ``.``-rw step (the shipped pipeline's shape)
         syncs its edits back, while the bind-mounted cache is never classified

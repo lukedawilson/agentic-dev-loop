@@ -46,6 +46,7 @@ class SyncBackReport:
     conflicts: tuple[str, ...]
     merged_paths: tuple[str, ...] = ()
     lane_violations: tuple[str, ...] = ()
+    host_added_paths: tuple[str, ...] = ()
     step_id: str | None = None
     timestamp: str = ""
 
@@ -217,7 +218,13 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
         real = real_files.get(rel)
         base = baseline.get(rel)
         if exp is None and real is not None:
-            changes[rel] = "deleted"
+            # A file missing from the export AND from the baseline was added
+            # host-side after materialisation - never an agent deletion, so it
+            # must not be unlinked (040).
+            if base is None:
+                changes[rel] = "host-added"
+            else:
+                changes[rel] = "deleted"
         elif real is None and exp is not None:
             changes[rel] = "added"
         elif exp != real:
@@ -250,6 +257,8 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
             plan_changes[rel] = kind
 
     plan = plan_sync_back(plan_changes, declared_rw, cache_paths, excludes)
+    host_added_paths = tuple(sorted(
+        rel for rel, kind in changes.items() if kind == "host-added"))
     merged_paths = tuple(sorted(merged_paths))
     hard_conflicts = tuple(sorted(hard_conflicts))
 
@@ -269,6 +278,7 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
         return SyncBackReport(
             synced_paths=(), conflicts=hard_conflicts,
             merged_paths=merged_paths, lane_violations=lane_violations,
+            host_added_paths=host_added_paths,
             step_id=step_id, timestamp=datetime.now(timezone.utc).isoformat())
 
     # A hard (non-merge) conflict keeps the BR-4.4 loud failure and the
@@ -278,8 +288,8 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
     if hard_conflicts:
         return SyncBackReport(
             synced_paths=(), conflicts=hard_conflicts,
-            merged_paths=merged_paths, step_id=step_id,
-            timestamp=datetime.now(timezone.utc).isoformat())
+            merged_paths=merged_paths, host_added_paths=host_added_paths,
+            step_id=step_id, timestamp=datetime.now(timezone.utc).isoformat())
 
     for rel in plan.to_copy:
         src = export_root / rel
@@ -292,4 +302,5 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
     return SyncBackReport(
         synced_paths=plan.to_copy + plan.to_delete,
         conflicts=(), merged_paths=merged_paths, lane_violations=(),
+        host_added_paths=host_added_paths,
         step_id=step_id, timestamp=datetime.now(timezone.utc).isoformat())

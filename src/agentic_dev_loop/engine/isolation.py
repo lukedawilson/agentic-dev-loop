@@ -1250,6 +1250,7 @@ class DockerBackend(Sandbox):
             "event": "sync_back",
             "synced_paths": list(report.synced_paths),
             "merged_paths": list(report.merged_paths),
+            "host_added_paths": list(report.host_added_paths),
         })
         return report
 

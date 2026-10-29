@@ -348,3 +348,49 @@ class TestMergeOnConflictPartition:
         assert report.merged_paths == ()
         assert "src/audit.md" in report.synced_paths
         assert (ws / "src" / "audit.md").read_text() == "base\nexport\n"
+
+
+class TestDeletedBranchBaselineGuard:
+    """040: the deleted branch consults the baseline before unlinking. A real
+    file absent from the baseline and the export is a host-side addition, never
+    an agent deletion; a baseline-present file deleted in the export still
+    mirrors (unlinks) exactly as before."""
+
+    def test_baseline_present_export_deleted_still_unlinks(self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "b.py").unlink()
+        baseline = {"src/a.py": _digest(ws / "src" / "a.py"),
+                    "src/b.py": _digest(ws / "src" / "b.py")}
+        report = sync_back(exp, ws, ["src"], baseline=baseline)
+        assert report.conflicts == ()
+        assert report.host_added_paths == ()
+        assert "src/b.py" in report.synced_paths
+        assert not (ws / "src" / "b.py").exists()
+
+    def test_baseline_absent_real_only_file_is_host_added_and_untouched(
+            self, tmp_path):
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (ws / "src" / "host-added.py").write_text("host-side addition")
+        baseline = {"src/a.py": _digest(ws / "src" / "a.py"),
+                    "src/b.py": _digest(ws / "src" / "b.py")}
+        report = sync_back(exp, ws, ["src"], baseline=baseline)
+        assert report.conflicts == ()
+        assert report.host_added_paths == ("src/host-added.py",)
+        assert report.synced_paths == ()
+        assert (ws / "src" / "host-added.py").read_text() == "host-side addition"
+
+    def test_modified_branch_hard_conflict_unchanged(self, tmp_path):
+        """Regression: BR-4.4 still treats a baseline-present path changed on
+        both sides as a loud conflict, never an overwrite."""
+        ws = _workspace(tmp_path)
+        exp = _export(tmp_path, ws)
+        (exp / "src" / "a.py").write_text("agent-change")
+        (ws / "src" / "a.py").write_text("external-change")
+        baseline = {"src/a.py": hashlib.sha256(b"orig-a").hexdigest()}
+        report = sync_back(exp, ws, ["src"], baseline=baseline)
+        assert report.conflicts == ("src/a.py",)
+        assert report.host_added_paths == ()
+        assert report.synced_paths == ()
+        assert (ws / "src" / "a.py").read_text() == "external-change"
