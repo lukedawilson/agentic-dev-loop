@@ -1586,7 +1586,7 @@ class TestUnit5RuntimeEnforcement:
             backend.close()
 
     def test_sync_back_host_added_skipped_and_audited(self, tmp_path):
-        """040: a real file absent from both the export and the baseline is a
+        """037: a real file absent from both the export and the baseline is a
         host-side addition, not an agent deletion - it is left untouched and
         the sync-back audit record names the skipped path."""
         import hashlib

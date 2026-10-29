@@ -351,7 +351,7 @@ class TestMergeOnConflictPartition:
 
 
 class TestDeletedBranchBaselineGuard:
-    """040: the deleted branch consults the baseline before unlinking. A real
+    """037: the deleted branch consults the baseline before unlinking. A real
     file absent from the baseline and the export is a host-side addition, never
     an agent deletion; a baseline-present file deleted in the export still
     mirrors (unlinks) exactly as before."""

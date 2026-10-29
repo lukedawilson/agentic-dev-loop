@@ -220,7 +220,7 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
         if exp is None and real is not None:
             # A file missing from the export AND from the baseline was added
             # host-side after materialisation - never an agent deletion, so it
-            # must not be unlinked (040).
+            # must not be unlinked (037).
             if base is None:
                 changes[rel] = "host-added"
             else:
