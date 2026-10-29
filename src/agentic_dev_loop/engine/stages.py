@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING
 from langgraph.graph import END
 from openhands.sdk import Conversation
 
+from .agent_error_guide import guide_section
 from .agents import load_agent, register_sandbox_terminal
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
 from agentic_dev_loop.core.paths import _has_wildcards
@@ -364,12 +365,12 @@ def _artifact_file(runtime: Runtime, step_name: str) -> str | None:
 def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
                   notes: list[str] | None = None,
                   artifacts: dict[str, str] | None = None) -> str:
-    """Assemble the attempt's shared message: subject, doc bundle, the
-    canonical dependency-policy paragraph (021), the expected-output-paths
-    section generated from step defs (a prompt merely naming files lets agents
-    skip them), accumulated stage artifacts (027), and previous-attempt
-    notes."""
-    parts = [f"You are working on {subject}.\n"]
+    """Assemble the attempt's shared message: the always-on agent-facing error
+    guide (034), subject, doc bundle, the canonical dependency-policy paragraph
+    (021), the expected-output-paths section generated from step defs (a prompt
+    merely naming files lets agents skip them), accumulated stage artifacts
+    (027), and previous-attempt notes."""
+    parts = [f"You are working on {subject}.\n", guide_section()]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
     if artifacts:
@@ -541,13 +542,14 @@ def brief_inputs_hash(runtime: Runtime, step: StepConfig,
 def build_brief_context(runtime: Runtime, step: StepConfig,
                         docs: dict[str, str],
                         doc_sources: dict[str, str] | None = None) -> str:
-    """Assemble the brief agent's task message (033): the resolved unit/plan
-    docs (re-read from disk where sources are known), the closed
-    ``brief_inputs.include`` file set, and the env-facts block. Prior verdicts
-    and feedback are deliberately absent - the notes channel delivers them per
-    attempt."""
+    """Assemble the brief agent's task message (033): the always-on
+    agent-facing error guide (034), the resolved unit/plan docs (re-read from
+    disk where sources are known), the closed ``brief_inputs.include`` file
+    set, and the env-facts block. Prior verdicts and feedback are deliberately
+    absent - the notes channel delivers them per attempt."""
     sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
-    parts = [f"## {name}\n\n{content}" for name, content in sections.items()]
+    parts = [guide_section()]
+    parts += [f"## {name}\n\n{content}" for name, content in sections.items()]
     if env_facts:
         parts.append("## Environment facts\n\n"
                      + "\n".join(f"- {fact}" for fact in env_facts))

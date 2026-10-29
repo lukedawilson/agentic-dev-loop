@@ -68,6 +68,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 agentic_dev_loop = ["py.typed"]
+"agentic_dev_loop.engine" = ["*.md"]
 "agentic_dev_loop.engine.seccomp" = ["*.json"]
 
 [tool.pytest.ini_options]
