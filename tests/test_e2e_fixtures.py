@@ -106,6 +106,11 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
     # sibling; the consumer copy must carry it (the real repo does).
     (repo / "aidlc-docs").mkdir(exist_ok=True)
     (repo / "aidlc-docs" / "domain-model-erd.md").write_text("# Domain model\n")
+    (repo / "planning-docs").mkdir(exist_ok=True)
+    (repo / "planning-docs" / "038-network-level-egress-enforcement.md").write_text("# 038\n")
+    (repo / "CHANGELOG.md").write_text("# Changelog\n")
+    (repo / "docs").mkdir(exist_ok=True)
+    (repo / "docs" / "known-issues.md").write_text("# Known issues\n")
     monkeypatch.chdir(repo)
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)

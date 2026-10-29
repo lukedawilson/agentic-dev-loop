@@ -13,6 +13,7 @@ import asyncio
 import json
 import sys
 import threading
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -56,24 +57,40 @@ class EgressProxy:
         """True while the proxy's server thread is running."""
         return self._thread is not None and self._thread.is_alive()
 
-    def start(self, host: str = "127.0.0.1", port: int = 0) -> int:
+    def start(self, host: str = "127.0.0.1", port: int = 0,
+              bind_timeout: float = 5.0) -> int:
         """Bind the proxy on ``host:port`` (ephemeral when port=0) and serve
-        in a background thread. Returns the bound port."""
+        in a background thread. Returns the bound port.
+
+        ``bind_timeout`` bounds how long the bind may wait for the requested
+        address to appear (the container-mode entrypoint binds an
+        internal-network IP that is attached after the container starts)."""
         self._loop = asyncio.new_event_loop()
 
         def _run() -> None:
             asyncio.set_event_loop(self._loop)
-            self._server = self._loop.run_until_complete(
-                asyncio.start_server(self._handle, host, port))
+            deadline = time.monotonic() + bind_timeout
+            while True:
+                try:
+                    self._server = self._loop.run_until_complete(
+                        asyncio.start_server(self._handle, host, port))
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.1)
             self._port = self._server.sockets[0].getsockname()[1]
             self._loop.run_forever()
 
         self._thread = threading.Thread(target=_run, daemon=True)
         self._thread.start()
-        deadline = datetime.now().timestamp() + 5.0
+        deadline = datetime.now().timestamp() + bind_timeout + 1.0
         while self._port is None:
+            if not self._thread.is_alive():
+                raise RuntimeError("egress proxy failed to bind")
             if datetime.now().timestamp() > deadline:
-                raise RuntimeError("egress proxy failed to bind within 5s")
+                raise RuntimeError(
+                    f"egress proxy failed to bind within {bind_timeout}s")
             threading.Event().wait(0.01)
         return self._port
 
@@ -323,8 +340,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy", required=True)
     parser.add_argument("--events", required=True)
     parser.add_argument("--dial-rewrites", default="{}")
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--bind-timeout", type=float, default=5.0)
     args = parser.parse_args(argv)
 
     proxy = EgressProxy(
@@ -332,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
         dial_rewrites=json.loads(args.dial_rewrites),
         event_file=Path(args.events),
     )
-    proxy.start(host=args.host, port=args.port)
+    proxy.start(host=args.host, port=args.port, bind_timeout=args.bind_timeout)
     threading.Event().wait()
     return 0
 

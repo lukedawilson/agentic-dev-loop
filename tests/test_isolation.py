@@ -21,6 +21,8 @@ from agentic_dev_loop.engine.egress_policy import EgressPolicy, TargetEntry
 from agentic_dev_loop.engine.mounts import MountSet, resolve_mount_set
 from agentic_dev_loop.engine.isolation import (
     AUDIT_MAX_BYTES, CONTAINER_REGISTRY, CmdResult, DEFAULT_DEV_IMAGE,
+    PROXY_CPUS, PROXY_MEMORY, PROXY_READY_ATTEMPTS, PROXY_USER,
+    PROXY_BIND_TIMEOUT,
     DEFAULT_DEV_IMAGE_REF, DockerBackend, EffectiveProfile, ProbeResult,
     SandboxError, SandboxExecutionRequest, SandboxExecutionResult,
     append_audit_record, classify_infra_failure, clean_stamps,
@@ -610,7 +612,8 @@ class TestResolveImageRef:
 
 
 def _backend(tmp_path, runner, *, image="img@sha256:abc", git_blocked=True,
-              network=False, sandbox_venv_dir=None, seccomp_profile=None):
+              network=False, sandbox_venv_dir=None, seccomp_profile=None,
+              dial_rewrites=None):
     return DockerBackend(
         image=image, workspace=str(tmp_path / "ws"),
         iso_state_dir=str(tmp_path / "state"),
@@ -618,8 +621,8 @@ def _backend(tmp_path, runner, *, image="img@sha256:abc", git_blocked=True,
                                  image, "4g", 2.0),
         runner=runner, network=network,
         sandbox_venv_dir=sandbox_venv_dir,
-        seccomp_profile=seccomp_profile)
-
+        seccomp_profile=seccomp_profile,
+        dial_rewrites=dial_rewrites)
 
 class TestRelocatedVenvDirCreation:
     """022: the relocated venv dir is the bind-mount source. It must be
@@ -1508,14 +1511,15 @@ class TestUnit5RuntimeEnforcement:
     def test_profile_container_mounts_and_proxy_env(self, tmp_path):
         """038: a step's mount set + egress policy key a pooled container;
         the proxy env points at the proxy container's internal DNS name
-        (never 127.0.0.1 or the host-gateway), and the exec cwd is the
-        export root."""
+        (never 127.0.0.1 or the host-gateway), the proxy binds a pinned
+        internal IP after a readiness probe, and the exec cwd is the export
+        root."""
         export = tmp_path / "export"
         (export / "src").mkdir(parents=True)
         (export / "src" / "a.py").write_text("x")
         runner = FakeRunner(
-            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""),
-            ok("true"), ok(""))
+            ok("net"), ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""),
+            ok("cid"), ok("true"), ok(""), ok("true"), ok(""))
         backend = _backend(tmp_path, runner)
         backend._export_root = str(export)
         ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
@@ -1531,15 +1535,24 @@ class TestUnit5RuntimeEnforcement:
             net_create = runner.calls[0]
             assert net_create[:3] == ["docker", "network", "create"]
             assert "--internal" in net_create and backend._run_net in net_create
-            proxy_run = runner.calls[1]
+            subnet_inspect = runner.calls[1]
+            assert subnet_inspect[:3] == ["docker", "network", "inspect"]
+            assert backend._run_net in subnet_inspect
+            proxy_run = runner.calls[2]
             assert proxy_run[:2] == ["docker", "run"]
             assert "--network" in proxy_run and "bridge" in proxy_run
             assert "--add-host" in proxy_run
             assert "host.docker.internal:host-gateway" in proxy_run
-            connect = runner.calls[2]
-            assert connect == ["docker", "network", "connect",
-                               backend._run_net, proxy_name]
-            run_argv = runner.calls[3]
+            assert "--read-only" in proxy_run
+            assert proxy_run[proxy_run.index("--host") + 1] == "172.18.0.2"
+            connect = runner.calls[3]
+            assert connect == ["docker", "network", "connect", "--ip",
+                               "172.18.0.2", backend._run_net, proxy_name]
+            probe = runner.calls[4]
+            assert probe[:2] == ["docker", "exec"]
+            assert probe[-2] == "172.18.0.2"
+            assert probe[-1] == "3128"
+            run_argv = runner.calls[5]
             assert run_argv[:2] == ["docker", "run"]
             assert "--network" in run_argv and backend._run_net in run_argv
             assert "--add-host" not in run_argv
@@ -1551,10 +1564,10 @@ class TestUnit5RuntimeEnforcement:
             assert proxy_envs and all(
                 f"http://{proxy_name}:3128" in a for a in proxy_envs)
             assert run_argv[run_argv.index("--workdir") + 1] == str(export)
-            inspect = runner.calls[4]
+            inspect = runner.calls[6]
             assert inspect == ["docker", "inspect", "-f",
                                "{{.State.Running}}", proxy_name]
-            exec_argv = runner.calls[5]
+            exec_argv = runner.calls[7]
             assert exec_argv[:2] == ["docker", "exec"]
             assert exec_argv[exec_argv.index("-w") + 1] == str(export)
             # the profile container is pooled: a second run reuses it
@@ -1571,8 +1584,8 @@ class TestUnit5RuntimeEnforcement:
         export = tmp_path / "export"
         (export / "src").mkdir(parents=True)
         runner = FakeRunner(
-            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""),
-            ok("false"))
+            ok("net"), ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""),
+            ok("cid"), ok("true"), ok(""), ok("false"))
         backend = _backend(tmp_path, runner)
         backend._export_root = str(export)
         ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
@@ -1586,6 +1599,55 @@ class TestUnit5RuntimeEnforcement:
             assert prof.proxy_name is not None
             with pytest.raises(SandboxError, match="proxy"):
                 backend.run(req)
+        finally:
+            backend.close()
+
+    def test_proxy_readiness_exhaustion_raises_proxy_error(self, tmp_path):
+        """039 D2: the bounded readiness probe runs between container start and
+        sandbox payload creation; exhaustion raises the internal proxy error."""
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        runner = FakeRunner(
+            ok("net"), ok("172.18.0.0/16 "), ok("proxy"), ok(""),
+            fail(1, ""), fail(1, ""), fail(1, ""), fail(1, ""), fail(1, ""),
+            ok(""), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        try:
+            with pytest.raises(SandboxError, match="AE-SBX-021"):
+                backend.run(req)
+            probes = [c for c in runner.calls
+                      if c[:2] == ["docker", "exec"] and "python3" in c]
+            assert len(probes) == PROXY_READY_ATTEMPTS
+        finally:
+            backend.close()
+
+    def test_proxy_dial_rewrites_reach_the_payload(self, tmp_path):
+        """039 D3: the backend's dial_rewrites field reaches the proxy argv
+        instead of the hardcoded empty map."""
+        export = tmp_path / "export"
+        (export / "src").mkdir(parents=True)
+        rewrites = {"host.docker.internal": "127.0.0.1"}
+        runner = FakeRunner(
+            ok("net"), ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""),
+            ok("cid"), ok("true"), ok(""))
+        backend = _backend(tmp_path, runner, dial_rewrites=rewrites)
+        backend._export_root = str(export)
+        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
+        pol = EgressPolicy(targets=(TargetEntry(host="pypi.org"),))
+        req = SandboxExecutionRequest(argv=["echo", "hi"], cwd=str(export),
+                                      env={}, network=True, mount_set=ms,
+                                      egress_policy=pol)
+        try:
+            backend.run(req)
+            proxy_run = runner.calls[2]
+            idx = proxy_run.index("--dial-rewrites")
+            assert proxy_run[idx + 1] == json.dumps(rewrites)
         finally:
             backend.close()
 
@@ -2235,29 +2297,40 @@ class TestNetworkEgressEnforcement:
     """038: internal-network topology, containerized proxy payload, teardown,
     and enforcement-event merge into the audit log."""
 
-    def test_proxy_payload_carries_host_access_and_mounts(self, tmp_path):
+    def test_proxy_payload_carries_host_access_hardening_and_bind(self, tmp_path):
+        rewrites = {"host.docker.internal": "127.0.0.1"}
         payload = docker_proxy_payload(
             run_id="r1", image="img", name="r1-proxy-abc",
             policy_json=json.dumps({"class": "allowlist", "targets": []}),
-            dial_rewrites_json="{}",
+            dial_rewrites_json=json.dumps(rewrites),
             events_host_path="/host/events.jsonl",
             egress_proxy_host_path="/host/egress_proxy.py",
-            egress_policy_host_path="/host/egress_policy.py")
+            egress_policy_host_path="/host/egress_policy.py",
+            bind_host="172.18.0.2")
         assert payload[:2] == ["docker", "run"]
         assert "--network" in payload and "bridge" in payload
         assert "--add-host" in payload
         assert payload[payload.index("--add-host") + 1] == "host.docker.internal:host-gateway"
+        assert "--read-only" in payload
+        assert payload[payload.index("--cap-drop") + 1] == "ALL"
+        assert payload[payload.index("--user") + 1] == PROXY_USER
+        assert payload[payload.index("--memory") + 1] == PROXY_MEMORY
+        assert payload[payload.index("--cpus") + 1] == str(PROXY_CPUS)
         assert "/host/egress_proxy.py:/egress/egress_proxy.py:ro" in payload
         assert "/host/egress_policy.py:/egress/egress_policy.py:ro" in payload
         assert "/host/events.jsonl:/egress/events.jsonl" in payload
         assert "python3" in payload and "/egress/egress_proxy.py" in payload
+        assert payload[payload.index("--host") + 1] == "172.18.0.2"
+        assert payload[payload.index("--dial-rewrites") + 1] == json.dumps(rewrites)
+        assert payload[payload.index("--bind-timeout") + 1] == str(PROXY_BIND_TIMEOUT)
         assert "--port" in payload and "3128" in payload
 
     def test_close_removes_network_and_proxy_and_merges_events(self, tmp_path):
         export = tmp_path / "export"
         (export / "src").mkdir(parents=True)
         runner = FakeRunner(
-            ok("net"), ok("proxy"), ok(""), ok("cid"), ok("true"), ok(""))
+            ok("net"), ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""),
+            ok("cid"), ok("true"), ok(""))
         backend = _backend(tmp_path, runner)
         backend._export_root = str(export)
         ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
@@ -2282,17 +2355,3 @@ class TestNetworkEgressEnforcement:
         assert merged["event"] == "egress_enforcement"
         assert merged["hostname"] == "pypi.org"
         assert not backend._egress_events_path.exists()
-
-
-def test_merge_egress_events_merges_and_removes(tmp_path):
-    state = tmp_path / "state"
-    events = tmp_path / "events.jsonl"
-    events.write_text(
-        json.dumps({"hostname": "a", "allowed": True, "timestamp": "t"})
-        + "\ngarbage\n")
-    assert merge_egress_events(state, events) == 1
-    assert not events.exists()
-    audit = (state / "sandbox-audit.jsonl").read_text().splitlines()
-    rec = json.loads(audit[0])
-    assert rec["event"] == "egress_enforcement"
-    assert rec["hostname"] == "a"

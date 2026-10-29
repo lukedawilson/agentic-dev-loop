@@ -363,3 +363,66 @@ def test_container_entrypoint_writes_events_file(tmp_path):
     rec = json.loads(lines[0])
     assert rec["hostname"] == "denied.example"
     assert rec["allowed"] is False
+
+def test_container_entrypoint_relays_allowed_dial(tmp_path):
+    """039 D6: the container-mode entrypoint binds, relays an allowed proxied
+    dial end-to-end to a real local upstream, and emits an allowed enforcement
+    event line."""
+    import http.server
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    class _Ok(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = b"relayed"
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    target = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Ok)
+    threading.Thread(target=target.serve_forever, daemon=True).start()
+    try:
+        target_port = target.server_address[1]
+        src = Path(__file__).resolve().parents[1] / "src" / "agentic_dev_loop" / "engine"
+        events = tmp_path / "events.jsonl"
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        policy_json = json.dumps({
+            "class": "allowlist",
+            "targets": [{"host": "127.0.0.1"}],
+        })
+        proc = subprocess.Popen(
+            [sys.executable, str(src / "egress_proxy.py"),
+             "--policy", policy_json, "--events", str(events),
+             "--host", "127.0.0.1", "--port", str(port)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5.0
+            connected = False
+            while time.monotonic() < deadline:
+                try:
+                    with socket.create_connection(("127.0.0.1", port), timeout=0.2):
+                        connected = True
+                        break
+                except OSError:
+                    time.sleep(0.05)
+            assert connected, "container-mode entrypoint did not bind"
+            req = (f"GET http://127.0.0.1:{target_port}/ HTTP/1.1\r\n"
+                   "Host: 127.0.0.1\r\n\r\n").encode()
+            resp = _send_raw(port, req)
+            assert b"200" in resp and b"relayed" in resp
+        finally:
+            proc.terminate()
+            proc.wait(timeout=5)
+        recs = [json.loads(line) for line in events.read_text().splitlines()]
+        assert any(r["hostname"] == "127.0.0.1" and r["allowed"] is True
+                   for r in recs)
+    finally:
+        target.shutdown()

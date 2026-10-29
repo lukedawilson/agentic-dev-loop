@@ -19,6 +19,7 @@ last-error.md) are never mounted - sandboxed code cannot reach them.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import json
 import math
 import os
@@ -102,6 +103,14 @@ _NETWORK_NAME_RE = re.compile(r"^[0-9a-f]{32}-net$")
 EGRESS_PROXY_PORT = 3128
 HOST_ACCESS_NETWORK = "bridge"
 EGRESS_EVENTS_PREFIX = "egress-events"
+
+# 039: hardened proxy-container runtime posture and readiness bounds.
+PROXY_USER = "65534:65534"
+PROXY_MEMORY = "64m"
+PROXY_CPUS = 0.5
+PROXY_BIND_TIMEOUT = 15.0
+PROXY_READY_ATTEMPTS = 5
+PROXY_READY_DELAY = 0.2
 
 
 class SandboxError(RuntimeError):
@@ -299,6 +308,37 @@ def proxy_url(proxy_name: str, port: int = EGRESS_PROXY_PORT) -> str:
 def egress_events_path(iso_state_dir: str | Path, run_id: str) -> Path:
     """The mounted enforcement-events file for one run (038, D6)."""
     return Path(iso_state_dir) / f"{EGRESS_EVENTS_PREFIX}-{run_id}.jsonl"
+
+
+def first_usable_ip(subnets: str) -> str | None:
+    """First usable non-gateway IPv4 address from one or more CIDR subnets."""
+    for token in subnets.split():
+        try:
+            network = ipaddress.ip_network(token, strict=False)
+        except ValueError:
+            continue
+        if network.version != 4:
+            continue
+        hosts = list(network.hosts())
+        if len(hosts) < 2:
+            continue
+        return str(hosts[1])
+    return None
+
+
+
+def proxy_readiness_argv(name: str, host: str,
+                         port: int = EGRESS_PROXY_PORT) -> list[str]:
+    """The in-container TCP-connect probe for proxy readiness (039, D2)."""
+    probe = (
+        "import socket,sys;"
+        "s=socket.socket();"
+        "s.settimeout(2);"
+        "s.connect((sys.argv[1], int(sys.argv[2])));"
+        "s.close()"
+    )
+    return ["docker", "exec", name, "python3", "-c", probe, host, str(port)]
+
 
 
 def mount_set_docker_flags(export_root: str, mount_set: MountSet) -> list[str]:
@@ -730,12 +770,16 @@ def docker_proxy_payload(*, run_id: str, image: str, name: str,
                          events_host_path: str,
                          egress_proxy_host_path: str,
                          egress_policy_host_path: str,
+                         bind_host: str,
                          port: int = EGRESS_PROXY_PORT,
                          host_network: str = HOST_ACCESS_NETWORK) -> list[str]:
-    """Exact argv for the containerized egress proxy (038, D2/D5). It is
-    created on the host-access network with a host-gateway mapping (D8), then
-    attached to the internal network so sandbox containers reach it only via
-    its internal DNS name. The policy is passed as JSON; the two engine
+    """Exact argv for the containerized egress proxy (038 D2/D5, 039 D1/D4).
+
+    Created on the host-access network with a host-gateway mapping (D8), then
+    attached to the internal network with the pinned ``bind_host``; the proxy
+    binds that internal address only, so the host-access attachment carries no
+    listener. Hardened with a read-only rootfs, dropped capabilities, a non-root
+    user, and memory/CPU limits. The policy is passed as JSON; the two engine
     modules are bind-mounted read-only so the image does not need the engine
     package installed."""
     payload = [
@@ -744,6 +788,10 @@ def docker_proxy_payload(*, run_id: str, image: str, name: str,
         "--label", f"agentic-dev-loop.run={run_id}",
         "--network", host_network,
         "--add-host", "host.docker.internal:host-gateway",
+        "--read-only",
+        "--cap-drop", "ALL",
+        "--user", PROXY_USER,
+        "--memory", PROXY_MEMORY, "--cpus", str(PROXY_CPUS),
         "-v", f"{egress_proxy_host_path}:/egress/egress_proxy.py:ro",
         "-v", f"{egress_policy_host_path}:/egress/egress_policy.py:ro",
         "-v", f"{events_host_path}:/egress/events.jsonl",
@@ -753,10 +801,12 @@ def docker_proxy_payload(*, run_id: str, image: str, name: str,
         "--policy", policy_json,
         "--events", "/egress/events.jsonl",
         "--dial-rewrites", dial_rewrites_json,
-        "--host", "0.0.0.0",
+        "--host", bind_host,
+        "--bind-timeout", str(PROXY_BIND_TIMEOUT),
         "--port", str(port),
     ]
     return payload
+
 
 def docker_provision_payload(*, run_id: str, image: str, workspace: str,
                              setup_cmd: str,
@@ -891,7 +941,8 @@ class DockerBackend(Sandbox):
                  export_root: str | None = None,
                  cache_mounts: list[tuple[str, str, str]] | None = None,
                  sync_excludes: list[str] | None = None,
-                 merge_on_conflict: list[str] | None = None):
+                 merge_on_conflict: list[str] | None = None,
+                 dial_rewrites: dict[str, str] | None = None):
         self._image = image
         self._workspace = workspace
         self._iso_state_dir = Path(iso_state_dir)  # host-only (audit)
@@ -927,6 +978,7 @@ class DockerBackend(Sandbox):
         # 029: append-style logs union-merged on a concurrent-edit conflict
         # instead of raising (host wins, export-only lines appended).
         self._merge_on_conflict = list(merge_on_conflict or ())
+        self._dial_rewrites = dict(dial_rewrites or {})
         self._baseline: dict[str, str] = {}
         # The profile-keyed pool (D-1/BR-10): profile key -> running container.
         self._pool: dict[tuple[str, bool], _ProfileContainer] = {}
@@ -1154,11 +1206,6 @@ class DockerBackend(Sandbox):
         if prof is None:
             prof = self._start_profile(key, mount_set, policy, request.network)
             self._pool[key] = prof
-        if request.network and not prof.started:
-            raise SandboxError(
-                "AE-SBX-013: networked execution requested but no networked "
-                "container is running - declare `network: true` on the step "
-                "(docs/setup.md §3)")
         if request.network:
             if prof.proxy_name is None:
                 raise SandboxError(
@@ -1238,7 +1285,8 @@ class DockerBackend(Sandbox):
         proxy_url_value: str | None = None
         if network and self._export_root is not None:
             proxy_name = proxy_container_name(self._run_id, key[0][:16])
-            self._start_proxy_container(proxy_name, policy)
+            self._start_proxy_container(proxy_name, policy,
+                                         self._dial_rewrites)
             proxy_url_value = proxy_url(proxy_name)
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
@@ -1261,36 +1309,80 @@ class DockerBackend(Sandbox):
                                  egress_policy=policy, proxy_name=proxy_name,
                                  started=True)
 
-    def _start_proxy_container(self, name: str, policy: EgressPolicy) -> None:
-        """Create one containerized proxy (038, D2/D5): host-access network
-        at create time, then attach the internal network; the events file is
-        pre-created so the single-file bind mount is a file, not a dir."""
+    def _start_proxy_container(self, name: str, policy: EgressPolicy,
+                               dial_rewrites: dict[str, str] | None = None) -> None:
+        """Create one containerized proxy (038 D2/D5, 039 D1-D4): host-access
+        network at create time with a pinned internal IP, then attach the internal
+        network; the proxy binds that address only and is readiness probed from
+        inside the container before the first sandbox exec (D2)."""
         self._ensure_run_network()
         events_host = self._egress_events_path
         events_host.parent.mkdir(parents=True, exist_ok=True)
         events_host.touch(exist_ok=True)
+        try:
+            os.chmod(events_host, 0o666)
+        except OSError:
+            pass
         policy_json = egress_proxy_module.policy_to_json(policy)
+        dial_rewrites = dict(dial_rewrites or {})
+        dial_rewrites_json = json.dumps(dial_rewrites, sort_keys=True)
+        bind_host = self._proxy_internal_ip()
         payload = docker_proxy_payload(
             run_id=self._run_id, image=self._image, name=name,
-            policy_json=policy_json, dial_rewrites_json="{}",
+            policy_json=policy_json, dial_rewrites_json=dial_rewrites_json,
             events_host_path=str(events_host),
             egress_proxy_host_path=str(Path(egress_proxy_module.__file__)),
             egress_policy_host_path=str(Path(egress_policy_module.__file__)),
-            port=EGRESS_PROXY_PORT)
+            bind_host=bind_host, port=EGRESS_PROXY_PORT)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             raise SandboxError(
                 f"AE-SBX-020: egress proxy container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
         connect = self._runner.run(
-            ["docker", "network", "connect", self._run_net, name], timeout=60)
+            ["docker", "network", "connect", "--ip", bind_host,
+             self._run_net, name], timeout=60)
         if connect.exit_code != 0:
             self._rm_container(name)
             raise SandboxError(
                 f"AE-SBX-020: egress proxy network attach failed: "
                 f"{connect.stderr.strip() or connect.stdout.strip()}")
+        if not self._wait_proxy_ready(name, bind_host):
+            self._rm_container(name)
+            raise SandboxError(
+                f"AE-SBX-021: egress proxy failed to bind "
+                f"{bind_host}:{EGRESS_PROXY_PORT} after "
+                f"{PROXY_READY_ATTEMPTS} readiness probes")
         self._register_container(name)
         self._proxy_containers.append(name)
+
+    def _proxy_internal_ip(self) -> str:
+        """Return the pinned first-usable IPv4 address on the internal network."""
+        inspect = self._runner.run(
+            ["docker", "network", "inspect", "-f",
+             "{{range .IPAM.Config}}{{.Subnet}} {{end}}", self._run_net],
+            timeout=30)
+        if inspect.exit_code != 0:
+            raise SandboxError(
+                f"AE-SBX-021: internal network inspect failed: "
+                f"{inspect.stderr.strip() or inspect.stdout.strip()}")
+        ip = first_usable_ip(inspect.stdout)
+        if ip is None:
+            raise SandboxError(
+                f"AE-SBX-021: internal network has no usable IPv4 subnet: "
+                f"{inspect.stdout.strip()!r}")
+        return ip
+
+    def _wait_proxy_ready(self, name: str, host: str) -> bool:
+        """Bounded in-container TCP-connect readiness probe (039 D2)."""
+        for _ in range(PROXY_READY_ATTEMPTS):
+            res = self._runner.run(proxy_readiness_argv(name, host),
+                                   timeout=15)
+            if res.exit_code == 0:
+                return True
+            time.sleep(PROXY_READY_DELAY)
+        return False
+
 
     def _proxy_alive(self, name: str) -> bool:
         """Query the daemon for proxy liveness (038 AE-SBX-018)."""
@@ -1809,7 +1901,8 @@ def _announce(msg: str) -> None:
 def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
                     state_dir: str | Path,
                     runner: CommandRunner | None = None,
-                    refresh: bool | None = None) -> Sandbox:
+                    refresh: bool | None = None,
+                    dial_rewrites: dict[str, str] | None = None) -> Sandbox:
     """Eager startup sequence (Q2): probe → image → materialise export →
     backend → ensure_image → create+start → pre-provision every declared setup
     (stamp-cached).
@@ -1866,7 +1959,8 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
         export_root=export_root, cache_mounts=cache_mounts,
         sync_excludes=list(cfg.sync_excludes),
-        merge_on_conflict=list(cfg.merge_on_conflict))
+        merge_on_conflict=list(cfg.merge_on_conflict),
+        dial_rewrites=dial_rewrites)
     _announce(f"preparing sandbox image {image} (first pull can take a while)")
     backend.ensure_image()
     _announce("sandbox image ready")
