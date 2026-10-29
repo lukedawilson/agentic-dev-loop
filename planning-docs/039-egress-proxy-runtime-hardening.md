@@ -1,6 +1,6 @@
 # 039-egress-proxy-runtime-hardening.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Follow-up to 038 (commit 5ee7936). Findings from the post-implementation
 code review of the 038 commit. 038's decisions and payload-level
