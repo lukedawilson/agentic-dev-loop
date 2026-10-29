@@ -42,6 +42,15 @@ def _load(tmp_path, data):
     return load_config(p)
 
 
+BRIEF_OK = (
+    "## Repo rules digest\n\nREPO RULES\n\n"
+    "## Unit scope and lane digest\n\nSCOPE\n\n"
+    "## Environment facts\n\n- offline; never fetch\n\n"
+    "## Open risks\n\nNone\n"
+)
+BRIEF_OK_NEW = BRIEF_OK.replace("SCOPE", "SCOPE NEW")
+
+
 BRIEF_STEP = {
     "name": "brief",
     "agent": "brief",
@@ -303,11 +312,11 @@ class TestBriefInputsHash:
 
 class TestBriefNode:
     def test_first_run_calls_agent_and_stores_hash(self, runtime, fake_agents):
-        fake_agents.set("brief", [("write", "attempt-brief.md", "BRIEF BODY")])
+        fake_agents.set("brief", [("write", "attempt-brief.md", BRIEF_OK)])
         update = make_brief_node(runtime, runtime.cfg.steps[0])(make_state())
         assert update["step_verdicts"] == {"brief": "pass"}
         assert update["failed"] is False
-        assert update["artifacts"] == {"brief": "BRIEF BODY"}
+        assert update["artifacts"] == {"brief": BRIEF_OK}
         assert update["brief_hashes"] == {
             "brief": brief_inputs_hash(runtime, runtime.cfg.steps[0],
                                        make_state()["docs"])}
@@ -316,7 +325,7 @@ class TestBriefNode:
         assert "## Environment facts\n\n- offline; never fetch" in msg
 
     def test_unchanged_inputs_skip_llm(self, runtime, fake_agents):
-        fake_agents.set("brief", [("write", "attempt-brief.md", "BRIEF BODY")])
+        fake_agents.set("brief", [("write", "attempt-brief.md", BRIEF_OK)])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         first = node(make_state())
         second = node(make_state(artifacts=first["artifacts"],
@@ -326,15 +335,15 @@ class TestBriefNode:
 
     def test_changed_inputs_rerun(self, runtime, fake_agents):
         fake_agents.set("brief", [
-            ("write", "attempt-brief.md", "OLD"),
-            ("write", "attempt-brief.md", "NEW"),
+            ("write", "attempt-brief.md", BRIEF_OK),
+            ("write", "attempt-brief.md", BRIEF_OK_NEW),
         ])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         first = node(make_state())
         (runtime.workspace / "AGENTS.md").write_text("EDITED")
         second = node(make_state(artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
-        assert second["artifacts"] == {"brief": "NEW"}
+        assert second["artifacts"] == {"brief": BRIEF_OK_NEW}
         assert fake_agents.agents_called() == ["brief", "brief"]
 
     def test_loader_doc_disk_edit_reruns_brief(self, runtime, fake_agents,
@@ -342,8 +351,8 @@ class TestBriefNode:
         plan = tmp_path / "plan.md"
         plan.write_text("PLAN V1")
         fake_agents.set("brief", [
-            ("write", "attempt-brief.md", "OLD"),
-            ("write", "attempt-brief.md", "NEW"),
+            ("write", "attempt-brief.md", BRIEF_OK),
+            ("write", "attempt-brief.md", BRIEF_OK_NEW),
         ])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         first = node(make_state(docs={"plan.md": "PLAN V1"},
@@ -354,7 +363,7 @@ class TestBriefNode:
                                  doc_sources={"plan.md": str(plan)},
                                  artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
-        assert second["artifacts"] == {"brief": "NEW"}
+        assert second["artifacts"] == {"brief": BRIEF_OK_NEW}
         assert fake_agents.agents_called() == ["brief", "brief"]
 
     def test_empty_response_is_unclear(self, runtime, fake_agents):
@@ -569,7 +578,14 @@ class TestBriefPipeline:
         monkeypatch.chdir(repo)
         monkeypatch.setenv("TEST_LLM_KEY", "sk-test")
 
-        fake_agents.set("brief", [("write", "attempt-brief.md", "BRIEF DIGEST")])
+        brief_digest = (
+            "## Repo rules digest\n\nREPO RULES\n\n"
+            "## Unit scope and lane digest\n\nBRIEF DIGEST\n\n"
+            "## Environment facts\n\n"
+            "- the workspace is an export with no .git; verify with find/ls, never git status\n\n"
+            "## Open risks\n\nNone\n"
+        )
+        fake_agents.set("brief", [("write", "attempt-brief.md", brief_digest)])
         fake_agents.set("dev", [("write", "implementation-summary.md", "did the work")])
 
         ok, attempts = run_pipeline("pipeline.yaml", _args())

@@ -43,6 +43,11 @@ def _merge_artifacts(a: dict[str, str], b: dict[str, str]) -> dict[str, str]:
     return {**a, **b}
 
 
+def _merge_counts(a: dict[str, int], b: dict[str, int]) -> dict[str, int]:
+    """Accumulate the per-step brief coverage retry counts (041)."""
+    return {**a, **b}
+
+
 class LoopState(TypedDict):
     """State threaded through the graph. `notes` accumulates across attempts
     (append reducer), `artifacts` accumulates across stages (merge reducer);
@@ -65,6 +70,7 @@ class LoopState(TypedDict):
     retry_target: str | None           # where the bump node loops back to
     thread_id: str
     brief_hashes: Annotated[dict[str, str], _merge_artifacts]  # step name -> input hash (033)
+    brief_retries: Annotated[dict[str, int], _merge_counts]  # step name -> coverage retries used (041)
 
 
 def build_graph(runtime: Runtime, checkpointer=None):
@@ -215,6 +221,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             "retry_target": None,
             "thread_id": thread_id,
             "brief_hashes": {},
+            "brief_retries": {},
         }
     bus = viz_bus
     with SqliteSaver.from_conn_string(db) as saver:

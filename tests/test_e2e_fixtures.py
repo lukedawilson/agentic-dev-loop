@@ -62,9 +62,20 @@ def _script_test(*behaviors):
     _COMMAND_QUEUE[:] = list(behaviors)
 
 
+_BRIEF_DIGEST = (
+    "## Repo rules digest\n\n# AGENTS.md\n# coding-standards-ddd.yaml\n\n"
+    "## Unit scope and lane digest\n\nplan scope\n\n"
+    "## Environment facts\n\n"
+    "- the workspace is an export with no .git; verify with find/ls, never git status\n"
+    "- the sandbox is network-off by default; never run package-manager fetches\n"
+    "- Python packages resolve from .venv-sandbox; run .venv-sandbox/bin/python\n\n"
+    "## Open risks\n\nNone\n"
+)
+
+
 def _passing_scripts(fake_agents, **overrides):
     scripts = {
-        "brief": [("write", "attempt-brief.md", "Brief digest.\n")],
+        "brief": [("write", "attempt-brief.md", _BRIEF_DIGEST)],
         "dev": [("write", "implementation-summary.md", "Implemented the fix.\n")],
         "review": [("write", "review-findings.md",
                     "Looks good.\n\nVERDICT: APPROVED\n")],

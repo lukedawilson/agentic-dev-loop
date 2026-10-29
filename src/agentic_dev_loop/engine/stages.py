@@ -34,6 +34,7 @@ from openhands.sdk import Conversation
 
 from .agent_error_guide import guide_section
 from .agents import load_agent, register_sandbox_terminal
+from .brief_coverage import extract_anchors, missing_anchors
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
 from agentic_dev_loop.core.paths import _has_wildcards
 from .deps import extension_message, parse_missing_dependencies, policy_injection
@@ -57,6 +58,7 @@ if TYPE_CHECKING:
 DEFAULT_MAX_ITERATIONS = 500
 DEFAULT_COMMAND_TIMEOUT = 600.0  # seconds - a pytest-class suite budget
 LAST_ERROR = "last-error.md"
+COVERAGE_RETRY_CAP = 3  # per-run brief coverage re-runs before the run fails (041)
 ARTIFACT_CONTEXT_CAP = 24_000  # chars per artifact injected into a step's context
 CUSTOM_PROMPT_HEADING = "Run-specific instructions"
 
@@ -554,6 +556,23 @@ def resolve_brief_inputs(runtime: Runtime, step: StepConfig
     return included, list(step.brief_inputs.env_facts)
 
 
+def _brief_anchors(runtime: Runtime, step: StepConfig) -> list[str]:
+    """The mechanical anchor set for a brief step (041), derived from the
+    resolved ``brief_inputs.include`` files only - plan docs reach dev/review
+    verbatim through the loader channel, so their sections need no anchor
+    enforcement. Duplicate headings across files merge into one anchor."""
+    included, _ = resolve_brief_inputs(runtime, step)
+    anchors: list[str] = []
+    for content in included.values():
+        anchors.extend(extract_anchors(content))
+    return list(dict.fromkeys(anchors))
+
+
+def _coverage_note_text(missing: list[str]) -> str:
+    """The missing-items list for the ``## Coverage retry`` section (041)."""
+    return "\n".join(f"- {item}" for item in missing)
+
+
 def validate_brief_inputs(workspace: Path, step: StepConfig) -> None:
     """Fail fast on ``brief_inputs.include`` entries that name no files (033).
 
@@ -620,13 +639,16 @@ def brief_inputs_hash(runtime: Runtime, step: StepConfig,
 
 def build_brief_context(runtime: Runtime, step: StepConfig,
                         docs: dict[str, str],
-                        doc_sources: dict[str, str] | None = None) -> str:
+                        doc_sources: dict[str, str] | None = None,
+                        coverage_note: str | None = None) -> str:
     """Assemble the brief agent's task message (033): the always-on
     agent-facing error guide (034), the resolved unit/plan docs (re-read from
     disk where sources are known), the closed ``brief_inputs.include`` file
     set, the run-specific instructions appended from ``custom_prompt`` (040),
-    and the env-facts block. Prior verdicts and feedback are deliberately
-    absent - the notes channel delivers them per attempt."""
+    and the env-facts block. A ``coverage_note`` (041) appends a correction
+    request against the digest contract - it is not prior verdicts or
+    feedback, so the 033 rule is unaffected. Prior verdicts and feedback are
+    deliberately absent - the notes channel delivers them per attempt."""
     sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
     parts = [guide_section()]
     parts += [f"## {name}\n\n{content}" for name, content in sections.items()]
@@ -635,6 +657,13 @@ def build_brief_context(runtime: Runtime, step: StepConfig,
     if env_facts:
         parts.append("## Environment facts\n\n"
                      + "\n".join(f"- {fact}" for fact in env_facts))
+    if coverage_note is not None:
+        parts.append(
+            "## Coverage retry\n\n"
+            "The captured brief is missing the following required items. "
+            "Regenerate the digest so every listed item appears on its own "
+            "line, verbatim where the contract requires verbatim:\n\n"
+            + coverage_note)
     return "\n\n".join(parts)
 
 
@@ -789,7 +818,13 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
     LLM call is skipped entirely. A changed include file or env fact re-runs
     the step and refreshes the hash. Prior verdicts and feedback never enter
     the brief message - they already reach dev/review through the notes
-    channel."""
+    channel.
+
+    The 041 coverage gate runs after every successful capture AND on the reuse
+    path: the four section headings, the include-file anchors, and the env
+    facts must all survive. A miss consumes one per-run retry unit (cap 3) and
+    re-runs the agent with a ``## Coverage retry`` correction note. Exhausting
+    the budget writes last-error.md and fails the run."""
     captures = step.artifact is not None or bool(step.produces)
 
     def node(state: dict) -> dict:
@@ -800,14 +835,9 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
         try:
             current_hash = brief_inputs_hash(runtime, step, state["docs"],
                                              state.get("doc_sources"))
-            if (state.get("artifacts", {}).get(step.name) is not None
-                    and state.get("brief_hashes", {}).get(step.name) == current_hash):
-                print(f"[{subject}] {step.name} brief inputs unchanged - reusing.",
-                      flush=True)
-                merged = {**state["step_verdicts"], step.name: "pass"}
-                return {"step_verdicts": merged, "failed": False}
-            message = build_brief_context(runtime, step, state["docs"],
-                                          state.get("doc_sources"))
+            anchors = _brief_anchors(runtime, step)
+            env_facts = (list(step.brief_inputs.env_facts)
+                         if step.brief_inputs is not None else [])
         except Exception:
             err = redact_values(traceback.format_exc(), runtime.secrets.values())
             print(err[-4000:], file=sys.stderr, flush=True)
@@ -816,6 +846,24 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
                 f"# Brief step failed\n\n```\n{err[-4000:]}\n```\n",
                 encoding="utf-8")
             return {"failed": True, "failed_step": step.name}
+
+        existing = state.get("artifacts", {}).get(step.name)
+        reused = (existing is not None
+                  and state.get("brief_hashes", {}).get(step.name) == current_hash)
+
+        if reused and not missing_anchors(existing, anchors, env_facts):
+            print(f"[{subject}] {step.name} brief inputs unchanged - reusing.",
+                  flush=True)
+            merged = {**state["step_verdicts"], step.name: "pass"}
+            return {"step_verdicts": merged, "failed": False}
+
+        coverage_note = None
+        if reused:
+            coverage_note = _coverage_note_text(
+                missing_anchors(existing, anchors, env_facts))
+        message = build_brief_context(runtime, step, state["docs"],
+                                      state.get("doc_sources"),
+                                      coverage_note=coverage_note)
 
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
         result = runtime.run_agent(step.agent, message,
@@ -834,11 +882,38 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
                                             result.truncated, max_iterations)],
                     "retry_target": _unclear_target(runtime, step)}
 
+        missing = missing_anchors(result.response or "", anchors, env_facts)
+        if missing:
+            prev_hash = state.get("brief_hashes", {}).get(step.name)
+            retries = (0 if prev_hash != current_hash
+                       else state.get("brief_retries", {}).get(step.name, 0))
+            if retries >= COVERAGE_RETRY_CAP:
+                dropped = "\n".join(f"- {item}" for item in missing)
+                runtime.state_dir.mkdir(parents=True, exist_ok=True)
+                (runtime.state_dir / LAST_ERROR).write_text(
+                    f"# Brief coverage failed\n\n"
+                    f"The brief step repeatedly dropped the following "
+                    f"required items:\n\n{dropped}\n",
+                    encoding="utf-8")
+                print(f"[{subject}] {step.name} brief coverage retries exhausted - "
+                      f"persistent drops: {', '.join(missing)}", flush=True)
+                return {"failed": True, "failed_step": step.name}
+            print(f"[{subject}] {step.name} brief coverage miss on attempt "
+                  f"{attempt}, retrying.", flush=True)
+            merged = {**state["step_verdicts"], step.name: None}
+            update = {"step_verdicts": merged, "retry_target": step.name}
+            if captures and result.response is not None:
+                update["artifacts"] = {step.name: result.response}
+                update["brief_hashes"] = {step.name: current_hash}
+                update["brief_retries"] = {step.name: retries + 1}
+            return update
+
         merged = {**state["step_verdicts"], step.name: "pass"}
         update = {"step_verdicts": merged, "failed": False}
         if captures and result.response is not None:
             update["artifacts"] = {step.name: result.response}
             update["brief_hashes"] = {step.name: current_hash}
+            update["brief_retries"] = {step.name: 0}
         return update
 
     return node
