@@ -6,9 +6,10 @@
 
 Engine: a new per-step config key that appends operator-supplied text
 (or the contents of a file the operator names) to an agent step's
-prompt. No consumer changes required for the engine half. README
-documentation is the only tooling-path deliverable and needs a human
-commit.
+prompt. No consumer changes required for the engine half. Tooling-path
+deliverables: README documentation (consumer repo, human commit) and a
+qa.agent.md scoping rewording (engine repo, host-side commit at
+landing, Change 4).
 
 ## Context
 
@@ -30,6 +31,18 @@ Worked example: a pipeline's qa step can carry
 `custom_prompt: tests/qa-plan.md` to inject a hand-written test plan
 for that run, or `custom_prompt: "verify the export tab first, then
 the asset upload flow"` as inline guidance.
+
+Landing dependency (039 Change 7): qa.agent.md currently phrases every
+plan-mandated execution as a command "the plan's QA section lists under
+'QA executes first-hand'". Once 040 lands, QA plans travel through
+`custom_prompt` (for example `custom_prompt: tests/qa-plan.md`) instead
+of a plan doc's QA section, so those prompt references must be reworded
+to point at the run-specific instructions appended from
+`custom_prompt`, and the "QA executes first-hand" marking moves into
+the custom_prompt text itself. The rewording lands with the 040
+release, never before: until `custom_prompt` ships, the plan-doc QA
+section is the operative mechanism and the prompt must keep matching
+it. Change 4 carries this.
 
 ## Decisions
 
@@ -62,6 +75,19 @@ action steps never see it.
 pipeline.yaml reference table row for `custom_prompt` plus one sentence
 in the agent steps docs. Needs a human commit.
 
+### 4. qa.agent.md scoping rewording (engine repo, host-side)
+
+Rename the source of plan-mandated QA executions in
+`agentic-dev-loop/sdk_agents/qa.agent.md` from "the plan's QA section"
+to the run-specific instructions appended from `custom_prompt` (the
+"QA executes first-hand" marking moves into the custom_prompt text).
+Touch every reference: the intro, WORKFLOW step 1, the PROBE-PLAN
+"Never run tests, except plan-mandated execution" bullet, the RULES
+pytest line, and the "Plan-mandated evidence" bullet. Committed
+host-side with the 040 release, not before, so the prompt matches the
+operative mechanism at every point (same mechanics as 039 Change 7:
+the file sits outside the loop commit boundary, plan 020).
+
 ## Verification
 
 - Config tests: literal text round-trips; an existing-file path reads
@@ -72,6 +98,8 @@ in the agent steps docs. Needs a human commit.
   artifacts; a step without it is unchanged.
 - Full pytest suite green.
 - ASCII only, no em dash, no consumer name (repo rules).
+- qa.agent.md self-check after Change 4: no remaining reference to
+  "the plan's QA section".
 
 ## Non-goals
 
