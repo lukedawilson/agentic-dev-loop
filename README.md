@@ -286,11 +286,13 @@ steps:
   a command like `curl ... -o spec.json` has no writable cwd to write into.
   Declare `mounts: [{ path: ".", mode: rw }]` (or a narrower rw path) for any
   networked step that needs to produce files.
-- **`network: true` is now scoped by the `egress:` allowlist.** A networked
-  step's traffic is forced through an engine-run per-policy egress proxy
-  (injected via `HTTP_PROXY`/`HTTPS_PROXY` and reached through the
-  `host.docker.internal` host-gateway); a request to an undeclared host is
-  denied and logged as an enforcement event. The engine never adds an
+- **`network: true` is scoped by the `egress:` allowlist, and egress is
+  structurally enforced.** A networked step runs on a per-run internal
+  docker network with no route to the host. Its traffic is forced
+  through a containerized egress proxy (injected via
+  `HTTP_PROXY`/`HTTPS_PROXY`, pointed at the proxy container's DNS name
+  on the internal network); a request to an undeclared host is denied
+  and logged as an enforcement event. The engine never adds an
   undeclared target. `egress: { class: browser }` is the explicit
   broad-but-logged class (every connection logged, nothing filtered); command
   and agent steps default to a strict allowlist.
@@ -300,16 +302,16 @@ steps:
   to exactly the declared hosts for that stage; the default stays network-off
   everywhere. Reserve it for stages that need it (QA, integration). The
   residual risks are documented in [docs/setup.md](docs/setup.md).
-- **Host-service reachability (planned - planning-docs/037, 038).** A host
-  service reached at `host.docker.internal` through the proxy fails today:
-  the policy admits it, but the proxy dials from the host, where that
-  container-only name does not resolve (a 502 for the client). 037 rewrites
-  `host.docker.internal` to host loopback at the proxy dial site, so signed
-  host-service traffic (an S3 SDK against a local MinIO, say) reaches the
-  host through the enforced, logged path. 038 then replaces the
-  host-gateway model with a per-run internal network: sandboxes get no host
-  route, and a containerized proxy on a second host-access network is the
-  only egress path.
+- **Host-service reachability (planning-docs/037, 038).** The egress
+  proxy is a container on the run's internal network with a second
+  host-access attachment carrying the `host.docker.internal`
+  host-gateway alias, so the name resolves natively inside the proxy
+  container and host services (an S3 SDK against a local MinIO, say)
+  are reached through the enforced, logged path. Sandbox containers
+  have no host route: the internal network carries no default route to
+  the host, and sandbox containers get no host-gateway alias.
+  `dial_rewrites` on the proxy remains the platform override for hosts
+  where the alias does not resolve.
 
 ### Sync-back conflicts (host edits during a run)
 
