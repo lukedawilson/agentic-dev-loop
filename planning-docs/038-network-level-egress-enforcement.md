@@ -1,6 +1,6 @@
 # 038-network-level-egress-enforcement.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Merges and supersedes the former dial-rewrite stopgap
 (`proxy-dial-rewrite-for-host-services.md`); that file is deleted by
