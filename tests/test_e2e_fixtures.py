@@ -13,6 +13,7 @@ default viz port. Kill behavior itself is covered in test_actions.py.
 
 import shutil
 import subprocess
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -74,6 +75,34 @@ def _passing_scripts(fake_agents, **overrides):
         fake_agents.set(agent, behaviors)
 
 
+def _materialize_referenced_docs(pipeline_path: Path, workspace: Path) -> None:
+    """Create a stub for every file the copied pipeline references, derived
+    from the pipeline config itself (additional_files plus the brief step's
+    brief_inputs.include) so future pipeline doc additions can never break
+    the fixture again. Replaces the hand-written stubs: a34 fixed the ERD
+    case by hand, 4b1cbd6 hand-fixed the 038/CHANGELOG/known-issues trio.
+    Literal include entries only: a wildcard cannot be stub-materialized,
+    so it raises instead of silently degrading."""
+    cfg = load_config(pipeline_path)
+    targets: list[Path] = []
+    for rel in cfg.additional_files:
+        targets.append(pipeline_path.parent / rel)
+    for step in cfg.steps:
+        if step.brief_inputs is None:
+            continue
+        for spec in step.brief_inputs.include:
+            if any(ch in spec for ch in "*?["):
+                raise RuntimeError(
+                    "e2e fixture cannot materialize wildcard "
+                    f"brief_inputs include: {spec!r}")
+            targets.append(workspace / spec)
+    for target in targets:
+        if target.is_file():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f"# {target.name}\n", encoding="utf-8")
+
+
 @pytest.fixture
 def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
     """Byte-identical copy of the shipped example as a clean git repo,
@@ -96,21 +125,13 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
     example_pipeline.write_text(
         example_pipeline.read_text().replace(
             "agents_dir: sdk_agents", "agents_dir: sdk_agents\nstate_dir: .pr", 1))
-    (repo / "README.md").write_text("# README\n")
-    # 033 brief_inputs.include resolves against the workspace root - the
-    # shipped example lists these repo-rule files, so the consumer copy must
-    # carry them (the real repo does).
-    (repo / "AGENTS.md").write_text("# Repo rules\n")
-    (repo / "coding-standards-ddd.yaml").write_text("standards: true\n")
-    # The example pipeline lists the domain model as an additional_files
-    # sibling; the consumer copy must carry it (the real repo does).
-    (repo / "aidlc-docs").mkdir(exist_ok=True)
-    (repo / "aidlc-docs" / "domain-model-erd.md").write_text("# Domain model\n")
-    (repo / "planning-docs").mkdir(exist_ok=True)
-    (repo / "planning-docs" / "038-network-level-egress-enforcement.md").write_text("# 038\n")
-    (repo / "CHANGELOG.md").write_text("# Changelog\n")
-    (repo / "docs").mkdir(exist_ok=True)
-    (repo / "docs" / "known-issues.md").write_text("# Known issues\n")
+    # Every file the shipped pipeline references (additional_files plus the
+    # brief step's brief_inputs.include) must exist in the consumer copy, or
+    # the engine fails fast at load. Derive stubs from the copied
+    # pipeline.yaml so future doc additions can never break the fixture
+    # again (a34 fixed the ERD case by hand; 4b1cbd6 hand-fixed the
+    # 038/CHANGELOG/known-issues trio; derivation ends the pattern).
+    _materialize_referenced_docs(example_pipeline, repo)
     monkeypatch.chdir(repo)
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)
@@ -132,6 +153,61 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
 def _log(repo: Path) -> str:
     return subprocess.run(["git", "log", "--oneline"], cwd=repo,
                           capture_output=True, text=True, check=True).stdout
+
+
+def _stub_pipeline(tmp_path: Path, additional: list[str],
+                   include: list[str]) -> tuple[Path, Path]:
+    """Minimal valid pipeline.yaml whose referenced files are all missing,
+    for pinning the stub-derivation helper directly."""
+    workspace = tmp_path / "repo"
+    pdir = workspace / "agentic-dev-loop"
+    pdir.mkdir(parents=True)
+    pipeline = pdir / "pipeline.yaml"
+    pipeline.write_text(textwrap.dedent(f"""
+        name: stub-derivation
+        llm:
+          model: x
+          api_key_env: OPENAI_API_KEY
+        agents_dir: sdk_agents
+        deps_policy: open
+        additional_files: {additional}
+        steps:
+          - name: brief
+            agent: brief
+            produces: [attempt-brief.md]
+            brief_inputs:
+              include: {include}
+              env_facts: []
+        """))
+    return pipeline, workspace
+
+
+class TestMaterializeReferencedDocs:
+    """The consumer_repo fixture derives pipeline-referenced stubs from the
+    copied pipeline.yaml (see _materialize_referenced_docs). Pin the
+    derivation itself: missing additional_files and brief_inputs.include
+    entries get a stub, existing files are never overwritten, and wildcard
+    includes raise (a wildcard cannot be stub-materialized, and silent
+    fallbacks are forbidden)."""
+
+    def test_missing_entries_are_stubbed(self, tmp_path):
+        pipeline, workspace = _stub_pipeline(
+            tmp_path, ["../a.md", "../docs/b.md"], ["rules.md"])
+        _materialize_referenced_docs(pipeline, workspace)
+        assert (workspace / "a.md").is_file()
+        assert (workspace / "docs" / "b.md").is_file()
+        assert (workspace / "rules.md").is_file()
+
+    def test_existing_files_are_not_overwritten(self, tmp_path):
+        pipeline, workspace = _stub_pipeline(tmp_path, ["../a.md"], [])
+        (workspace / "a.md").write_text("keep\n")
+        _materialize_referenced_docs(pipeline, workspace)
+        assert (workspace / "a.md").read_text(encoding="utf-8") == "keep\n"
+
+    def test_wildcard_include_raises(self, tmp_path):
+        pipeline, workspace = _stub_pipeline(tmp_path, [], ["*.md"])
+        with pytest.raises(RuntimeError, match="wildcard"):
+            _materialize_referenced_docs(pipeline, workspace)
 
 
 class TestHistoricalFixtures:
