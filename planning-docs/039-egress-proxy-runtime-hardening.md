@@ -12,7 +12,8 @@ daemon behavior. It does not reopen any 038 decision.
 
 Engine: `isolation.py` (proxy payload, lifecycle, readiness),
 `egress_proxy.py` (container-mode entrypoint), tests. One tooling-path
-deliverable: a `qa.agent.md` rule change (Change 7, human commit).
+deliverable: a `qa.agent.md` rule change (Change 7), committed
+host-side with this plan.
 
 ## Context
 
@@ -117,14 +118,14 @@ failure path.
   runs between container start and sandbox payload creation; probe
   success proceeds; probe exhaustion raises the proxy error.
 
-### 7. qa.agent.md carve-out (tooling path, human commit)
+### 7. qa.agent.md carve-out (tooling path, committed host-side)
 
 `agentic-dev-loop/sdk_agents/qa.agent.md` gains a plan-scoped
-test-execution carve-out. The dev agent writes the edit (rw mount); the
-qa stage loads the file from the workspace at stage start, so the edit
-takes effect for this run's own QA; the commit action excludes the
-file (tooling path), so a human commits it, riding with the pending
-038 Change 4 edit to the same file. Exact rules added:
+test-execution carve-out, committed host-side with this plan (the
+loop's commit action excludes the file by design, plan 020). The qa
+stage loads the file from the workspace at stage start, so the
+committed prompt governs this run's QA; no in-run dev edit is needed.
+Exact rules added:
 
 - Replace the absolute pytest ban with: never run pytest or any test
   command EXCEPT commands the plan's QA section explicitly lists under
@@ -179,9 +180,10 @@ first-hand evidence, not a citation of the dev summary or test gate.
 
 ## Tooling-path deliverables
 
-`agentic-dev-loop/sdk_agents/qa.agent.md` (Change 7). Human commit
-required; rides with 038 Change 4 (persona-scope section, same file,
-still pending).
+`agentic-dev-loop/sdk_agents/qa.agent.md` (Change 7 plus 038 Change
+4's persona-scope section, same file), committed host-side with this
+plan. The consumer repo copy of the qa prompt (038 Change 4, both
+repos) remains a human commit in that repo.
 
 ## Verification
 
@@ -207,10 +209,9 @@ still pending).
 - The daemon-behavior test exercises the entrypoint over loopback
   only, not docker networking; accepted, matching the suite's existing
   no-docker constraint.
-- The qa.agent.md carve-out takes effect only if the dev agent writes
-  it before the qa stage starts; the QA contract's Change 7 self-check
-  catches a missing or bad edit, and the review stage sees the same
-  file, but a human commit is still required to persist it.
+- The consumer repo copy of the qa prompt is outside this repo's
+  reach; landing it there is a human action (038 Change 4), and until
+  it lands the consumer runs keep the old prompt.
 - The QA contract hard-requires first-hand execution, which costs QA
   turn budget; the scoped four-file pytest run plus greps is bounded,
   and the contract's stop rule keeps it from sprawling.
