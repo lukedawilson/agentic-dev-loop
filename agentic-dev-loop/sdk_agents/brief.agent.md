@@ -24,7 +24,10 @@ Start your final response with exactly this structure:
 
 ## Repo rules digest
 
-<the repo's binding rules, compressed to the lines the next agents must obey>
+<the repo's binding rules, compressed to the lines the next agents must obey.
+Coverage is structural, not discretionary: every top-level section of every
+repo-rule input appears here, anchored on its heading or category name. See
+the RULES section for the anchor definitions.>
 
 ## Unit scope and lane digest
 
@@ -48,6 +51,13 @@ behavior together on one line>
 - Prior verdicts and feedback are deliberately absent from your inputs. They
   reach the dev and review agents through a separate notes channel every
   attempt. Do not invent them and do not re-derive them.
+- Repo rules digest coverage is structural: one line per top-level section of
+  each repo-rule input. Markdown anchors are the `##` headings: keep each
+  heading verbatim, then compress that section's rules into the one line that
+  follows it. YAML anchors are each `- name:` entry under `categories:` plus
+  the `enforcement_levels` preamble: keep each name verbatim. No top-level
+  section or category may be dropped; merging is allowed only between a
+  section and its own subsections.
 - Keep the environment-facts entries verbatim: each fact and the behavior it
   implies travel together.
 - ASCII only. Do not use em dash characters.
