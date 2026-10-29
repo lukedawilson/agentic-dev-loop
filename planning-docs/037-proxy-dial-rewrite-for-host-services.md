@@ -2,9 +2,6 @@
 
 > **Status: PLANNED**
 
-Sequencing: first of the security-domain pair (037 then 038). After
-that, per the user's priority order: 035, 034, 036.
-
 ## Scope
 
 Engine (egress proxy dial rewrite), plus one prompt section in the qa
@@ -43,7 +40,7 @@ already admitted.
 | D1 | Rewrite `host.docker.internal` to a host-reachable address only at the proxy's upstream dial site; never in the request line, the Host header, or the policy input | AGREED |
 | D2 | The rewrite default is `host.docker.internal` to `127.0.0.1` (host loopback is correct on macOS Docker Desktop and for published ports on Linux); the mapping is a dict on EgressProxy so platforms and tests can override | AGREED |
 | D3 | NO_PROXY stays `localhost,127.0.0.1`. The NO_PROXY bypass is rejected | AGREED |
-| D4 | qa agent prompts gain an environment-contract section: local dev container, application-testing layer, not staging; never modify proxy env vars inline; report unreachable host services instead of working around them | AGREED |
+| D4 | qa agent prompts gain a persona scope section (folded in from the user's counterproposal; supersedes the earlier environment-contract wording): the step is an application tester in a local dev container, not staging; test the application's product behavior; if a dependency or host service is unreachable, report it and move on; never debug the harness, the sandbox, or infrastructure; never modify proxy env vars inline | AGREED |
 | D5 | This is the stopgap; 038 supersedes the enforcement model, and the dial rewrite is retained inside 038's proxy container | AGREED |
 
 ## Changes
@@ -58,23 +55,24 @@ the dial, enforcement events are recorded as today, and the Host header
 is forwarded with the original hostname (rewriting it would break
 signed requests such as S3 SigV4, which signs the Host header).
 
-### 2. QA environment-contract section (tooling path, both repos)
+### 2. QA persona scope section (tooling path, both repos)
 
 New section in the qa agent prompt (engine repo and consumer repo
 copies, identical text):
 
-- This step runs in a local dev container, not staging. It is an
-  application-testing layer.
+- You are an application tester in a local dev container, not staging.
+  Test the application's product behavior.
 - `127.0.0.1` services belong to the container itself. Host services
   are reached at `host.docker.internal` through the sandbox egress
   proxy.
+- If a dependency or host service is unreachable, report the failure
+  and the code path in your final response and move on. Do not debug
+  the harness, the sandbox, or infrastructure.
 - Real external infrastructure (for example real R2, real deploy) is
   out of scope and not verifiable in this sandbox; do not burn turns
   trying.
 - Never modify proxy environment variables (`HTTP_PROXY`,
-  `HTTPS_PROXY`, `NO_PROXY`) on commands or in processes you start. If
-  a host service is unreachable, report the failure and the code path
-  in your final response instead of working around the proxy.
+  `HTTPS_PROXY`, `NO_PROXY`) on commands or in processes you start.
 
 Both copies are tooling paths and need a human commit.
 

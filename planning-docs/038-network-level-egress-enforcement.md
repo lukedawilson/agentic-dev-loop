@@ -2,9 +2,6 @@
 
 > **Status: PLANNED**
 
-Sequencing: second of the security-domain pair (037 then 038). After
-that, per the user's priority order: 035, 034, 036.
-
 ## Scope
 
 Engine (sandbox network topology, proxy containerization, lifecycle).

@@ -58,7 +58,7 @@ Push credentials stay out of the sandbox. Existing constraints stand: argv-style
 
 ## Dependencies / sequencing
 
-**Self-contained:** no work item or verification step in this plan requires 019's code. The only overlap is shared principles (secrets out of the sandbox) and the cross-ref map below. Recommended order - 019 first (secret exfiltration is the higher-likelihood exposure), then 020 - but either can land independently.
+**Self-contained:** no work item or verification step in this plan requires 019's code. The only overlap is shared principles (secrets out of the sandbox) and the cross-ref map below. The two plans can land independently.
 
 ## Workspace-narrowing map (cross-refs, not this unit's scope)
 

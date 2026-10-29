@@ -200,6 +200,7 @@ steps:
 | `stop_when:` | Optional agent-step termination: `{ green_command: <argv regex>, post_green_turns: <int, default 2> }`. When the agent's most recent terminal observation matching `green_command` exits 0 and no workspace writes have happened since, the engine injects one nudge turn, allows `post_green_turns` further turns, then closes the conversation. Absent = run to finish. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
+| `custom_prompt:` | Planned (planning-docs/039). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox before the step runs (command or agent steps; network ON; stamp-cached, re-runs when the pipeline's lockfiles change); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
@@ -299,6 +300,16 @@ steps:
   to exactly the declared hosts for that stage; the default stays network-off
   everywhere. Reserve it for stages that need it (QA, integration). The
   residual risks are documented in [docs/setup.md](docs/setup.md).
+- **Host-service reachability (planned - planning-docs/037, 038).** A host
+  service reached at `host.docker.internal` through the proxy fails today:
+  the policy admits it, but the proxy dials from the host, where that
+  container-only name does not resolve (a 502 for the client). 037 rewrites
+  `host.docker.internal` to host loopback at the proxy dial site, so signed
+  host-service traffic (an S3 SDK against a local MinIO, say) reaches the
+  host through the enforced, logged path. 038 then replaces the
+  host-gateway model with a per-run internal network: sandboxes get no host
+  route, and a containerized proxy on a second host-access network is the
+  only egress path.
 
 ### Sync-back conflicts (host edits during a run)
 
