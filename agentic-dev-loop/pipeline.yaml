@@ -92,7 +92,8 @@ steps:
     agent: qa
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
-    max_iterations: 60
+    max_iterations: 100
+    finalize_nudge_turns: 10           # 035 provisional: one final-response nudge
     mounts: [{path: ".", mode: ro}]
     on_pass: commit
     on_fail: { goto: dev, retry: true }

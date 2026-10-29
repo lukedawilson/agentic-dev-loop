@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a32] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 035-finalize-nudge-and-verdict-cap.md (agent dev loop)
+- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, planning-docs/035-finalize-nudge-and-verdict-cap.md
+
 ## [1.0.0a31] - 2026-10-29
 
 ### Changed

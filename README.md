@@ -182,6 +182,8 @@ steps:
     agent: qa
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL }
+    max_iterations: 100
+    finalize_nudge_turns: 10
     on_pass: commit
     on_fail: { goto: dev, retry: true }
 
@@ -197,6 +199,7 @@ steps:
 | `brief_inputs:` | Optional agent-step input spec: `{ include: [<paths/globs>], env_facts: [<strings>] }`. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as that step's task message, and regenerates the step only when those inputs change. A produces-only agent step such as `brief` is the documented pattern for per-run context digestion. |
 | `stop_when:` | Optional agent-step termination: `{ green_command: <argv regex>, post_green_turns: <int, default 2> }`. When the agent's most recent terminal observation matching `green_command` exits 0 and no workspace writes have happened since, the engine injects one nudge turn, allows `post_green_turns` further turns, then closes the conversation. Absent = run to finish. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
+| `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox before the step runs (command or agent steps; network ON; stamp-cached, re-runs when the pipeline's lockfiles change); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
@@ -379,9 +382,10 @@ an agent burned budget learning it mid-run:
   the dev agent's next context; the dev prompt makes every listed issue a
   required fix.
 - **No git mutations, ever.** The `commit` step is the single commit point.
-- **`max_iterations` per role.** qa is bounded probing (60 in both
-  reference repos); dev is open-ended construction and stays uncapped
-  (the engine default).
+- **`max_iterations` per role.** qa is bounded probing (100 in this
+  repo's dogfood loop, with `finalize_nudge_turns: 10` so it never ends
+  silently at the cap - both provisional); dev is open-ended construction
+  and stays uncapped (the engine default).
 
 ### The pipeline file
 
@@ -396,7 +400,7 @@ adapt per repo.
 | editor-tests | command | network + `presets: [package-registries]` | frontend suites that cannot run offline (`npm ci && npm test`). A separate step, never merged into `test`: the step name is the failure diagnosis, its timeout does not contend the backend suite's, and a retry re-runs only its own chain |
 | conformance | command | network + `presets: [package-registries]` | repo-specific fitness checks (the consumer repo: jscpd + DDD rules) |
 | review | agent | ro, offline | static conformance verdict |
-| qa | agent | per repo (see table above) | live-behaviour probes; `max_iterations: 60`; inject secrets only if the probes need them |
+| qa | agent | per repo (see table above) | live-behaviour probes; `max_iterations: 100` + `finalize_nudge_turns: 10` (provisional); inject secrets only if the probes need them |
 | commit | action | host-side | the single commit point |
 
 Adaptation checklist for a new repo:

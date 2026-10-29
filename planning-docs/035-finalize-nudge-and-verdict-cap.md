@@ -1,6 +1,6 @@
 # 035-finalize-nudge-and-verdict-cap.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Assumes 032 implemented first: the turn-level conversation hook it
 introduces is the plumbing this plan reuses.
