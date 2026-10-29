@@ -13,7 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - feat: construct plan 038-network-level-egress-enforcement.md (agent dev loop)
 - docs(engine): fix stale 040 plan refs to 037
-- Uncommitted changes: README.md, planning-docs/038-network-level-egress-enforcement.md, planning-docs/039-egress-proxy-runtime-hardening.md, planning-docs/039-step-custom-prompt.md, planning-docs/040-brief-coverage-check.md, planning-docs/040-step-custom-prompt.md, planning-docs/041-brief-coverage-check.md
+- docs(plan): add 039-egress-proxy-runtime-hardening.md
+- docs(plan): renumber 039-step-custom-prompt.md and 040-brief-coverage-check.md to 040 and 041
+- docs(plan): mark 038-network-level-egress-enforcement.md completed
+- docs(engine): point the README custom_prompt row at planning-docs/040
 
 ## [1.0.0a35] - 2026-10-29
 
