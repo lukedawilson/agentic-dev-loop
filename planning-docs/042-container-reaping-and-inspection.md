@@ -1,6 +1,6 @@
 # Plan 042: Container reaping and inspection
 
-**Status:** PLANNED
+> **Status: COMPLETED**
 
 ## Scope
 

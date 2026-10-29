@@ -28,7 +28,10 @@ also removed under the same criteria; its orphaning was likewise not proven.
 1. Find the owning run's state dir in the run's OWN workspace
    (`.agentic-dev-loop/runs/` under the repo the run belongs to), not the
    agent-engine home path.
-2. Check whether the engine process for that run is alive.
+2. Check whether the engine process for that run is alive. The
+   `agentic-dev-loop containers --json` command resolves each engine container
+   to its registry record, owner pid, and a `live`/`orphaned`/`stale-entry`
+   verdict; run it instead of reasoning from `ps` output or CPU time.
 3. Treat static CPU time as normal for I/O-bound steps. It is not a hang
    signal.
 4. If ownership cannot be proven, leave the container alone and surface it to
@@ -40,8 +43,9 @@ Note: a run started over a dirty worktree skips its auto-commit by design (the
 human commits; see `actions.py`), which is what happens when restarting over a
 killed run's uncommitted changes.
 
-**Status:** Open. The engine does not reliably reap containers when a run ends
-or is abandoned, and there was no safe verification protocol for declaring a
-container an orphan. Candidate for a future plan: engine-side cleanup on run
-end or step timeout, plus a `loop containers` inspection command that resolves
-each container to its owning run and live/dead engine.
+**Status:** Closed by plan 042 (2026-10-29) - see
+`planning-docs/042-container-reaping-and-inspection.md`. The engine now
+reliably reaps containers when a run ends or is abandoned (SIGTERM runs
+`close()`; a post-create startup failure also reaps the container it created),
+and `agentic-dev-loop containers` is the verification protocol for declaring a
+container an orphan.

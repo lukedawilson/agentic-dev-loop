@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a41] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
+- Uncommitted changes: README.md, docs/known-issues.md
+
 ## [1.0.0a40] - 2026-10-29
 
 ### Changed
