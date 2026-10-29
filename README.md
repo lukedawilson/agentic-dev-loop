@@ -218,6 +218,18 @@ run start (or when its inputs change), its `produces:` artifact survives attempt
 starts, and the dev/review agents read that digest instead of re-deriving repo
 rules and environment facts every attempt.
 
+The brief digest is mechanically coverage-checked: the four section headings
+(`Repo rules digest`, `Unit scope and lane digest`, `Environment facts`, and
+`Open risks`) must appear, every anchor extracted from the `include` files
+(markdown `##` headings, and YAML category names plus `enforcement_levels`)
+must appear on its own line (case-insensitive, whitespace-collapsed, `**`
+decoration allowed), and every `env_facts` entry must appear verbatim. A miss
+re-runs the brief agent once per missing set with a `## Coverage retry`
+correction note, bounded to three retries per input set; if the same items are
+still dropped after the cap, the run fails and `last-error.md` names the
+persistent drops. Include files with no extractable anchors pass vacuously, and
+unusual YAML rule shapes are under-checked, never over-checked.
+
 ### Secrets (`secrets:`) - refs only, never values
 
 Secret values never belong in the pipeline yaml, the workspace, or `state_dir`.

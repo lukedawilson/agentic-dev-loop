@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a39] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 041-brief-coverage-check.md (agent dev loop)
+- Uncommitted changes: README.md, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/041-brief-coverage-check.md
+
 ## [1.0.0a38] - 2026-10-29
 
 ### Changed

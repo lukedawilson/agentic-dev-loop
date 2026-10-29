@@ -1,6 +1,6 @@
 # 041-brief-coverage-check.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Independent of 038 and 040. This is Part B of the brief coverage fix;
 Part A (the section-anchored digest contract in the brief agent prompt,

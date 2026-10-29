@@ -61,3 +61,6 @@ behavior together on one line>
 - Keep the environment-facts entries verbatim: each fact and the behavior it
   implies travel together.
 - ASCII only. Do not use em dash characters.
+- If the task message carries a `## Coverage retry` section, regenerate the
+  brief so every listed item appears, verbatim where the contract requires
+  verbatim. No exploration: the listed items are the only correction signal.
