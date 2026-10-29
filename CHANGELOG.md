@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a30] - 2026-10-29
+
+### Changed
+
+- Add brief agent
+- feat: construct plan 033-brief-step.md (agent dev loop)
+
 ## [1.0.0a29] - 2026-10-28
 
 ### Changed
