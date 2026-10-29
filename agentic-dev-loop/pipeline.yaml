@@ -16,16 +16,16 @@ llm:
 
 max_attempts: 10                     # CLI --max-attempts overrides
 agents_dir: sdk_agents               # resolved relative to the pipeline file's dir
-# 021 supply-chain dial: this repo's dogfood loop still runs the bootstrap
+# Supply-chain dial: this repo's dogfood loop still runs the bootstrap
 # protocol (its restore step is an open install; no committed lockfile yet -
-# the consumer repos migrate to `locked` per 021 §3). `open` keeps the 018
-# restore behavior verbatim.
+# the consumer repos migrate to `locked` once a committed lockfile exists).
+# `open` keeps the original restore behavior verbatim.
 deps_policy: open
-# 029 concurrent-edit merge: the aidlc audit log is append-only and edited by
+# Concurrent-edit merge: the aidlc audit log is append-only and edited by
 # both the loop (AI-DLC mandates audit.md logging) and the operator - union-merge
 # those edits instead of raising a sync-back conflict.
 merge_on_conflict: [aidlc-docs/audit.md]
-# 022 venv-boundary enforcement: keep the container-built sandbox venv OUT of
+# Venv-boundary enforcement: keep the container-built sandbox venv OUT of
 # the workspace - it is bind-mounted in from this host dir at
 # {ws}/.venv-sandbox (rw), so `git add -A` sees no venv noise and the host
 # `.venv` stays masked (read-only empty tmpfs) from the sandbox.
@@ -37,7 +37,7 @@ steps:
     agent: brief
     produces: attempt-brief.md            # run-scoped: created once, reused every attempt
     max_iterations: 12
-    # 033 per-run context digestion: a closed input list (resolved relative to
+    # Per-run context digestion: a closed input list (resolved relative to
     # the workspace root) plus the stable environment facts the brief agent
     # must never discover by running commands. The resolved unit/plan docs and
     # additional_files (../README.md) arrive through the loader context.
@@ -47,12 +47,30 @@ steps:
         - the workspace is an export with no .git; verify with find/ls, never git status
         - the sandbox is network-off by default; never run package-manager fetches
         - Python packages resolve from .venv-sandbox; run .venv-sandbox/bin/python
+    # Banned-command deny-list: custom entries append after the engine
+    # defaults (git mutations, package installs, playwright, docker).
+    # Releases and GitHub mutations stay operator-only: the loop never
+    # publishes itself.
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
     on_pass: dev
 
   - name: dev
     agent: dev
     produces: implementation-summary.md   # hygiene-tracked, no verdict
     mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
+    # Banned-command deny-list: custom entries append after the engine
+    # defaults (git mutations, package installs, playwright, docker).
+    # Releases and GitHub mutations stay operator-only: the loop never
+    # publishes itself.
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
     on_pass: restore
 
   - name: restore
@@ -60,7 +78,7 @@ steps:
     # fails the step on a known-CVE pin. Under `open` that failure routes to
     # `dev` like any restore failure - dev can bump the pin, and the bumped
     # pin is audited again on the next pass, so the loop self-corrects.
-    # pip is upgraded first (022 bootstrap hygiene): the dev image's ensurepip
+    # pip is upgraded first (bootstrap hygiene): the dev image's ensurepip
     # bundles a stale wheel, and pip is not a pyproject pin dev can bump, so
     # the audit would otherwise deadlock on pip's own CVEs. Cheap no-op once
     # current; keeps the audit scoped to project pins only.
@@ -86,6 +104,15 @@ steps:
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     mounts: [{path: ".", mode: ro}]
+    # Banned-command deny-list: custom entries append after the engine
+    # defaults (git mutations, package installs, playwright, docker).
+    # Releases and GitHub mutations stay operator-only: the loop never
+    # publishes itself.
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -94,8 +121,17 @@ steps:
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
     max_iterations: 100
-    finalize_nudge_turns: 10           # 035 provisional: one final-response nudge
+    finalize_nudge_turns: 10           # Provisional: one final-response nudge
     mounts: [{path: ".", mode: ro}]
+    # Banned-command deny-list: custom entries append after the engine
+    # defaults (git mutations, package installs, playwright, docker).
+    # Releases and GitHub mutations stay operator-only: the loop never
+    # publishes itself.
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
     on_pass: commit
     on_fail: { goto: dev, retry: true }
     # UNVERIFIABLE moves on like pass (never rewinds, never retries): the run
