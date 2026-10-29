@@ -1,6 +1,6 @@
 # 040-step-custom-prompt.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 ## Scope
 
