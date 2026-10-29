@@ -217,3 +217,27 @@ class TestVerdictShape:
         a = _parse("VERDICT: PASS", TEST_VERDICTS).value
         b = _parse("VERDICT: **PASS**", TEST_VERDICTS).value
         assert a == b
+
+
+QA_ENV_VERDICTS = {"PASS": "pass", "FAIL": "fail",
+                   "UNVERIFIABLE": "unverifiable", "ENV": "env"}
+
+
+class TestEnvVerdictParsing:
+    def test_parse_env(self):
+        _ok("VERDICT: ENV", QA_ENV_VERDICTS, "env")
+        _ok("VERDICT: ENV - sandbox network is dead",
+            QA_ENV_VERDICTS, "env")
+        _ok("verdict: env", QA_ENV_VERDICTS, "env")
+
+    def test_parse_verdict_env_returns_canonical_value(self):
+        assert parse_verdict("VERDICT: ENV", QA_ENV_VERDICTS) == "env"
+
+    def test_negated_env_stays_ambiguous_on_four_key_sets(self):
+        _err("VERDICT: NOT ENV", QA_ENV_VERDICTS, VerdictError.AMBIGUOUS)
+
+    def test_conflicting_pass_and_env_is_ambiguous(self):
+        _err("VERDICT: PASS\nVERDICT: ENV", QA_ENV_VERDICTS,
+             VerdictError.AMBIGUOUS)
+        assert parse_verdict("VERDICT: PASS\nVERDICT: ENV",
+                             QA_ENV_VERDICTS) == "retry"

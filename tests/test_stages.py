@@ -362,6 +362,53 @@ class TestAgentNode:
         assert "VERDICT: FAIL" in note
         assert "VERDICT: UNVERIFIABLE" in note
 
+    def test_unclear_note_mentions_fourth_keyword(self, runtime, fake_agents):
+        step = make_cfg([
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "success"}]).steps[0]
+        fake_agents.set("qa", [("write", "qa-report.md", "undecided")])
+        update = make_agent_node(runtime, step)(make_state())
+        (note,) = update["notes"]
+        assert "VERDICT: PASS" in note
+        assert "VERDICT: FAIL" in note
+        assert "VERDICT: UNVERIFIABLE" in note
+        assert "VERDICT: ENV" in note
+
+    def test_env_verdict_hard_fails_and_writes_last_error(self, runtime,
+                                                          fake_agents):
+        step = make_cfg([
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "success"}]).steps[0]
+        fake_agents.set("qa", [("write", "qa-report.md",
+                                "probe timeout\nVERDICT: ENV")])
+        update = make_agent_node(runtime, step)(make_state())
+        assert update["step_verdicts"] == {"qa": "env"}
+        assert update["failed"] is True
+        assert update["failed_step"] == "qa"
+        assert "artifacts" not in update
+        err = (runtime.state_dir / "last-error.md").read_text()
+        assert "Environmental failure (verdict: ENV)" in err
+        assert "probe timeout" in err
+
+    def test_env_verdict_with_on_env_route_moves_without_hard_fail(
+            self, runtime, fake_agents):
+        step = make_cfg([
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "success", "on_env": "failure"}]).steps[0]
+        fake_agents.set("qa", [("write", "qa-report.md",
+                                "probe timeout\nVERDICT: ENV")])
+        update = make_agent_node(runtime, step)(make_state())
+        assert update["step_verdicts"] == {"qa": "env"}
+        assert update["failed"] is False
+        assert update["artifacts"] == {"qa": "probe timeout\nVERDICT: ENV"}
+        assert "failed_step" not in update
+
 
 class TestCommandNode:
     def _node(self, runtime, steps, idx=0):
@@ -639,6 +686,46 @@ class TestRouter:
         # unset on_unverifiable -> on_pass; never on_fail's bump retry
         assert router(make_state(attempt=1,
                                  step_verdicts={"qa": "unverifiable"})) == "commit"
+
+    def test_env_routes_on_env(self, runtime):
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "commit", "on_fail": {"goto": "dev", "retry": True},
+             "on_env": "dev"},
+            {"name": "commit", "action": "commit", "on_pass": "success"},
+        ])
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        router = make_router(runtime, cfg.steps[1])
+        assert router(make_state(step_verdicts={"qa": "env"})) == "dev"
+
+    def test_env_with_on_env_failure_ends(self, runtime):
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "commit", "on_env": "failure"},
+            {"name": "commit", "action": "commit", "on_pass": "success"},
+        ])
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        router = make_router(runtime, cfg.steps[1])
+        assert router(make_state(step_verdicts={"qa": "env"})) == END
+
+    def test_env_without_on_env_is_defensive_end(self, runtime):
+        cfg = make_cfg([
+            {"name": "dev", "agent": "dev", "on_pass": "qa"},
+            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
+             "verdicts": {"pass": "PASS", "fail": "FAIL",
+                          "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+             "on_pass": "commit"},
+            {"name": "commit", "action": "commit", "on_pass": "success"},
+        ])
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        router = make_router(runtime, cfg.steps[1])
+        assert router(make_state(step_verdicts={"qa": "env"})) == END
 
 
 class TestBumpNode:

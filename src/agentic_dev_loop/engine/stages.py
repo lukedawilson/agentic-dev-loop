@@ -683,13 +683,13 @@ def _unclear_note(runtime: Runtime, step: StepConfig, attempt: int,
     captured response when it exists, so real findings are never swallowed."""
     expected = ""
     if step.verdicts is not None:
+        keywords = [f"`VERDICT: {step.verdicts.pass_}`",
+                    f"`VERDICT: {step.verdicts.fail}`"]
         if step.verdicts.unverifiable is not None:
-            expected = (f" (expected `VERDICT: {step.verdicts.pass_}`, "
-                        f"`VERDICT: {step.verdicts.fail}`, or "
-                        f"`VERDICT: {step.verdicts.unverifiable}` on its own line)")
-        else:
-            expected = (f" (expected `VERDICT: {step.verdicts.pass_}` or "
-                        f"`VERDICT: {step.verdicts.fail}` on its own line)")
+            keywords.append(f"`VERDICT: {step.verdicts.unverifiable}`")
+        if step.verdicts.env is not None:
+            keywords.append(f"`VERDICT: {step.verdicts.env}`")
+        expected = f" (expected {' or '.join(keywords)} on its own line)"
     if truncated:
         lead = (f"{step.name} agent was cut short on attempt {attempt} "
                 f"(hit the {max_iterations}-turn limit or was stopped "
@@ -718,6 +718,8 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
         verdicts_map = {step.verdicts.pass_: "pass", step.verdicts.fail: "fail"}
         if step.verdicts.unverifiable is not None:
             verdicts_map[step.verdicts.unverifiable] = "unverifiable"
+        if step.verdicts.env is not None:
+            verdicts_map[step.verdicts.env] = "env"
     captures = step.artifact is not None or bool(step.produces)
 
     def node(state: dict) -> dict:
@@ -783,6 +785,21 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
             if verdict == "unverifiable":
                 print(f"[{subject}] {step.name} verdict: UNVERIFIABLE "
                       f"(moves on).", flush=True)
+                update = {"step_verdicts": merged, "failed": False}
+                if captures and result.response is not None:
+                    update["artifacts"] = {step.name: result.response}
+                return update
+            if verdict == "env":
+                print(f"[{subject}] {step.name} verdict: ENV "
+                      f"(environmental, halting).", flush=True)
+                if step.on_env is None:
+                    runtime.state_dir.mkdir(parents=True, exist_ok=True)
+                    (runtime.state_dir / LAST_ERROR).write_text(
+                        f"# Environmental failure (verdict: ENV)\n\n"
+                        f"{result.response or 'no captured response'}\n",
+                        encoding="utf-8")
+                    return {"step_verdicts": merged,
+                            "failed": True, "failed_step": step.name}
                 update = {"step_verdicts": merged, "failed": False}
                 if captures and result.response is not None:
                     update["artifacts"] = {step.name: result.response}
@@ -1115,6 +1132,8 @@ def make_router(runtime: Runtime, step: StepConfig):
             if step.on_unverifiable is not None:
                 return resolve(step.on_unverifiable)
             return resolve(step.on_pass)
+        if verdict == "env":
+            return resolve(step.on_env) if step.on_env is not None else END
         if verdict == "fail":
             if step.on_fail is None:
                 return END

@@ -637,3 +637,40 @@ class TestDepsPolicy:
     def test_lockfiles_accepts_a_single_string(self, tmp_path):
         data = _base() | {"lockfiles": "uv.lock"}
         assert _load(tmp_path, data).lockfiles == ["uv.lock"]
+
+
+def test_four_keyword_verdict_and_on_env_load(tmp_path):
+    data = _base()
+    data["steps"][0] = {
+        "name": "qa", "agent": "qa", "artifact": "qa-report.md",
+        "verdicts": {"pass": "PASS", "fail": "FAIL",
+                     "unverifiable": "UNVERIFIABLE", "env": "ENV"},
+        "on_pass": "success", "on_unverifiable": "success",
+        "on_env": "failure",
+    }
+    step = _load(tmp_path, data).steps[0]
+    assert step.verdicts.pass_ == "PASS"
+    assert step.verdicts.fail == "FAIL"
+    assert step.verdicts.unverifiable == "UNVERIFIABLE"
+    assert step.verdicts.env == "ENV"
+    assert step.on_env == "failure"
+
+
+def test_dangling_on_env_rejected(tmp_path):
+    data = _base()
+    data["steps"][0]["on_env"] = "nope"
+    with pytest.raises(ValidationError, match="unknown route target 'nope'"):
+        _load(tmp_path, data)
+
+
+def test_env_keyword_optional_three_keyword_still_loads(tmp_path):
+    data = _base()
+    data["steps"][0] = {
+        "name": "qa", "agent": "qa", "artifact": "qa-report.md",
+        "verdicts": {"pass": "PASS", "fail": "FAIL",
+                     "unverifiable": "UNVERIFIABLE"},
+        "on_pass": "success", "on_unverifiable": "success",
+    }
+    step = _load(tmp_path, data).steps[0]
+    assert step.verdicts.env is None
+    assert step.on_env is None

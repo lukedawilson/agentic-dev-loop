@@ -35,3 +35,19 @@ def test_probe_plan_rules_present():
     assert "**Outcome probes.**" in text
     assert "**Concurrency probes.**" in text
     assert "**Error messages are assertions.**" in text
+
+
+def test_env_verdict_rules_present():
+    text = _text()
+    assert "VERDICT: ENV" in text
+    assert "## ENV" in text
+    assert "environment" in text.lower()
+    assert "harness" in text
+    assert "2 attempts" in text
+
+
+def test_env_unverifiable_distinction_present():
+    text = _text()
+    assert "UNVERIFIABLE" in text
+    assert "verification environment" in text
+    assert "product code" in text

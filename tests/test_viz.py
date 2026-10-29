@@ -743,6 +743,13 @@ class TestServer:
         assert 'else if (v === "unverifiable")' in PAGE
         assert " (verdict: UNVERIFIABLE)" in PAGE
 
+    def test_page_constant_has_env_verdict_support(self):
+        assert "verdictEnv" in PAGE
+        # the new value maps to the fatal badge, never the unclear fallthrough
+        assert 'else if (v === "env")' in PAGE
+        assert " (verdict: ENV)" in PAGE
+        assert 'verdictEnv.has(n)' in PAGE
+
     def test_page_constant_color_palette(self):
         assert 'classDef running fill:#1976d2' in PAGE
         assert 'classDef fail fill:#ffb300' in PAGE
@@ -1118,6 +1125,19 @@ main();
 
         assert snaps[0]["badges"] == ["review: unverifiable"]
         assert snaps[0]["classes"]["review"] == "unverifiable"
+
+    def test_env_verdict_badge_and_fatal_class(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t"},
+            {"type": "node_finished", "node": "review", "ok": True},
+            {"type": "state", "attempt": 1,
+             "step_verdicts": {"review": "env"}, "failed": False},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["badges"] == ["review: env"]
+        assert snaps[0]["classes"]["review"] == "fatal"
 
     def test_copy_button_copies_console_text(self, node, tmp_path):
         events = [

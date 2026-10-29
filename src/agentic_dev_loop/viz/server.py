@@ -546,6 +546,7 @@ PAGE = """<!doctype html>
   var verdictFail = new Set();
   var verdictPass = new Set();
   var verdictUnverifiable = new Set();
+  var verdictEnv = new Set();
   var fatalNodes = new Set();
   var maxAttempts = null;
   var attempt = null;
@@ -614,7 +615,13 @@ PAGE = """<!doctype html>
     if (verdictFail.has(n)) { return "fail"; }
     if (verdictPass.has(n)) { return "pass"; }
     if (verdictUnverifiable.has(n)) { return "unverifiable"; }
+    if (verdictEnv.has(n)) { return "env"; }
     return nodeStatus[n] || "pending";
+  }
+
+  function renderStatusOf(n) {
+    var s = statusOf(n);
+    return s === "env" ? "fatal" : s;
   }
 
   function updateBadges() {
@@ -627,6 +634,7 @@ PAGE = """<!doctype html>
       if (v === "pass") { b.className += " badge-pass"; }
       else if (v === "fail") { b.className += " badge-fail"; }
       else if (v === "unverifiable") { b.className += " badge-unverifiable"; }
+      else if (v === "env") { b.className += " badge-fail"; }
       else { b.className += " badge-unclear"; }
       b.textContent = step + ": " + (v === null || v === undefined ? "no verdict" : v);
       box.appendChild(b);
@@ -638,6 +646,7 @@ PAGE = """<!doctype html>
     verdictPass.clear();
     verdictFail.clear();
     verdictUnverifiable.clear();
+    verdictEnv.clear();
     currentVerdicts = {};
     nodeStatus = {};
     stageWord = {};
@@ -665,7 +674,7 @@ PAGE = """<!doctype html>
     var classLines = Object.keys(nodeStatus).filter(function (n) {
       return nodeIds.has(n);
     }).map(function (n) {
-      return "class " + n + " " + statusOf(n) + ";";
+      return "class " + n + " " + renderStatusOf(n) + ";";
     });
     var src = mermaidSource + "\\n" + classDefs.join("\\n") + "\\n" + classLines.join("\\n");
     mermaid.render("graph-" + (renderCount++), src).then(function (res) {
@@ -756,9 +765,10 @@ PAGE = """<!doctype html>
       if (v === "pass") { suffix = " (verdict: PASS)"; }
       else if (v === "fail") { suffix = " (verdict: FAIL)"; }
       else if (v === "unverifiable") { suffix = " (verdict: UNVERIFIABLE)"; }
+      else if (v === "env") { suffix = " (verdict: ENV)"; }
     }
     status.textContent = (word ? " " + word : "") + suffix;
-    header.className = "stage-header status-" + statusOf(node);
+    header.className = "stage-header status-" + renderStatusOf(node);
   }
 
   function setStageStatus(node, word) {
@@ -1072,10 +1082,11 @@ PAGE = """<!doctype html>
           Object.keys(ev.step_verdicts).forEach(function (k) {
             verdictSteps.add(k);
             var v = ev.step_verdicts[k];
-            if (v === "pass") { verdictPass.add(k); verdictFail.delete(k); verdictUnverifiable.delete(k); }
-            else if (v === "fail") { verdictFail.add(k); verdictPass.delete(k); verdictUnverifiable.delete(k); }
-            else if (v === "unverifiable") { verdictUnverifiable.add(k); verdictPass.delete(k); verdictFail.delete(k); }
-            else { verdictPass.delete(k); verdictFail.delete(k); verdictUnverifiable.delete(k); }
+            if (v === "pass") { verdictPass.add(k); verdictFail.delete(k); verdictUnverifiable.delete(k); verdictEnv.delete(k); }
+            else if (v === "fail") { verdictFail.add(k); verdictPass.delete(k); verdictUnverifiable.delete(k); verdictEnv.delete(k); }
+            else if (v === "unverifiable") { verdictUnverifiable.add(k); verdictPass.delete(k); verdictFail.delete(k); verdictEnv.delete(k); }
+            else if (v === "env") { verdictEnv.add(k); verdictPass.delete(k); verdictFail.delete(k); verdictUnverifiable.delete(k); }
+            else { verdictPass.delete(k); verdictFail.delete(k); verdictUnverifiable.delete(k); verdictEnv.delete(k); }
             currentVerdicts[k] = v;
           });
           updateBadges();
