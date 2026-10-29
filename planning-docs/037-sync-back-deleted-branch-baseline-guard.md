@@ -1,6 +1,6 @@
-# 040-sync-back-deleted-branch-baseline-guard.md
+# 037-sync-back-deleted-branch-baseline-guard.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 ## Scope
 

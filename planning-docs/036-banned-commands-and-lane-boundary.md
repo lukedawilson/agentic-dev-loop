@@ -2,7 +2,7 @@
 
 > **Status: COMPLETED**
 
-Independent of 032-038; can land first or last.
+Independent of 032-040; can land first or last.
 
 ## Scope
 
