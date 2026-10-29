@@ -1,6 +1,6 @@
 # 036-banned-commands-and-lane-boundary.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Independent of 032-038; can land first or last.
 

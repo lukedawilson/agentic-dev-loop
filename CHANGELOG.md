@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a33] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 036-banned-commands-and-lane-boundary.md (agent dev loop)
+- pipeline.yml fix
+- feat: brief agent structural repo rules digest coverage
+- docs: recreate 039, drop priority-ordering text, README planned notes
+- Uncommitted changes: planning-docs/036-banned-commands-and-lane-boundary.md, planning-docs/037-brief-coverage-check.md, planning-docs/037-proxy-dial-rewrite-for-host-services.md, planning-docs/038-network-level-egress-enforcement.md, planning-docs/038-proxy-dial-rewrite-for-host-services.md, planning-docs/039-network-level-egress-enforcement.md, planning-docs/040-step-custom-prompt.md, planning-docs/041-sync-back-deleted-branch-baseline-guard.md
+
 ## [1.0.0a32] - 2026-10-29
 
 ### Changed
