@@ -58,42 +58,20 @@ LAST_ERROR = "last-error.md"
 ARTIFACT_CONTEXT_CAP = 24_000  # chars per artifact injected into a step's context
 
 
-class _StopWhenController:
-    """Turn-level stop-when-green observation (032).
+class _TurnPauseController:
+    """Turn-level pause callback (032): pause the SDK run loop after every
+    agent-sourced event so the caller can drive one turn at a time. The
+    finalize nudge (035) reuses this hook without any stop-when state."""
 
-    Pure per-event state machine - no knowledge of how the conversation is
-    driven. ``on_event`` is a SDK conversation callback: it records the most
-    recent matching terminal observation and any subsequent file-editor
-    write, and pauses the conversation after every agent-sourced event so the
-    caller can drive one turn at a time.
-    """
-
-    NUDGE = "Step complete: produce your final response now"
-    _WRITE_COMMANDS = frozenset({"create", "str_replace", "insert", "undo_edit"})
-
-    def __init__(self, spec) -> None:
-        self._pattern = re.compile(spec.green_command)
-        self.post_green_turns = spec.post_green_turns
-        self.green_hit = False
-        self.writes_since_green = False
-        self.nudged = False
-        self.post_nudge_turns = 0
+    def __init__(self) -> None:
         self.conversation = None
 
     def attach(self, conversation) -> None:
         self.conversation = conversation
 
-    @property
-    def green_signal(self) -> bool:
-        return self.green_hit and not self.writes_since_green
-
     def on_event(self, event) -> None:
         if self.conversation is None:
             return
-        from openhands.sdk.event import ObservationEvent
-
-        if isinstance(event, ObservationEvent):
-            self._record_observation(event)
         if getattr(event, "source", None) == "agent":
             from openhands.sdk.conversation.state import (
                 ConversationExecutionStatus,
@@ -101,6 +79,58 @@ class _StopWhenController:
             self.conversation.state.execution_status = (
                 ConversationExecutionStatus.PAUSED
             )
+
+
+class _FinalizeNudgeController(_TurnPauseController):
+    """Finalize nudge (035): template text, never step-named. The turn loop
+    asks for the message when the conversation reaches the configured index;
+    ``nudged`` guards against re-injection on a same-turn retry."""
+
+    _TEMPLATE = "{n} turns remain: produce your final response now"
+
+    def __init__(self, turns: int) -> None:
+        super().__init__()
+        self.turns = turns
+        self.nudged = False
+
+    def message(self) -> str:
+        return self._TEMPLATE.format(n=self.turns)
+
+
+class _StopWhenController(_TurnPauseController):
+    """Turn-level stop-when-green observation (032).
+
+    Pure per-event state machine - no knowledge of how the conversation is
+    driven. ``on_event`` is a SDK conversation callback: it records the most
+    recent matching terminal observation and any subsequent file-editor
+    write, and (via the base pause) pauses the conversation after every
+    agent-sourced event so the caller can drive one turn at a time.
+    """
+
+    NUDGE = "Step complete: produce your final response now"
+    _WRITE_COMMANDS = frozenset({"create", "str_replace", "insert", "undo_edit"})
+
+    def __init__(self, spec) -> None:
+        super().__init__()
+        self._pattern = re.compile(spec.green_command)
+        self.post_green_turns = spec.post_green_turns
+        self.green_hit = False
+        self.writes_since_green = False
+        self.nudged = False
+        self.post_nudge_turns = 0
+
+    @property
+    def green_signal(self) -> bool:
+        return self.green_hit and not self.writes_since_green
+
+    def on_event(self, event) -> None:
+        super().on_event(event)
+        if self.conversation is None:
+            return
+        from openhands.sdk.event import ObservationEvent
+
+        if isinstance(event, ObservationEvent):
+            self._record_observation(event)
 
     def on_terminal_result(self, command: str | None, exit_code: int | None,
                            wrote_workspace: bool) -> None:
@@ -160,6 +190,10 @@ class Runtime:
             controller = None
             if step is not None and step.stop_when is not None:
                 controller = _StopWhenController(step.stop_when)
+            finalize_controller = None
+            if step is not None and step.finalize_nudge_turns is not None:
+                finalize_controller = _FinalizeNudgeController(
+                    step.finalize_nudge_turns)
 
             if self.sandbox is not None:
                 if step is not None:
@@ -182,15 +216,22 @@ class Runtime:
                     secrets=(step_secret_env(self.cfg, step, self.secrets)
                              if step is not None else None))
             agent = load_agent(self.agents_dir, agent_name, self.llm)
-            callbacks = [controller.on_event] if controller is not None else None
+            callbacks = []
+            if controller is not None:
+                callbacks.append(controller.on_event)
+            if finalize_controller is not None:
+                callbacks.append(finalize_controller.on_event)
             conv = Conversation(agent=agent, workspace=str(self.workspace),
                                 max_iteration_per_run=max_iterations,
-                                callbacks=callbacks)
+                                callbacks=callbacks or None)
             if controller is not None:
                 controller.attach(conv)
+            if finalize_controller is not None:
+                finalize_controller.attach(conv)
             conv.send_message(message)
-            if controller is not None:
-                self._run_stop_when_loop(conv, controller, max_iterations)
+            if controller is not None or finalize_controller is not None:
+                self._run_stop_when_loop(conv, controller, max_iterations,
+                                         finalize_controller)
             else:
                 conv.run()
 
@@ -231,15 +272,19 @@ class Runtime:
             if conv is not None:
                 conv.close()
 
-    def _run_stop_when_loop(self, conv, controller: _StopWhenController,
-                            max_iterations: int) -> None:
-        """Drive one turn at a time so a green signal can inject the nudge
-        and enforce the post-nudge turn budget. The controller's callback
-        pauses the SDK run loop after every agent-sourced event, so each
-        ``conv.run()`` here advances exactly one agent turn."""
+    def _run_stop_when_loop(self, conv,
+                            controller: _StopWhenController | None,
+                            max_iterations: int,
+                            finalize_controller: _FinalizeNudgeController | None = None) -> None:
+        """Drive one turn at a time so turn-level hooks can inject their
+        nudges and enforce budgets. A controller's callback pauses the SDK
+        run loop after every agent-sourced event, so each ``conv.run()`` here
+        advances exactly one agent turn."""
         from openhands.sdk.conversation.state import ConversationExecutionStatus
 
         turns = 0
+        nudge_at = (max_iterations - finalize_controller.turns
+                    if finalize_controller is not None else None)
         while True:
             conv.run()
             status = conv.state.execution_status
@@ -253,17 +298,24 @@ class Runtime:
                 conv.state.execution_status = ConversationExecutionStatus.ERROR
                 break
 
-            if not controller.nudged and controller.green_signal:
-                conv.send_message(controller.NUDGE)
-                controller.nudged = True
-                if controller.post_green_turns == 0:
-                    break
+            if (finalize_controller is not None and turns == nudge_at
+                    and not finalize_controller.nudged):
+                conv.send_message(finalize_controller.message())
+                finalize_controller.nudged = True
                 continue
 
-            if controller.nudged:
-                controller.post_nudge_turns += 1
-                if controller.post_nudge_turns >= controller.post_green_turns:
-                    break
+            if controller is not None:
+                if not controller.nudged and controller.green_signal:
+                    conv.send_message(controller.NUDGE)
+                    controller.nudged = True
+                    if controller.post_green_turns == 0:
+                        break
+                    continue
+
+                if controller.nudged:
+                    controller.post_nudge_turns += 1
+                    if controller.post_nudge_turns >= controller.post_green_turns:
+                        break
 
 
 def prompt_dir(runtime: Runtime) -> str:

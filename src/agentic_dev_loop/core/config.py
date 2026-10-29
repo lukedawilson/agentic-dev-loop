@@ -387,6 +387,7 @@ class StepConfig(BaseModel):
     timeout: float | None = Field(default=None, gt=0)  # seconds, command steps only
     terminal_timeout: float | None = Field(default=None, gt=0)  # seconds, agent steps only (032)
     stop_when: StopWhenSpec | None = None  # agent steps only (032)
+    finalize_nudge_turns: int | None = Field(default=None, gt=0)  # agent steps only (035)
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
@@ -459,6 +460,21 @@ class StepConfig(BaseModel):
         if self.stop_when is not None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'stop_when' requires 'agent'"
+            )
+        if self.finalize_nudge_turns is not None and self.agent is None:
+            raise ValueError(
+                f"step {self.name!r}: 'finalize_nudge_turns' requires 'agent'"
+            )
+        if self.finalize_nudge_turns is not None and self.max_iterations is None:
+            raise ValueError(
+                f"step {self.name!r}: 'finalize_nudge_turns' requires "
+                "'max_iterations'"
+            )
+        if (self.finalize_nudge_turns is not None
+                and self.finalize_nudge_turns >= self.max_iterations):
+            raise ValueError(
+                f"step {self.name!r}: 'finalize_nudge_turns' must be less "
+                "than 'max_iterations'"
             )
         if self.brief_inputs is not None and self.agent is None:
             raise ValueError(
