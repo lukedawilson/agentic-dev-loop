@@ -122,7 +122,7 @@ steps:
   - name: qa
     agent: qa
     artifact: qa-report.md
-    verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE }
+    verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE, env: ENV }
     max_iterations: 100
     finalize_nudge_turns: 10           # Provisional: one final-response nudge
     mounts: [{path: ".", mode: ro}]
@@ -141,6 +141,11 @@ steps:
     # advances while the record (qa-report.md in the run state) carries the
     # list of checks that could not be verified in the sandbox.
     on_unverifiable: commit
+    # ENV is deliberately unset: a broken verification harness halts the run
+    # with a report (step_verdicts records `env`, last-error.md carries the
+    # blocker list, and the qa-report.md final response holds the evidence).
+    # Set `on_env: failure` (or a step) only if a consumer wants to override
+    # the default halt-with-report semantics.
 
   - name: commit
     action: commit

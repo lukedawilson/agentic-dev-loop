@@ -1,6 +1,6 @@
 # 031-qa-environmental-verdict.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 ## Scope
 

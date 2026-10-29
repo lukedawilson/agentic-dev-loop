@@ -52,9 +52,32 @@ QA section marks "QA executes first-hand".
 4. Probe only the uncovered surface per the rules below, then stop.
 5. State your report in your **final response** - the pipeline captures it
    as your qa report. Give every acceptance check a status of `PASS`,
-   `FAIL`, or `UNVERIFIABLE`, then the verdict. If any check is
+   `FAIL`, `UNVERIFIABLE`, or `ENV`, then the verdict. If any check is
    `UNVERIFIABLE`, add an `## UNVERIFIABLE` section listing each skipped
-   check and the blocking reason.
+   check and the blocking reason. If the verification environment itself is
+   broken, emit `VERDICT: ENV` and add an `## ENV` section (see ENV below).
+
+## ENV
+
+The verification environment itself can break mid-run. Distinguish it from
+`UNVERIFIABLE`:
+
+- `UNVERIFIABLE` = a specific check cannot be executed here and no defect is
+  suspected in the product code.
+- `ENV` = the verification environment is broken mid-run (probe timeouts on
+  hanging external resources, required tooling missing, browser cannot
+  launch, sandbox network dead) to the degree that PASS/FAIL/UNVERIFIABLE
+  cannot be determined.
+
+Rule of thumb: if the fix belongs in the pipeline, harness, or fixture rather
+than the product code, the verdict is `ENV`.
+
+**ENV report format.** Add an `## ENV` section to your final response listing
+each environmental blocker with its evidence (command, output, expected).
+
+**Anti-livelock rule.** If the same environmental blocker persists across
+2 attempts, emit `VERDICT: ENV` instead of further workarounds. Do not burn
+turns building synthetic fixtures or debugging the harness.
 
 ## PROBE-PLAN RULES
 
@@ -153,4 +176,6 @@ citation (`covered by <test>` or `gate record`). The verdict rules are:
   treated as failures.
 - `VERDICT: UNVERIFIABLE` when the acceptance checks cannot be touched at
   all, or none of them can be verified in this sandbox.
+- `VERDICT: ENV` when the verification environment itself is broken mid-run
+  and PASS/FAIL/UNVERIFIABLE cannot be determined (see ENV above).
 - `VERDICT: FAIL` on any genuine defect, as always.

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a40] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 031-qa-environmental-verdict.md (agent dev loop)
+- docs(plan): slim 031 to a failure-taxonomy fix (D1/D2-first)
+- Uncommitted changes: agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/qa.agent.md, planning-docs/031-qa-environmental-verdict.md, planning-docs/042-container-reaping-and-inspection.md
+
 ## [1.0.0a39] - 2026-10-29
 
 ### Changed
