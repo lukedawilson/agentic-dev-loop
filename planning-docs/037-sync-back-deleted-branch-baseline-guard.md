@@ -13,11 +13,12 @@ plus tests.
 
 The 039 deletion incident, Oct 29: dogfood run 6cb529022644
 (implementing 036) was live while
-planning-docs/039-step-custom-prompt.md was recreated and committed
-host-side (a854fc7). The run's export had been materialized from a
-working tree without 039. Every sync_back after the host commit
-classified 039 as "deleted" and unlinked it from the real repo. Audit
-evidence: deletions at 09:49:46, 09:54:37, 09:59:09, 10:04:29 UTC.
+planning-docs/040-step-custom-prompt.md (numbered 039 at the time) was
+recreated and committed host-side (a854fc7). The run's export had been
+materialized from a working tree without that plan. Every sync_back
+after the host commit classified it as "deleted" and unlinked it from
+the real repo. Audit evidence: deletions at 09:49:46, 09:54:37,
+09:59:09, 10:04:29 UTC.
 Had the run reached its commit action with the file deleted, `git add
 -A` would have committed the deletion permanently.
 

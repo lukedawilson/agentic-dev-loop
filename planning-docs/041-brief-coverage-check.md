@@ -2,7 +2,7 @@
 
 > **Status: PLANNED**
 
-Independent of 038 and 039. This is Part B of the brief coverage fix;
+Independent of 038 and 040. This is Part B of the brief coverage fix;
 Part A (the section-anchored digest contract in the brief agent prompt,
 commit 75b545e) is already merged and can land on its own. Part B
 enforces Part A mechanically.
