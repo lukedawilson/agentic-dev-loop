@@ -266,6 +266,18 @@ class TestBuildBriefContext:
         assert ctx.count("## AGENTS.md") == 1
         assert "REPO RULES FROM DOCS" in ctx
 
+    def test_custom_prompt_between_docs_and_env_facts(self, runtime):
+        step = make_cfg([{
+            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "brief_inputs": {"include": ["AGENTS.md"], "env_facts": ["offline"]},
+            "custom_prompt": "brief scope", "on_pass": "success",
+        }]).steps[0]
+        ctx = build_brief_context(runtime, step, {"plan.md": "THE PLAN"})
+        assert "## Run-specific instructions\n\nbrief scope" in ctx
+        assert ctx.count("## Run-specific instructions") == 1
+        assert ctx.index("## plan.md") < ctx.index("## Run-specific instructions")
+        assert ctx.index("## Run-specific instructions") < ctx.index("## Environment facts")
+
 
 class TestBriefInputsHash:
     def test_stable_and_content_sensitive(self, runtime):

@@ -58,6 +58,13 @@ DEFAULT_MAX_ITERATIONS = 500
 DEFAULT_COMMAND_TIMEOUT = 600.0  # seconds - a pytest-class suite budget
 LAST_ERROR = "last-error.md"
 ARTIFACT_CONTEXT_CAP = 24_000  # chars per artifact injected into a step's context
+CUSTOM_PROMPT_HEADING = "Run-specific instructions"
+
+
+def custom_prompt_section(text: str) -> str:
+    """The per-step ``custom_prompt`` section (040): appended verbatim, no
+    rewording, under a fixed heading."""
+    return f"## {CUSTOM_PROMPT_HEADING}\n\n{text}"
 
 
 class _TurnPauseController:
@@ -432,15 +439,19 @@ def _artifact_file(runtime: Runtime, step_name: str) -> str | None:
 
 def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
                   notes: list[str] | None = None,
-                  artifacts: dict[str, str] | None = None) -> str:
+                  artifacts: dict[str, str] | None = None,
+                  custom_prompt: str | None = None) -> str:
     """Assemble the attempt's shared message: the always-on agent-facing error
-    guide (034), subject, doc bundle, the canonical dependency-policy paragraph
-    (021), the expected-output-paths section generated from step defs (a prompt
-    merely naming files lets agents skip them), accumulated stage artifacts
-    (027), and previous-attempt notes."""
+    guide (034), subject, doc bundle, the run-specific instructions appended
+    from the step's ``custom_prompt`` (040), the canonical dependency-policy
+    paragraph (021), the expected-output-paths section generated from step
+    defs (a prompt merely naming files lets agents skip them), accumulated
+    stage artifacts (027), and previous-attempt notes."""
     parts = [f"You are working on {subject}.\n", guide_section()]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
+    if custom_prompt:
+        parts.append(custom_prompt_section(custom_prompt))
     if artifacts:
         parts.append("## Stage artifacts")
         for step_name, content in artifacts.items():
@@ -613,11 +624,14 @@ def build_brief_context(runtime: Runtime, step: StepConfig,
     """Assemble the brief agent's task message (033): the always-on
     agent-facing error guide (034), the resolved unit/plan docs (re-read from
     disk where sources are known), the closed ``brief_inputs.include`` file
-    set, and the env-facts block. Prior verdicts and feedback are deliberately
+    set, the run-specific instructions appended from ``custom_prompt`` (040),
+    and the env-facts block. Prior verdicts and feedback are deliberately
     absent - the notes channel delivers them per attempt."""
     sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
     parts = [guide_section()]
     parts += [f"## {name}\n\n{content}" for name, content in sections.items()]
+    if step.custom_prompt:
+        parts.append(custom_prompt_section(step.custom_prompt))
     if env_facts:
         parts.append("## Environment facts\n\n"
                      + "\n".join(f"- {fact}" for fact in env_facts))
@@ -683,7 +697,8 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
         max_iterations = step.max_iterations or DEFAULT_MAX_ITERATIONS
         message = build_context(runtime, state["docs"], state["subject"],
                                 state["notes"],
-                                artifacts=state.get("artifacts", {}))
+                                artifacts=state.get("artifacts", {}),
+                                custom_prompt=step.custom_prompt)
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
         result = runtime.run_agent(step.agent, message,
                                     max_iterations=max_iterations, step=step)

@@ -389,6 +389,7 @@ class StepConfig(BaseModel):
     stop_when: StopWhenSpec | None = None  # agent steps only (032)
     finalize_nudge_turns: int | None = Field(default=None, gt=0)  # agent steps only (035)
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
+    custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
     forbidden_commands: list[str] = []  # banned-command regex deny-list (036 D1)
@@ -439,6 +440,13 @@ class StepConfig(BaseModel):
                 raise ValueError(
                     f"forbidden_commands entry {pattern!r} is not a valid "
                     f"regex: {e}") from e
+        return v
+
+    @field_validator("custom_prompt")
+    @classmethod
+    def _nonempty_custom_prompt(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("custom_prompt must be a non-empty string")
         return v
 
     @model_validator(mode="after")
@@ -500,6 +508,10 @@ class StepConfig(BaseModel):
         if self.brief_inputs is not None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'brief_inputs' requires 'agent'"
+            )
+        if self.custom_prompt is not None and self.agent is None:
+            raise ValueError(
+                f"step {self.name!r}: 'custom_prompt' requires 'agent'"
             )
         if (self.brief_inputs is not None
                 and (self.artifact is not None or self.verdicts is not None)):
@@ -797,6 +809,28 @@ class PipelineConfig(BaseModel):
         return self
 
 
+def _custom_prompt_looks_like_path(value: str) -> bool:
+    """040/D2: a value counts as path-shaped when it carries a path
+    separator or a file extension (a dot). A path-shaped value that names no
+    existing file is a hard error, never silent text."""
+    return "/" in value or "\\" in value or Path(value).suffix != ""
+
+
+def resolve_custom_prompt(value: str, pipeline_dir: Path, step_name: str) -> str:
+    """Resolve a ``custom_prompt`` value (040/D2): an existing file
+    (relative to the pipeline's directory, or absolute) is read as the
+    prompt; any other value is literal text. A path-shaped value that names
+    no file fails loud, naming the path."""
+    candidate = Path(value)
+    path = candidate if candidate.is_absolute() else pipeline_dir / candidate
+    if path.is_file():
+        return path.read_text(encoding="utf-8")
+    if _custom_prompt_looks_like_path(value):
+        raise ValueError(
+            f"step {step_name!r}: 'custom_prompt' file not found: {value}")
+    return value
+
+
 def default_state_dir(pipeline_path: Path) -> str:
     """The new run-state default (Q1): checkpoint DB + last-error.md live OUTSIDE
     the workspace mount, under ~/.agentic-dev-loop/runs/<pipeline-hash>/ where
@@ -816,4 +850,10 @@ def load_config(path: Path) -> PipelineConfig:
         )
     if "state_dir" not in data:
         data["state_dir"] = default_state_dir(path)
-    return PipelineConfig.model_validate(data)
+    cfg = PipelineConfig.model_validate(data)
+    pipeline_dir = path.resolve().parent
+    for step in cfg.steps:
+        if step.custom_prompt is not None:
+            step.custom_prompt = resolve_custom_prompt(
+                step.custom_prompt, pipeline_dir, step.name)
+    return cfg

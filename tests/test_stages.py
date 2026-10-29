@@ -137,6 +137,19 @@ class TestBuildContext:
         ctx = build_context(runtime, {}, "s", [])
         assert "## Stage artifacts" not in ctx
 
+    def test_custom_prompt_section_between_prompt_and_artifacts(self, runtime):
+        ctx = build_context(runtime, {"plan.md": "THE PLAN"}, "s", [],
+                            artifacts={"dev": "summary"},
+                            custom_prompt="verify export first")
+        assert "## Run-specific instructions\n\nverify export first" in ctx
+        assert ctx.count("## Run-specific instructions") == 1
+        assert ctx.index("## plan.md") < ctx.index("## Run-specific instructions")
+        assert ctx.index("## Run-specific instructions") < ctx.index("## Stage artifacts")
+
+    def test_no_custom_prompt_leaves_context_unchanged(self, runtime):
+        ctx = build_context(runtime, {"plan.md": "THE PLAN"}, "s", [])
+        assert "## Run-specific instructions" not in ctx
+
 
 class TestDepsPolicyContext:
     def test_locked_policy_injected(self, runtime):
@@ -209,6 +222,17 @@ class TestAgentNode:
         fake_agents.set("dev", [("write", "implementation-summary.md", "MARKER-DEV")])
         update = make_agent_node(runtime, runtime.cfg.steps[0])(make_state())
         assert update["artifacts"] == {"dev": "MARKER-DEV"}
+
+    def test_custom_prompt_reaches_agent_message(self, runtime, fake_agents):
+        cfg = make_cfg([{"name": "dev", "agent": "dev",
+                         "produces": ["summary.md"],
+                         "custom_prompt": "scope note", "on_pass": "success"}])
+        rt = dataclasses.replace(runtime, cfg=cfg)
+        fake_agents.set("dev", [("write", "summary.md", "done")])
+        make_agent_node(rt, rt.cfg.steps[0])(make_state())
+        (message,) = fake_agents.messages_for("dev")
+        assert "## Run-specific instructions\n\nscope note" in message
+        assert message.count("## Run-specific instructions") == 1
 
     def test_pass_verdict_captures_artifact(self, runtime, fake_agents):
         fake_agents.set("check", [("write", "ci-fix.md", "MARKER-CHECK\nVERDICT: PASS\n")])

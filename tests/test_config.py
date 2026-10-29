@@ -331,6 +331,66 @@ def test_timeout_without_command_rejected(tmp_path):
         _load(tmp_path, data)
 
 
+class TestCustomPrompt:
+    def test_defaults_none(self, tmp_path):
+        assert _load(tmp_path, _base()).steps[0].custom_prompt is None
+
+    def test_literal_text_round_trips(self, tmp_path):
+        data = _base()
+        data["steps"][0]["custom_prompt"] = "verify the export tab first"
+        assert _load(tmp_path, data).steps[0].custom_prompt == \
+            "verify the export tab first"
+
+    def test_existing_file_path_reads_contents(self, tmp_path):
+        (tmp_path / "qa-plan.md").write_text("verify the export tab\n")
+        data = _base()
+        data["steps"][0]["custom_prompt"] = "qa-plan.md"
+        assert _load(tmp_path, data).steps[0].custom_prompt == \
+            "verify the export tab\n"
+
+    def test_absolute_file_path_reads_contents(self, tmp_path):
+        plan = tmp_path / "plan.txt"
+        plan.write_text("ABSOLUTE PLAN")
+        data = _base()
+        data["steps"][0]["custom_prompt"] = str(plan)
+        assert _load(tmp_path, data).steps[0].custom_prompt == "ABSOLUTE PLAN"
+
+    def test_missing_path_with_extension_rejected(self, tmp_path):
+        data = _base()
+        data["steps"][0]["custom_prompt"] = "qa-plan.md"
+        with pytest.raises(ValueError,
+                           match="'custom_prompt' file not found: qa-plan.md"):
+            _load(tmp_path, data)
+
+    def test_missing_path_with_separator_rejected(self, tmp_path):
+        data = _base()
+        data["steps"][0]["custom_prompt"] = "tests/qa-plan"
+        with pytest.raises(ValueError, match="tests/qa-plan"):
+            _load(tmp_path, data)
+
+    def test_requires_agent(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "x", "command": "true",
+                          "custom_prompt": "hi"}]
+        with pytest.raises(ValidationError,
+                           match="'custom_prompt' requires 'agent'"):
+            _load(tmp_path, data)
+
+    def test_rejected_on_action_step(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "x", "action": "commit",
+                          "custom_prompt": "hi"}]
+        with pytest.raises(ValidationError,
+                           match="'custom_prompt' requires 'agent'"):
+            _load(tmp_path, data)
+
+    def test_empty_value_rejected(self, tmp_path):
+        data = _base()
+        data["steps"][0]["custom_prompt"] = ""
+        with pytest.raises(ValidationError, match="non-empty"):
+            _load(tmp_path, data)
+
+
 @pytest.mark.parametrize("field,value", [
     ("artifact", "a.md"),
     ("verdicts", {"pass": "P", "fail": "F"}),
