@@ -499,6 +499,28 @@ dotnet restore --locked-mode      # installs exactly packages.lock.json
 Keep the lockfile tracked (do not gitignore it) and re-run the locked restore
 to prove it holds from a clean cache before setting `deps_policy: locked`.
 
+## Agent-facing error guide
+
+The engine bundles an always-on guide for the engine error codes an agent
+can actually observe while running terminal commands. The guide lives at
+`src/agentic_dev_loop/engine/agent_error_guide.md`, versioned with the engine
+code that emits the codes, and is injected into every agent step's task
+context at assembly time. There is no opt-in and no opt-out in v1; command
+and action steps never receive it because no agent reads them.
+
+Each agent-visible code has exactly one table row, shaped like this:
+
+| Code | Meaning | Correct response |
+| --- | --- | --- |
+| AE-SBX-016 | The loop refused to sync an edit because the real repo changed underneath on a path this workspace also touches; the file in this workspace is stale and its edits will not be applied. | The command is not the problem: retry once, do not edit or work around the named path, and mention the code in your final response if it persists. |
+
+The guide is consumer-agnostic: it explains the general mechanism and never
+names a consumer or a consumer domain rule ID. If an ID must appear inside a
+quoted engine message, the placeholder `<domain-rule-id>` is used. Any engine
+change that adds or changes an agent-visible error code must update the guide
+in the same commit; the test suite enforces the pairing by parsing the
+agent-visible `SandboxError` raise sites against the bundled table.
+
 ## Host boundary (security model)
 
 The orchestrator, tool layer, and the `commit` action run in the **host

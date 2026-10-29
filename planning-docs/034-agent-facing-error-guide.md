@@ -1,8 +1,8 @@
 # 034-agent-facing-error-guide.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
-Independent of the other churn plans; pairs with 035 (once the deny-list
+Independent of the other churn plans; pairs with 036 (once the deny-list
 ships, its structured "[forbidden: <label>]" observation gets a guide
 entry too).
 
@@ -66,7 +66,7 @@ One line per code:
 The full list of agent-visible codes is enumerated from the engine source
 at implementation time (the AE-SBX-* family; AE-SBX-016 is the only one
 observed in the wild). Further entries follow the same shape as codes are
-added, and 035's "[forbidden: <label>]" observation gets an entry when
+added, and 036's "[forbidden: <label>]" observation gets an entry when
 that plan lands.
 
 ### 4. Naming rule (engine)

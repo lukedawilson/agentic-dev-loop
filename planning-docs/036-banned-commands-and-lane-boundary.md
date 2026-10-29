@@ -1,8 +1,8 @@
-# 035-banned-commands-and-lane-boundary.md
+# 036-banned-commands-and-lane-boundary.md
 
 > **Status: PLANNED**
 
-Independent of 032-036; can land first or last.
+Independent of 032-038; can land first or last.
 
 ## Scope
 

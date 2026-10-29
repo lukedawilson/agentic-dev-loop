@@ -30,7 +30,7 @@ policy-checked, logged proxy.
 
 Threat classes and what closes them, per the chat analysis:
 
-- The agent's own env-override workaround: 035's command deny-list plus
+- The agent's own env-override workaround: 036's command deny-list plus
   the 037 prompt rule.
 - Hostile code the agent executes (builder, restored dependencies,
   generated code): only this plan.
@@ -110,4 +110,4 @@ Needs a human commit.
 - seccomp or iptables filtering (rejected in the chat analysis:
   seccomp connect filtering is UDP-bypassable and platform-fragile,
   host iptables does not apply under Docker Desktop).
-- Command-level deny-lists (035).
+- Command-level deny-lists (036).

@@ -100,5 +100,5 @@ path. Needs a human commit.
 
 - NO_PROXY changes (rejected).
 - Network-level enforcement (038).
-- Mechanical denial of env-prefix commands (035's banned-commands
+- Mechanical denial of env-prefix commands (036's banned-commands
   deny-list).

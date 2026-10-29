@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a31] - 2026-10-29
+
+### Changed
+
+- feat: construct plan 034-agent-facing-error-guide.md (agent dev loop)
+- Uncommitted changes: README.md, planning-docs/032-stop-when-green.md, planning-docs/034-agent-facing-error-guide.md, planning-docs/035-finalize-nudge-and-verdict-cap.md, planning-docs/036-banned-commands-and-lane-boundary.md, planning-docs/037-proxy-dial-rewrite-for-host-services.md, planning-docs/038-network-level-egress-enforcement.md
+
 ## [1.0.0a30] - 2026-10-29
 
 ### Changed
