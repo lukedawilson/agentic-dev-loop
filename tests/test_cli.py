@@ -4,6 +4,7 @@ listed in the pipeline's `extensions:`). Pipeline runs are real; FakeAgents
 stubs only the SDK network boundary."""
 
 import importlib.metadata
+import os
 import sqlite3
 import subprocess
 import sys
@@ -437,3 +438,85 @@ class TestRefreshAndCleanStamps:
 
         assert cli_mod.main(["clean.yaml", "--clean-stamps"]) == 0
         assert len(calls) == 1
+
+
+
+class TestContainersSubcommand:
+    def test_help_without_pipeline(self, capsys):
+        with pytest.raises(SystemExit) as e:
+            main(["containers", "--help"])
+        assert e.value.code == 0
+        out = capsys.readouterr().out
+        assert "--reap" in out
+        assert "--json" in out
+        assert "--state-dir" in out
+
+
+class TestCliLightweightImports:
+    def test_containers_path_does_not_import_sdk(self):
+        # Change 5: `containers`, `--help`, and `--version` must load no
+        # pipeline, extension, or SDK imports. Importing cli in a clean
+        # interpreter must not pull in dryrun -> stages -> openhands.sdk /
+        # langgraph (the pre-fix top-level `from .dryrun import dry_run` did).
+        root = Path(__file__).resolve().parents[1]
+        src = root / "src"
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            filter(None, [str(src), str(root), env.get("PYTHONPATH", "")]))
+        code = (
+            "import sys, agentic_dev_loop.engine.cli;"
+            "print('openhands.sdk' in sys.modules);"
+            "print('langgraph' in sys.modules);"
+            "print('agentic_dev_loop.engine.dryrun' in sys.modules);"
+            "print('agentic_dev_loop.engine.stages' in sys.modules)"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=root, env=env,
+            capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip().splitlines() == [
+            "False", "False", "False", "False"]
+
+
+class TestSigtermHandler:
+    def test_first_sigterm_raises_system_exit_143(self, monkeypatch):
+        import agentic_dev_loop.engine.cli as cli_mod
+
+        cli_mod._sigterm_in_progress = False
+        with pytest.raises(SystemExit) as e:
+            cli_mod._handle_sigterm(15, None)
+        assert e.value.code == 143
+        assert cli_mod._sigterm_in_progress is True
+
+    def test_second_sigterm_hard_exits(self, monkeypatch):
+        import agentic_dev_loop.engine.cli as cli_mod
+
+        cli_mod._sigterm_in_progress = True
+        exited = []
+
+        def fake_exit(code):
+            exited.append(code)
+            raise SystemExit(code)
+
+        monkeypatch.setattr(cli_mod.os, "_exit", fake_exit)
+        with pytest.raises(SystemExit) as e:
+            cli_mod._handle_sigterm(15, None)
+        assert exited == [143]
+        assert e.value.code == 143
+
+    def test_run_path_installs_and_restores_handler(self, repo, fake_agents,
+                                                    monkeypatch):
+        import agentic_dev_loop.engine.cli as cli_mod
+
+        fake_agents.set("dev", [("write", "implementation-summary.md", "done")])
+        installed = []
+        restored = []
+        monkeypatch.setattr(cli_mod, "_install_sigterm_handler",
+                            lambda: (installed.append(True) or object()))
+        monkeypatch.setattr(cli_mod, "_restore_sigterm_handler",
+                            lambda prev: restored.append(prev))
+
+        assert cli_mod.main(["pipeline.yaml", "--plan", "plan.md",
+                             "--no-viz"]) == 0
+        assert installed == [True]
+        assert len(restored) == 1

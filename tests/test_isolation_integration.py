@@ -382,7 +382,8 @@ class TestReaperE2E:
                 "created_at": "now",
             }) + "\n")
 
-        reap_orphaned_containers(b._iso_state_dir, SubprocessRunner())
+        reaped = reap_orphaned_containers(b._iso_state_dir, SubprocessRunner())
+        assert reaped == [name]
 
         inspect = SubprocessRunner().run(
             ["docker", "ps", "-a", "--filter", f"name={name}",

@@ -1049,6 +1049,34 @@ class TestStartupSandbox:
             startup_sandbox(cfg, workspace=ws, runner=runner)  # type: ignore[call-arg]
         assert runner.calls == []
 
+    def test_provision_failure_closes_backend(self, tmp_path, monkeypatch):
+        """042 D3: a setup-hook failure after the exec container was created
+        must still reach close() and prune the run's registry entry."""
+        from agentic_dev_loop.engine.isolation import (CONTAINER_REGISTRY,
+                                                       startup_sandbox)
+
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = self._cfg(tmp_path, with_setup=True)
+        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
+                            lambda *a: "/usr/bin/docker")
+        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
+        runner = FakeRunner(
+            ok("1.54"),       # probe version
+            ok("linux"),      # probe ostype
+            ok(""),           # image inspect
+            ok(""),           # exec container run
+            fail(1, "boom"),  # provision run fails
+            ok(""),           # close: stop
+            ok(""),           # close: rm -f
+            ok(""),           # close: verify container gone
+        )
+        with pytest.raises(SandboxError, match="AE-SBX-009"):
+            startup_sandbox(cfg, workspace=ws,
+                            state_dir=tmp_path / "run-state", runner=runner)
+        registry = tmp_path / "iso-state" / CONTAINER_REGISTRY
+        assert not registry.exists() or registry.read_text().strip() == ""
+
     def test_sequence_and_provision(self, tmp_path, monkeypatch):
         from agentic_dev_loop.engine import isolation
         from agentic_dev_loop.engine.isolation import startup_sandbox
@@ -2178,7 +2206,8 @@ class TestReaper:
         name = f"{'a' * 32}-exec"
         self._write(tmp_path / "state", [self._entry(name, proc.pid)])
         runner = FakeRunner()
-        reap_orphaned_containers(tmp_path / "state", runner)
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == [name]
         assert runner.calls == [["docker", "rm", "-f", name]]
         assert self._read(tmp_path / "state") == []
 
@@ -2355,3 +2384,130 @@ class TestNetworkEgressEnforcement:
         assert merged["event"] == "egress_enforcement"
         assert merged["hostname"] == "pypi.org"
         assert not backend._egress_events_path.exists()
+
+
+
+class TestRegisterBeforeCreate:
+    """042 D1: every create site appends its registry record before the
+    create command, so a failed create still leaves a stale entry the close()
+    verification and startup reaper can later prune."""
+
+    def _entries(self, state_dir):
+        path = Path(state_dir) / CONTAINER_REGISTRY
+        if not path.is_file():
+            return []
+        return [json.loads(line) for line in
+                path.read_text().splitlines() if line.strip()]
+
+    def test_legacy_exec_entry_exists_when_create_fails(self, tmp_path):
+        runner = FakeRunner(fail(125, "boom"))
+        backend = _backend(tmp_path, runner)
+        with pytest.raises(SandboxError, match="AE-SBX-010"):
+            backend.create_execution_container()
+        assert any(e["name"] == backend._container
+                   for e in self._entries(tmp_path / "state"))
+
+    def test_legacy_network_entry_exists_when_create_fails(self, tmp_path):
+        runner = FakeRunner(ok(""), ok("cid"), fail(125, "boom"))
+        backend = _backend(tmp_path, runner, network=True)
+        with pytest.raises(SandboxError, match="AE-SBX-013"):
+            backend.create_execution_container()
+        assert any(e["name"] == backend._network_container
+                   for e in self._entries(tmp_path / "state"))
+
+    def test_network_entry_exists_when_network_create_fails(self, tmp_path):
+        runner = FakeRunner(fail(125, "boom"))
+        backend = _backend(tmp_path, runner, network=True)
+        with pytest.raises(SandboxError, match="AE-SBX-021"):
+            backend._ensure_run_network()
+        assert any(e.get("name") == backend._run_net
+                   and e.get("kind") == "network"
+                   for e in self._entries(tmp_path / "state"))
+
+    def test_base_export_entry_exists_when_create_fails(self, tmp_path):
+        runner = FakeRunner(fail(125, "boom"))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(tmp_path / "export")
+        with pytest.raises(SandboxError, match="AE-SBX-010"):
+            backend._create_base_export_container()
+        assert any(e["name"] == backend._container
+                   for e in self._entries(tmp_path / "state"))
+
+    def test_profile_entry_exists_when_create_fails(self, tmp_path):
+        runner = FakeRunner(fail(125, "boom"))
+        backend = _backend(tmp_path, runner)
+        backend._export_root = str(tmp_path / "export")
+        key = container_profile_key(MountSet(), EgressPolicy())
+        with pytest.raises(SandboxError, match="AE-SBX-010"):
+            backend._start_profile((key, False), MountSet(), EgressPolicy(),
+                                   False)
+        expected = f"{backend._run_id}-exec-{key[:16]}"
+        assert any(e["name"] == expected
+                   for e in self._entries(tmp_path / "state"))
+
+    def test_proxy_entry_exists_when_create_fails(self, tmp_path):
+        runner = FakeRunner(ok(""), ok("172.18.0.0/16 "), fail(125, "boom"))
+        backend = _backend(tmp_path, runner, network=True)
+        with pytest.raises(SandboxError, match="AE-SBX-020"):
+            backend._start_proxy_container("r-proxy-abc", EgressPolicy())
+        assert any(e["name"] == "r-proxy-abc"
+                   for e in self._entries(tmp_path / "state"))
+
+
+class TestCloseVerification:
+    """042 D2: close() prunes an owned registry entry only when the daemon
+    confirms the object is gone; a surviving object keeps its entry."""
+
+    def _write(self, state_dir, entry):
+        path = Path(state_dir) / CONTAINER_REGISTRY
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+
+    def _read(self, state_dir):
+        path = Path(state_dir) / CONTAINER_REGISTRY
+        if not path.is_file():
+            return []
+        return [json.loads(line) for line in
+                path.read_text().splitlines() if line.strip()]
+
+    def test_close_keeps_entry_when_rm_fails_and_container_survives(self, tmp_path):
+        name = f"{'a' * 32}-exec"
+        entry = {"run_id": "r", "name": name, "pid": os.getpid(),
+                 "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", entry)
+        runner = FakeRunner(ok(""), fail(1, "boom"), ok(name + "\n"))
+        backend = _backend(tmp_path, runner)
+        backend._run_id = "r"
+        backend._container = name
+        backend._started = True
+        backend.close()
+        assert self._read(tmp_path / "state") == [entry]
+
+    def test_close_prunes_entry_after_verified_removal(self, tmp_path):
+        name = f"{'b' * 32}-exec"
+        entry = {"run_id": "r", "name": name, "pid": os.getpid(),
+                 "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", entry)
+        runner = FakeRunner(ok(""), ok(""), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._run_id = "r"
+        backend._container = name
+        backend._started = True
+        backend.close()
+        assert self._read(tmp_path / "state") == []
+
+    def test_second_close_is_a_noop(self, tmp_path):
+        name = f"{'c' * 32}-exec"
+        entry = {"run_id": "r", "name": name, "pid": os.getpid(),
+                 "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", entry)
+        runner = FakeRunner(ok(""), ok(""), ok(""))
+        backend = _backend(tmp_path, runner)
+        backend._run_id = "r"
+        backend._container = name
+        backend._started = True
+        backend.close()
+        calls_after_first = len(runner.calls)
+        backend.close()
+        assert len(runner.calls) == calls_after_first

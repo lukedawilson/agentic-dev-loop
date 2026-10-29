@@ -1053,12 +1053,12 @@ class DockerBackend(Sandbox):
             workspace=self._workspace, network=False,
             sandbox_venv_dir=self._sandbox_venv_dir,
             seccomp_profile=self._seccomp_profile)
+        self._register_container(self._container)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
-        self._register_container(self._container)
         self._started = True
         if not self._network_enabled:
             return
@@ -1068,6 +1068,7 @@ class DockerBackend(Sandbox):
             network_name=self._run_net,
             sandbox_venv_dir=self._sandbox_venv_dir,
             seccomp_profile=self._seccomp_profile)
+        self._register_container(self._network_container)
         net_res = self._runner.run(net_payload, timeout=60)
         if net_res.exit_code != 0:
             # reclaim the already-started network-none container - never leak it.
@@ -1076,13 +1077,13 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-013: networked container run failed: "
                 f"{net_res.stderr.strip() or net_res.stdout.strip()}")
-        self._register_container(self._network_container)
         self._network_started = True
 
     def _ensure_run_network(self) -> None:
         """Create the per-run internal network once (038, D1/D6)."""
         if self._network_created:
             return
+        self._register_network(self._run_net)
         res = self._runner.run(
             ["docker", "network", "create", "--internal",
              "--label", "agentic-dev-loop=true",
@@ -1093,10 +1094,12 @@ class DockerBackend(Sandbox):
                 f"AE-SBX-021: internal network create failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
         self._network_created = True
-        self._register_network(self._run_net)
 
     def _register_network(self, name: str) -> None:
-        """Record the per-run network for the orphan reaper (038, D6)."""
+        """Record the per-run network for the orphan reaper (038 D6, 042 D1).
+        Appended BEFORE the create command so any object that exists is
+        registered; the reaper tolerates a stale entry (a dead owner whose
+        create never happened gets a no-op rm and a pruned entry)."""
         _append_registry_record(self._iso_state_dir, {
             "run_id": self._run_id,
             "name": name,
@@ -1117,12 +1120,12 @@ class DockerBackend(Sandbox):
             seccomp_profile=self._seccomp_profile,
             mount_set=base, export_root=self._export_root,
             cache_mounts=self._cache_mounts)
+        self._register_container(self._container)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
-        self._register_container(self._container)
         self._started = True
         if not self._baseline:
             self._baseline = _snapshot(Path(self._export_root),
@@ -1297,6 +1300,7 @@ class DockerBackend(Sandbox):
             mount_set=mount_set, export_root=self._export_root,
             cache_mounts=self._cache_mounts, egress_proxy=proxy_url_value,
             name=name)
+        self._register_container(name)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             if proxy_name is not None:
@@ -1304,7 +1308,6 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-010: container run failed: "
                 f"{res.stderr.strip() or res.stdout.strip()}")
-        self._register_container(name)
         return _ProfileContainer(name=name, mount_set=mount_set,
                                  egress_policy=policy, proxy_name=proxy_name,
                                  started=True)
@@ -1334,6 +1337,7 @@ class DockerBackend(Sandbox):
             egress_proxy_host_path=str(Path(egress_proxy_module.__file__)),
             egress_policy_host_path=str(Path(egress_policy_module.__file__)),
             bind_host=bind_host, port=EGRESS_PROXY_PORT)
+        self._register_container(name)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
             raise SandboxError(
@@ -1353,7 +1357,6 @@ class DockerBackend(Sandbox):
                 f"AE-SBX-021: egress proxy failed to bind "
                 f"{bind_host}:{EGRESS_PROXY_PORT} after "
                 f"{PROXY_READY_ATTEMPTS} readiness probes")
-        self._register_container(name)
         self._proxy_containers.append(name)
 
     def _proxy_internal_ip(self) -> str:
@@ -1521,12 +1524,14 @@ class DockerBackend(Sandbox):
             self._runner.run(["docker", "network", "rm", self._run_net], timeout=60)
             self._network_created = False
         merge_egress_events(self._iso_state_dir, self._egress_events_path)
-        self._prune_registry()
+        self._verify_and_prune_registry()
 
     def _register_container(self, name: str) -> None:
-        """Record one successfully created exec container in the host registry
-        (030, D4). Best-effort: a broken registry only disables reaping, it
-        never fails the run."""
+        """Record one exec/proxy container in the host registry (030 D4, 042
+        D1). Appended BEFORE the create command so any object that exists is
+        registered. Best-effort: a broken registry only disables reaping, it
+        never fails the run; the reaper tolerates a stale entry (a dead owner
+        whose create never happened gets a no-op rm and a pruned entry)."""
         _append_registry_record(self._iso_state_dir, {
             "run_id": self._run_id,
             "name": name,
@@ -1535,14 +1540,49 @@ class DockerBackend(Sandbox):
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    def _prune_registry(self) -> None:
-        """Drop this run's registry entries after close() removed the
-        containers (030, D4). Tolerates a missing registry file."""
+    def _verify_and_prune_registry(self) -> None:
+        """Prune this run's registry entries only after the daemon confirms
+        the object is gone (042 D2). A surviving object (daemon down, rm
+        failure) keeps its entry so the next startup reaper retries. Never
+        raises."""
         entries = _read_registry(self._iso_state_dir)
         if not entries:
             return
-        remaining = [e for e in entries if e.get("run_id") != self._run_id]
+        remaining: list[dict] = []
+        for entry in entries:
+            if entry.get("run_id") != self._run_id:
+                remaining.append(entry)
+                continue
+            name = entry.get("name")
+            if not isinstance(name, str):
+                remaining.append(entry)
+                continue
+            if entry.get("kind") == "network":
+                gone = self._network_gone(name)
+            else:
+                gone = self._container_gone(name)
+            if not gone:
+                remaining.append(entry)
         _write_registry(self._iso_state_dir, remaining)
+
+    def _container_gone(self, name: str) -> bool:
+        """True only when the daemon confirms the container no longer exists.
+        A nonzero daemon exit keeps the entry."""
+        res = self._runner.run(
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"], timeout=30)
+        if res.exit_code != 0:
+            return False
+        return name not in res.stdout.splitlines()
+
+    def _network_gone(self, name: str) -> bool:
+        """True only when the daemon reports the network is missing. Any
+        other inspect failure (daemon unreachable) keeps the entry."""
+        res = self._runner.run(
+            ["docker", "network", "inspect", name], timeout=30)
+        if res.exit_code == 0:
+            return False
+        return "No such network" in f"{res.stderr} {res.stdout}"
 
     # -- internal -----------------------------------------------------------
 
@@ -1777,7 +1817,8 @@ def _pid_alive_matches(pid: int, recorded_start: str | None) -> bool:
 
 
 def reap_orphaned_containers(state_dir: str | Path,
-                             runner: CommandRunner | None = None) -> None:
+                             runner: CommandRunner | None = None,
+                             *, announce: bool = True) -> list[str]:
     """Startup orphan reaper (030/038, D4/D6): remove exec/proxy containers
     and the per-run internal network whose owning CLI process is gone (crashed
     before close()). Exact by construction - only engine registry names are
@@ -1786,8 +1827,9 @@ def reap_orphaned_containers(state_dir: str | Path,
     runner = runner or _default_runner
     entries = _read_registry(Path(state_dir))
     if not entries:
-        return
+        return []
     remaining: list[dict] = []
+    reaped: list[str] = []
     for entry in entries:
         name = entry.get("name")
         kind = entry.get("kind", "container")
@@ -1801,7 +1843,9 @@ def reap_orphaned_containers(state_dir: str | Path,
                 remaining.append(entry)
                 continue
             runner.run(["docker", "network", "rm", name], timeout=60)
-            _announce(f"reaped orphaned sandbox network {name}")
+            if announce:
+                _announce(f"reaped orphaned sandbox network {name}")
+            reaped.append(name)
             continue
         if not isinstance(name, str) or not _CONTAINER_NAME_RE.match(name):
             # Defense in depth: a corrupted registry entry is never an engine
@@ -1814,8 +1858,11 @@ def reap_orphaned_containers(state_dir: str | Path,
             remaining.append(entry)
             continue
         runner.run(["docker", "rm", "-f", name], timeout=60)
-        _announce(f"reaped orphaned sandbox container {name}")
+        if announce:
+            _announce(f"reaped orphaned sandbox container {name}")
+        reaped.append(name)
     _write_registry(Path(state_dir), remaining)
+    return reaped
 
 
 # ---------------------------------------------------------------------------
@@ -1961,17 +2008,23 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         sync_excludes=list(cfg.sync_excludes),
         merge_on_conflict=list(cfg.merge_on_conflict),
         dial_rewrites=dial_rewrites)
-    _announce(f"preparing sandbox image {image} (first pull can take a while)")
-    backend.ensure_image()
-    _announce("sandbox image ready")
-    _announce("starting execution container...")
-    backend.create_execution_container()
-    _announce("execution container started")
-    if refresh is None:
-        refresh = bool(cfg.isolation and cfg.isolation.refresh)
-    for setup_cmd, stamp_key in _declared_setups(cfg, workspace):
-        _announce(f"provisioning setup (stamp {stamp_key[:8]})")
-        backend.provision(setup_cmd, stamp_key, str(iso_state_dir / "stamps"),
-                          force=refresh)
-    _announce("sandbox ready")
-    return backend
+    try:
+        _announce(f"preparing sandbox image {image} (first pull can take a while)")
+        backend.ensure_image()
+        _announce("sandbox image ready")
+        _announce("starting execution container...")
+        backend.create_execution_container()
+        _announce("execution container started")
+        if refresh is None:
+            refresh = bool(cfg.isolation and cfg.isolation.refresh)
+        for setup_cmd, stamp_key in _declared_setups(cfg, workspace):
+            _announce(f"provisioning setup (stamp {stamp_key[:8]})")
+            backend.provision(setup_cmd, stamp_key,
+                              str(iso_state_dir / "stamps"), force=refresh)
+        _announce("sandbox ready")
+        return backend
+    except BaseException:
+        # 042 D3: a post-create startup failure (e.g. a setup hook) must still
+        # reap the exec container it created, never leak it to the reaper.
+        backend.close()
+        raise
