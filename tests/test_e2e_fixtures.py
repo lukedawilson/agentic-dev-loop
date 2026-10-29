@@ -102,6 +102,10 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
     # carry them (the real repo does).
     (repo / "AGENTS.md").write_text("# Repo rules\n")
     (repo / "coding-standards-ddd.yaml").write_text("standards: true\n")
+    # The example pipeline lists the domain model as an additional_files
+    # sibling; the consumer copy must carry it (the real repo does).
+    (repo / "aidlc-docs").mkdir(exist_ok=True)
+    (repo / "aidlc-docs" / "domain-model-erd.md").write_text("# Domain model\n")
     monkeypatch.chdir(repo)
     subprocess.run(["git", "init", "-q"], check=True)
     subprocess.run(["git", "config", "user.email", "t@t"], check=True)
