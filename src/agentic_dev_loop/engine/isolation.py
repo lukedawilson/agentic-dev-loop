@@ -121,6 +121,10 @@ class SandboxExecutionRequest:
     # Host-side audit metadata (BR-11) - never sent into the container.
     pipeline: str | None = None
     step: str | None = None
+    # 036 lane boundary (v1): the unit allowlist every synced path must match.
+    # None = unrestricted (no engine-allowlist.yaml); an empty tuple = present
+    # but empty file (deny all synced paths).
+    allowlist: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.argv:
@@ -1071,7 +1075,7 @@ class DockerBackend(Sandbox):
         result = self._exec(request, prof.name)
         report: SyncBackReport | None = None
         if mount_set.rw_paths() and self._export_root is not None:
-            report = self._sync_back(mount_set)
+            report = self._sync_back(mount_set, request.allowlist)
         if report is not None and (report.synced_paths or report.merged_paths):
             result = SandboxExecutionResult(
                 exit_code=result.exit_code, stdout=result.stdout,
@@ -1169,7 +1173,8 @@ class DockerBackend(Sandbox):
         export_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(host_path, export_path, follow_symlinks=False)
 
-    def _sync_back(self, mount_set: MountSet) -> SyncBackReport | None:
+    def _sync_back(self, mount_set: MountSet,
+                   allowlist: tuple[str, ...] | None = None) -> SyncBackReport | None:
         """Sync declared-rw export changes back to the real repo (BR-4/F1),
         git-aware, host-side, with the sandbox step already complete.
 
@@ -1184,7 +1189,18 @@ class DockerBackend(Sandbox):
             self._export_root, self._workspace, list(mount_set.rw_paths()),
             baseline=self._baseline, step_id=None,
             cache_paths=self._cache_paths, excludes=self._sync_excludes,
-            merge_on_conflict=self._merge_on_conflict)
+            merge_on_conflict=self._merge_on_conflict, allowlist=allowlist)
+
+        # 036 lane boundary (v1): fail the step before any copy/delete/merge
+        # so an out-of-lane write is never promoted into the real repo.
+        if report.lane_violations:
+            _announce(
+                "lane violation: "
+                + ", ".join(report.lane_violations)
+                + " outside engine-allowlist.yaml")
+            raise SandboxError(
+                "engine lane violation: synced/merged paths outside the unit "
+                "engine-allowlist.yaml: " + ", ".join(report.lane_violations))
 
         # 029 step 2: union-merge declared merge paths first, so a mixed
         # merge+hard conflict still converges the append-style logs before

@@ -391,6 +391,7 @@ class StepConfig(BaseModel):
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
+    forbidden_commands: list[str] = []  # banned-command regex deny-list (036 D1)
     network: bool = False  # per-stage egress (command/agent + sandbox actions; host-side actions reject at registry time)
     # unit-5: per-step mount granularity + egress policy. Empty mounts =
     # strict-by-default (BR-1.1); egress None = strict empty allowlist
@@ -419,6 +420,26 @@ class StepConfig(BaseModel):
     @classmethod
     def _coerce_produces(cls, v: Any) -> Any:
         return [v] if isinstance(v, str) else v
+
+    @field_validator("forbidden_commands", mode="before")
+    @classmethod
+    def _coerce_forbidden_commands(cls, v: Any) -> Any:
+        return [v] if isinstance(v, str) else v
+
+    @field_validator("forbidden_commands")
+    @classmethod
+    def _valid_forbidden_commands(cls, v: list[str]) -> list[str]:
+        for pattern in v:
+            if not isinstance(pattern, str) or not pattern.strip():
+                raise ValueError(
+                    "forbidden_commands entries must be non-empty strings")
+            try:
+                re.compile(pattern)
+            except re.error as e:
+                raise ValueError(
+                    f"forbidden_commands entry {pattern!r} is not a valid "
+                    f"regex: {e}") from e
+        return v
 
     @model_validator(mode="after")
     def _check_shape(self) -> "StepConfig":

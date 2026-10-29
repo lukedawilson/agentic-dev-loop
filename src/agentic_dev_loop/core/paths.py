@@ -67,3 +67,25 @@ def dir_excluded(dir_rel: str, excludes: tuple[str, ...] | list[str]) -> bool:
             if parts[:len(spec_parts)] == spec_parts:
                 return True
     return False
+
+
+def path_allowed(rel: str, allowlist: tuple[str, ...] | list[str]) -> bool:
+    """True when a repo-relative posix path matches an allowed path/glob.
+
+    Mirrors ``path_excluded`` semantics: literal entries match by component
+    prefix (the dir and everything under it); wildcard entries match by
+    ``fnmatch.fnmatchcase`` on the full posix relpath. A ``.`` (or blank)
+    entry allows the whole tree.
+    """
+    parts = relative_parts(rel)
+    for spec in allowlist:
+        if _has_wildcards(spec):
+            if fnmatch.fnmatchcase(rel, spec):
+                return True
+        else:
+            spec_parts = relative_parts(spec)
+            if not spec_parts:
+                return True
+            if parts[:len(spec_parts)] == spec_parts:
+                return True
+    return False

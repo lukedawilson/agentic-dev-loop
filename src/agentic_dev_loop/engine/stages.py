@@ -38,7 +38,9 @@ from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepC
 from agentic_dev_loop.core.paths import _has_wildcards
 from .deps import extension_message, parse_missing_dependencies, policy_injection
 from .egress_policy import assemble_egress_policy
-from .isolation import SandboxExecutionRequest, command_argv, resolve_sandbox_env
+from .forbidden import resolve_forbidden_rules
+from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
+                        resolve_sandbox_env)
 from .mounts import resolve_mount_set
 from .outputs import CapturedOutput
 from .secrets import redact_values, step_secret_env
@@ -171,6 +173,9 @@ class Runtime:
     # the real workspace (no export materialised - fake/legacy paths).
     sandbox_cwd: Path | None = None
     secrets: dict[str, str] = field(default_factory=dict)
+    # 036 lane boundary (v1): the active unit's engine-allowlist.yaml paths;
+    # None = unrestricted (no allowlist file).
+    engine_allowlist: list[str] | None = None
 
     def run_agent(self, agent_name: str, message: str,
                   max_iterations: int = DEFAULT_MAX_ITERATIONS,
@@ -200,6 +205,13 @@ class Runtime:
                     cwd, mount_set, egress_policy = _step_sandbox(self, step)
                 else:
                     cwd, mount_set, egress_policy = (self.workspace, None, None)
+                forbidden_commands = (
+                    resolve_forbidden_rules(step.forbidden_commands,
+                                            step.network)
+                    if step is not None else None)
+                allowlist = (
+                    tuple(self.engine_allowlist)
+                    if self.engine_allowlist is not None else None)
                 register_sandbox_terminal(
                     self.sandbox,
                     env=step.env if step is not None else None,
@@ -214,7 +226,9 @@ class Runtime:
                     on_terminal_result=(controller.on_terminal_result
                                         if controller is not None else None),
                     secrets=(step_secret_env(self.cfg, step, self.secrets)
-                             if step is not None else None))
+                             if step is not None else None),
+                    forbidden_commands=forbidden_commands,
+                    allowlist=allowlist)
             agent = load_agent(self.agents_dir, agent_name, self.llm)
             callbacks = []
             if controller is not None:
@@ -364,7 +378,8 @@ def _run_command(command: str, workspace: Path, timeout: float,
                  network: bool = False,
                  mount_set=None,
                  egress_policy=None,
-                 cwd: Path | None = None) -> tuple[int | None, str, bool]:
+                 cwd: Path | None = None,
+                 allowlist: tuple[str, ...] | None = None) -> tuple[int | None, str, bool]:
     """Run a command step in the workspace, capturing combined stdout/stderr.
 
     With a ``Sandbox`` the command routes through the isolation boundary: git
@@ -381,7 +396,8 @@ def _run_command(command: str, workspace: Path, timeout: float,
         request = SandboxExecutionRequest(
             argv=command_argv(command), cwd=str(cwd or workspace), env=env or {},
             timeout=timeout, pipeline=pipeline, step=step, network=network,
-            mount_set=mount_set, egress_policy=egress_policy)
+            mount_set=mount_set, egress_policy=egress_policy,
+            allowlist=allowlist)
         result = sandbox.run(request)
         return result.exit_code, result.stdout + result.stderr, result.timed_out
     if needs_shell(command):
@@ -822,6 +838,8 @@ def make_command_node(runtime: Runtime, step: StepConfig):
     timeout = step.timeout if step.timeout is not None else DEFAULT_COMMAND_TIMEOUT
     sandbox = runtime.sandbox
     cwd, mount_set, egress_policy = _step_sandbox(runtime, step)
+    allowlist = (tuple(runtime.engine_allowlist)
+                 if runtime.engine_allowlist is not None else None)
     if sandbox is not None:
         env = resolve_sandbox_env(
             step.env, secrets=step_secret_env(runtime.cfg, step, runtime.secrets))
@@ -837,7 +855,16 @@ def make_command_node(runtime: Runtime, step: StepConfig):
                 step.command, runtime.workspace, timeout, env,
                 sandbox=sandbox, pipeline=runtime.cfg.name, step=step.name,
                 network=step.network, mount_set=mount_set,
-                egress_policy=egress_policy, cwd=cwd)
+                egress_policy=egress_policy, cwd=cwd, allowlist=allowlist)
+        except SandboxError:
+            err = redact_values(traceback.format_exc(),
+                                runtime.secrets.values())[-4000:]
+            print(err, file=sys.stderr, flush=True)
+            runtime.state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime.state_dir / LAST_ERROR).write_text(
+                f"# Command step failed\n\n```\n{err}\n```\n",
+                encoding="utf-8")
+            return {"failed": True, "failed_step": step.name}
         except Exception:
             print(redact_values(traceback.format_exc(),
                                 runtime.secrets.values())[-4000:],
@@ -903,6 +930,8 @@ def make_action_node(runtime: Runtime, step: StepConfig):
     timeout = DEFAULT_COMMAND_TIMEOUT
     env = resolve_sandbox_env(step.env)
     cwd, mount_set, egress_policy = _step_sandbox(runtime, step)
+    allowlist = (tuple(runtime.engine_allowlist)
+                 if runtime.engine_allowlist is not None else None)
 
     def node(state: dict) -> dict:
         attempt = state["attempt"]
@@ -919,7 +948,17 @@ def make_action_node(runtime: Runtime, step: StepConfig):
             exit_code, output, timed_out = _run_command(
                 command, runtime.workspace, timeout, env, sandbox=runtime.sandbox,
                 pipeline=runtime.cfg.name, step=step.name, network=step.network,
-                mount_set=mount_set, egress_policy=egress_policy, cwd=cwd)
+                mount_set=mount_set, egress_policy=egress_policy, cwd=cwd,
+                allowlist=allowlist)
+        except SandboxError:
+            err = redact_values(traceback.format_exc(),
+                                runtime.secrets.values())[-4000:]
+            print(err, file=sys.stderr, flush=True)
+            runtime.state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime.state_dir / LAST_ERROR).write_text(
+                f"# Action step failed\n\n```\n{err}\n```\n",
+                encoding="utf-8")
+            return {"failed": True, "failed_step": step.name}
         except Exception:
             print(redact_values(traceback.format_exc(),
                                 runtime.secrets.values())[-4000:],

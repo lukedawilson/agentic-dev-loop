@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
 
-from agentic_dev_loop.core.paths import dir_excluded, path_excluded
+from agentic_dev_loop.core.paths import dir_excluded, path_allowed, path_excluded
 
 # Never sync these components, whatever the declaration says (BR-2/BR-4).
 _FORBIDDEN = frozenset({".git", ".venv"})
@@ -45,6 +45,7 @@ class SyncBackReport:
     synced_paths: tuple[str, ...]
     conflicts: tuple[str, ...]
     merged_paths: tuple[str, ...] = ()
+    lane_violations: tuple[str, ...] = ()
     step_id: str | None = None
     timestamp: str = ""
 
@@ -187,7 +188,8 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
               step_id: str | None = None,
               cache_paths: list[str] | tuple[str, ...] = (),
               excludes: list[str] | tuple[str, ...] = (),
-              merge_on_conflict: list[str] | tuple[str, ...] = ()) -> SyncBackReport:
+              merge_on_conflict: list[str] | tuple[str, ...] = (),
+              allowlist: list[str] | tuple[str, ...] | None = None) -> SyncBackReport:
     """Diff-copy declared-rw export changes into the real repo (ID-5).
 
     A conflict - a declared-rw path changed in the export AND in the real repo
@@ -251,6 +253,24 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
     merged_paths = tuple(sorted(merged_paths))
     hard_conflicts = tuple(sorted(hard_conflicts))
 
+    # 036 lane boundary (v1): every path that would be merged or synced must
+    # match the unit allowlist. A violation fails before any copy/delete/merge
+    # is applied - the out-of-lane write is detection, not promotion into the
+    # real repo. None = unrestricted (no allowlist file).
+    if allowlist is not None:
+        checked = tuple(sorted(set(merged_paths) | set(plan.to_copy)
+                               | set(plan.to_delete)))
+        lane_violations = tuple(p for p in checked
+                                if not path_allowed(p, allowlist))
+    else:
+        lane_violations = ()
+
+    if lane_violations:
+        return SyncBackReport(
+            synced_paths=(), conflicts=hard_conflicts,
+            merged_paths=merged_paths, lane_violations=lane_violations,
+            step_id=step_id, timestamp=datetime.now(timezone.utc).isoformat())
+
     # A hard (non-merge) conflict keeps the BR-4.4 loud failure and the
     # copy/delete stays atomic: nothing non-merge copies or deletes when one
     # remains. Merge paths are still reported so the caller union-merges them
@@ -271,5 +291,5 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
 
     return SyncBackReport(
         synced_paths=plan.to_copy + plan.to_delete,
-        conflicts=(), merged_paths=merged_paths, step_id=step_id,
-        timestamp=datetime.now(timezone.utc).isoformat())
+        conflicts=(), merged_paths=merged_paths, lane_violations=(),
+        step_id=step_id, timestamp=datetime.now(timezone.utc).isoformat())

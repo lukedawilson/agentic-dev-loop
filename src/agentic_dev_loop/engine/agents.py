@@ -15,6 +15,7 @@ from openhands.tools.file_editor import FileEditorTool  # noqa: F401 - registers
 from openhands.tools.task_tracker import TaskTrackerTool  # noqa: F401 - registers "task_tracker"
 from openhands.tools.terminal import TerminalTool  # noqa: F401 - registers "terminal"
 
+from .forbidden import ForbiddenRule, match_forbidden_command
 from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
                         resolve_sandbox_env)
 
@@ -68,7 +69,9 @@ class SandboxTerminalExecutor(ToolExecutor):
                  pipeline: str | None = None, step: str | None = None,
                  network: bool = False, mount_set=None, egress_policy=None,
                  terminal_timeout: float | None = None,
-                 on_terminal_result=None):
+                 on_terminal_result=None,
+                 forbidden_commands: tuple[ForbiddenRule, ...] | None = None,
+                 allowlist: tuple[str, ...] | None = None):
         self._sandbox = sandbox
         self._workspace = workspace
         self._env = env or {}
@@ -79,6 +82,8 @@ class SandboxTerminalExecutor(ToolExecutor):
         self._egress_policy = egress_policy
         self._terminal_timeout = terminal_timeout
         self._on_terminal_result = on_terminal_result
+        self._forbidden_commands = forbidden_commands
+        self._allowlist = allowlist
 
     def __call__(self, action, conversation=None):
         from openhands.tools.terminal import TerminalObservation
@@ -99,11 +104,19 @@ class SandboxTerminalExecutor(ToolExecutor):
         timeout = action.timeout
         if timeout is None and self._terminal_timeout is not None:
             timeout = self._terminal_timeout
+        argv = command_argv(action.command)
+        forbidden = match_forbidden_command(argv, self._forbidden_commands)
+        if forbidden is not None:
+            return TerminalObservation.from_text(
+                f"[forbidden: {forbidden}]", is_error=True,
+                command=action.command, exit_code=None, timeout=False,
+                metadata=CmdOutputMetadata(exit_code=-1))
         request = SandboxExecutionRequest(
-            argv=command_argv(action.command), cwd=self._workspace,
+            argv=argv, cwd=self._workspace,
             env=self._env, timeout=timeout,
             pipeline=self._pipeline, step=self._step, network=self._network,
-            mount_set=self._mount_set, egress_policy=self._egress_policy)
+            mount_set=self._mount_set, egress_policy=self._egress_policy,
+            allowlist=self._allowlist)
         try:
             result = self._sandbox.run(request)
         except SandboxError as exc:
@@ -142,7 +155,9 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
                               mount_set=None, egress_policy=None,
                               terminal_timeout: float | None = None,
                               on_terminal_result=None,
-                              secrets: dict[str, str] | None = None) -> None:
+                              secrets: dict[str, str] | None = None,
+                              forbidden_commands: tuple[ForbiddenRule, ...] | None = None,
+                              allowlist: tuple[str, ...] | None = None) -> None:
     """Per-run re-registration of the `terminal` name (KD-4): a callable
     factory that builds the SDK terminal with a `SandboxTerminalExecutor`.
     Pipelines are sequential, so re-registering per agent step is safe.
@@ -161,6 +176,8 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
                 pipeline=pipeline, step=step, network=network,
                 mount_set=mount_set, egress_policy=egress_policy,
                 terminal_timeout=terminal_timeout,
-                on_terminal_result=on_terminal_result))
+                on_terminal_result=on_terminal_result,
+                forbidden_commands=forbidden_commands,
+                allowlist=allowlist))
 
     register_tool("terminal", factory)

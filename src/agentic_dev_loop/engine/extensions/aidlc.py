@@ -138,6 +138,12 @@ class AidlcDocumentLoader:
         _, sources = resolve_unit_docs_with_sources(self.docs_dir, unit)
         return sources
 
+    def unit_dir(self, args: argparse.Namespace) -> Path:
+        """The active unit directory (036): where the engine lane boundary
+        looks for ``engine-allowlist.yaml``."""
+        unit = getattr(args, "aidlc_unit", None) or get_current_unit(self.docs_dir)
+        return Path(self.docs_dir) / "construction" / unit
+
 
 class AidlcExtension:
     name = "ai-dlc"

@@ -18,6 +18,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agentic_dev_loop import viz
 from .actions import git_worktree_clean, kill_listeners_on_port
+from .allowlist import resolve_engine_allowlist
 from agentic_dev_loop.core.config import load_config
 from .hostboundary import (check_orchestrator_install,
                            check_tooling_integrity, tooling_rel_paths)
@@ -170,11 +171,13 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
 def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                   sandbox, resolved_secrets, tooling_paths) -> tuple[bool, int]:
     export_root = getattr(sandbox, "export_root", None)
+    engine_allowlist = resolve_engine_allowlist(registry, args)
     runtime = Runtime(cfg=cfg, registry=registry, llm=build_llm(cfg.llm),
                       agents_dir=base / cfg.agents_dir, state_dir=state_dir,
                       workspace=Path.cwd(), sandbox=sandbox,
                       sandbox_cwd=Path(export_root) if export_root else None,
-                      secrets=resolved_secrets)
+                      secrets=resolved_secrets,
+                      engine_allowlist=engine_allowlist)
     state_dir.mkdir(parents=True, exist_ok=True)
 
     resume = getattr(args, "resume", None)
