@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a34] - 2026-10-29
+
+### Changed
+
+- fix(tests): materialize domain-model-erd.md in the consumer_repo fixture
+
 ## [1.0.0a33] - 2026-10-29
 
 ### Changed
