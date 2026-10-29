@@ -6,6 +6,7 @@ extensions:
 additional_files:                    # top-level, standalone, optional
   - ../README.md                     # resolved relative to the pipeline file's dir;
                                      # listed-but-missing → fail fast
+  - ../aidlc-docs/domain-model-erd.md   # project domain model (aidlc-docs)
 
 llm:
   model: openai/deepseek-v4-pro
