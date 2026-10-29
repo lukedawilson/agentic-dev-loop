@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a35] - 2026-10-29
+
+### Changed
+
+- docs(plan): renumber 039-041 down to close the 038 gap, fix stale refs
+- feat: construct plan 037-sync-back-deleted-branch-baseline-guard.md (agent dev loop)
+- docs(plan): swap 037 and 041 planning-doc numbers
+- feat(pipeline): banned-command deny-lists for agent steps
+
 ## [1.0.0a34] - 2026-10-29
 
 ### Changed
