@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a37] - 2026-10-29
+
+### Changed
+
+- fix(tests): derive e2e fixture doc stubs from the pipeline config
+- docs(plan): mark 039 egress-proxy-runtime-hardening COMPLETED
+- feat: construct plan 039-egress-proxy-runtime-hardening.md (agent dev loop)
+- docs(pipeline): add 038 plan, CHANGELOG, known-issues to additional_files
+- docs(plan): 040 qa prompt scoping rewording at landing
+- docs(engine): README sandbox topology paragraph (038 C6)
+- docs(engine): qa prompt persona scope (038 C4) and plan-mandated execution carve-out (039 C7)
+- docs: replace the a36 changelog sweep line with concrete entries
+- docs(plan): fix stale refs after the 039-041 renumber
+
 ## [1.0.0a36] - 2026-10-29
 
 ### Changed
