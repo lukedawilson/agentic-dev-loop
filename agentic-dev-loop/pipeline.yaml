@@ -32,6 +32,22 @@ isolation:
   sandbox_venv_dir: ~/.agentic-dev-loop/venvs/agent-engine
 
 steps:
+  - name: brief
+    agent: brief
+    produces: attempt-brief.md            # run-scoped: created once, reused every attempt
+    max_iterations: 12
+    # 033 per-run context digestion: a closed input list (resolved relative to
+    # the workspace root) plus the stable environment facts the brief agent
+    # must never discover by running commands. The resolved unit/plan docs and
+    # additional_files (../README.md) arrive through the loader context.
+    brief_inputs:
+      include: [AGENTS.md, coding-standards-ddd.yaml]
+      env_facts:
+        - the workspace is an export with no .git; verify with find/ls, never git status
+        - the sandbox is network-off by default; never run package-manager fetches
+        - Python packages resolve from .venv-sandbox; run .venv-sandbox/bin/python
+    on_pass: dev
+
   - name: dev
     agent: dev
     produces: implementation-summary.md   # hygiene-tracked, no verdict

@@ -1,6 +1,6 @@
 # 033-brief-step.md
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Assumes 032 implemented first (not strictly required; the brief step is
 independent of the stop-when-green signal).
