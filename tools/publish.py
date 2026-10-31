@@ -12,6 +12,9 @@ Invariants (enforced here, not by convention):
   extracts the changelog section by tag name)
 - a version can only be cut once: same version is allowed only while the
   tag v<version> does not exist yet
+- a release entry that references a consumer-adoption plan must carry a
+  `### Consumer adoption` subsection (registry CONSUMER_ADOPTION_PLANS
+  below); without it the release is refused
 - any failure leaves the repository unchanged and exits non-zero, loudly
 """
 
@@ -30,6 +33,37 @@ from packaging.version import InvalidVersion, Version
 
 class PublishError(Exception):
     """A loud, user-facing failure. The message is complete on its own."""
+
+
+# Plan slugs whose completion obligates consumer repos to edit their own
+# pipeline.yaml or agent prompt copies (verdict vocabulary, step caps,
+# banned commands, qa prompt sections). A release entry that references
+# one of these must carry a `### Consumer adoption` subsection. When a new
+# plan adds consumer obligations, add its slug here.
+CONSUMER_ADOPTION_PLANS = {
+    "-qa-unverifiable-verdict": "plan 024",
+    "-qa-environmental-verdict": "plan 031",
+    "-finalize-nudge-and-verdict-cap": "plan 035",
+    "-banned-commands-and-lane-boundary": "plan 036",
+    "-network-level-egress-enforcement": "plan 038",
+    "-egress-proxy-runtime-hardening": "plan 039",
+}
+
+
+def enforce_consumer_adoption(section: str) -> None:
+    """Refuse a release section that references a consumer-adoption plan
+    without a `### Consumer adoption` note."""
+    if "### Consumer adoption" in section:
+        return
+    for marker, plan in CONSUMER_ADOPTION_PLANS.items():
+        if marker in section:
+            raise PublishError(
+                f"the release entry references {plan}, which requires "
+                "consumer repos to edit their pipeline.yaml or agent prompt "
+                "copies: add a `### Consumer adoption` subsection to the "
+                "entry naming exactly what consumer repos must change "
+                "(see the plan's scope and sections) and re-run"
+            )
 
 
 def git(cwd: Path, *args: str) -> str:
@@ -156,6 +190,7 @@ def render_changelog(
             )
         content = "### Changed\n\n" + "\n".join(f"- {b}" for b in bullets) + "\n\n"
         unreleased_body = ""
+    enforce_consumer_adoption(content)
     new_section = f"## [{version}] - {date}\n\n{content}"
     return old[:match.start()] + "## [Unreleased]\n\n" + unreleased_body \
         + new_section + tail
@@ -263,10 +298,11 @@ def main(argv: list[str] | None = None) -> int:
             print("(dry run - nothing changed)")
             return 0
 
+        new_changelog = render_changelog(
+            old_changelog, str(target), date, args.description, bullets)
         (pyproject).write_text(
             bump_pyproject_text(pyproject.read_text(), str(target)))
-        changelog_path.write_text(render_changelog(
-            old_changelog, str(target), date, args.description, bullets))
+        changelog_path.write_text(new_changelog)
 
         git(root, "add", "-A")
         git(root, "commit", "-m", f"release: {tag}")

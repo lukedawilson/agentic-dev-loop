@@ -226,6 +226,45 @@ class TestChangelog:
         assert read_version(repo) == "0.2.0"
 
 
+class TestConsumerAdoption:
+    def test_marker_without_adoption_section_fails(self, tmp_path):
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: construct plan 031-qa-environmental-verdict.md\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode != 0
+        assert "Consumer adoption" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+
+    def test_marker_with_adoption_section_passes(self, tmp_path):
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: construct plan 031-qa-environmental-verdict.md\n\n"
+                "### Consumer adoption\n\n"
+                "- qa verdict steps must add `env: ENV` to their verdicts map\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.1"
+
+    def test_no_marker_passes_without_section(self, tmp_path):
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased="### Changed\n\n- feat: add kernel sandbox\n",
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.1"
+
+
 class TestGitOps:
     def test_commit_tag_and_push(self, tmp_path):
         repo, bare = make_repo(tmp_path)

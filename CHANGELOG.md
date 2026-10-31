@@ -70,6 +70,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs(plan): slim 031 to a failure-taxonomy fix (D1/D2-first)
 - Uncommitted changes: agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/qa.agent.md, planning-docs/031-qa-environmental-verdict.md, planning-docs/042-container-reaping-and-inspection.md
 
+### Consumer adoption
+
+- 031: qa verdict steps must add `env: ENV` to their `verdicts` map
+  (`on_env` unset halts the run with a report instead of a dev retry), and
+  consumer qa prompt copies must gain the ENV rules and anti-livelock rule
+  (plan 031, sections 3 and 5). Without this, an environmental failure at
+  the qa step, for example a sandbox that cannot start its egress proxy,
+  reports FAIL and routes to a dev retry that cannot repair it.
+
 ## [1.0.0a39] - 2026-10-29
 
 ### Changed
@@ -97,6 +106,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs(engine): qa prompt persona scope (038 C4) and plan-mandated execution carve-out (039 C7)
 - docs: replace the a36 changelog sweep line with concrete entries
 - docs(plan): fix stale refs after the 039-041 renumber
+
+### Consumer adoption
+
+- 038 C4 + 039 C7: consumer qa prompt copies must gain the persona-scope
+  section (038) and the plan-mandated execution carve-out (039); until they
+  do, consumer runs keep the old prompt (plan 039, open risks).
 
 ## [1.0.0a36] - 2026-10-29
 
@@ -134,12 +149,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs: recreate 039, drop priority-ordering text, README planned notes
 - Uncommitted changes: planning-docs/036-banned-commands-and-lane-boundary.md, planning-docs/037-brief-coverage-check.md, planning-docs/037-proxy-dial-rewrite-for-host-services.md, planning-docs/038-network-level-egress-enforcement.md, planning-docs/038-proxy-dial-rewrite-for-host-services.md, planning-docs/039-network-level-egress-enforcement.md, planning-docs/040-step-custom-prompt.md, planning-docs/041-sync-back-deleted-branch-baseline-guard.md
 
+### Consumer adoption
+
+- 036: agent steps should carry `forbidden_commands` deny-lists (engine
+  defaults plus repo-specific additions), and the active unit should get its
+  lane-boundary allowlist file (plan 036, sections 1 and 2).
+
 ## [1.0.0a32] - 2026-10-29
 
 ### Changed
 
 - feat: construct plan 035-finalize-nudge-and-verdict-cap.md (agent dev loop)
 - Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, planning-docs/035-finalize-nudge-and-verdict-cap.md
+
+### Consumer adoption
+
+- 035: verdict steps should set `max_iterations: 100` and
+  `finalize_nudge_turns: 10` (consumer pipeline change; plan 035, D2).
 
 ## [1.0.0a31] - 2026-10-29
 
@@ -328,6 +354,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - feat: construct plan 024-qa-unverifiable-verdict.md (agent dev loop)
 - docs: add plan 025, unit 5 post-intent findings, plan 023 follow-up pointers
 - Uncommitted changes: README.md, planning-docs/025-browser-ready-sandbox-config.md
+
+### Consumer adoption
+
+- 024: qa verdict steps must add `unverifiable: UNVERIFIABLE` to their
+  `verdicts` map, and consumer qa prompt copies must gain the UNVERIFIABLE
+  verdict rules (see planning-docs/024).
 
 ## [1.0.0a15] - 2026-10-24
 
