@@ -281,6 +281,24 @@ class TestConsumerAdoption:
         assert read_version(repo) == "0.2.0"
         assert tags(repo) == []
 
+    def test_046_marker_without_adoption_section_fails(self, tmp_path):
+        """Plan 046 obligates consumers to delete the vendored brief prompt
+        and declare brief_inputs.sections, so its slug is registered too:
+        a release entry referencing it without a `### Consumer adoption`
+        note gets refused."""
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: tweak plan 046-embed-brief-prompt\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode != 0
+        assert "Consumer adoption" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+
 
 class TestGitOps:
     def test_commit_tag_and_push(self, tmp_path):

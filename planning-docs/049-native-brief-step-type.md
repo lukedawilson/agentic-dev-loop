@@ -1,6 +1,6 @@
 # Plan 049: Brief as a native step type
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 

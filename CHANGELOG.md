@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a49] - 2026-10-31
+
+### Breaking
+
+- `brief` is now a native step type (049): `brief_inputs:` is the step-type
+  discriminator with no `agent:`, `produces:`, or `max_iterations:`. The
+  prompt, capture file (`attempt-brief.md`), and iteration cap (12) are
+  engine-owned. The old `agent: brief` + `brief_inputs` + `produces` shape
+  fails validation naming the fix.
+
+### Consumer adoption
+
+- 049: rewrite the brief step to the new shape (drop `agent:`, `produces:`,
+  and `max_iterations:`; keep `brief_inputs:` with its declared `sections:`),
+  and delete the vendored
+  `agentic-dev-loop/sdk_agents/brief.agent.md` (046 D5).
+
 ## [1.0.0a48] - 2026-10-31
 
 ### Changed

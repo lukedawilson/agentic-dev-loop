@@ -162,10 +162,11 @@ agents_dir: sdk_agents                                  # your <name>.agent.md f
 
 steps:
   - name: brief
-    agent: brief
-    produces: attempt-brief.md
-    max_iterations: 12
-    brief_inputs: { include: [AGENTS.md, coding-standards-ddd.yaml], env_facts: ["the workspace is an export with no .git; verify with find/ls, never git status"] }
+    reasoning_effort: medium
+    brief_inputs:
+      include: [AGENTS.md, coding-standards-ddd.yaml]
+      sections: [Repo rules digest, Unit scope digest, Environment facts, Open risks]
+      env_facts: ["the workspace is an export with no .git; verify with find/ls, never git status"]
     on_pass: dev
 
   - name: dev
@@ -205,9 +206,9 @@ steps:
 
 | Key | Notes |
 | --- | --- |
-| `agent:` / `command:` / `action:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). |
+| `agent:` / `command:` / `action:` / `brief_inputs:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). `brief_inputs:` is a native brief step - see its row below. |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
-| `brief_inputs:` | Optional agent-step input spec: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as that step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). A produces-only agent step such as `brief` is the documented pattern for per-run context digestion. |
+| `brief_inputs:` | The discriminator for a native brief step: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. There is no `agent:`, `produces:`, or `max_iterations:` - the prompt is engine-embedded, the capture file is `attempt-brief.md`, and the iteration cap is 12, all engine-owned. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as the step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). `name` stays free-form, so multiple brief steps are allowed. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
 | `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
@@ -250,9 +251,9 @@ Recommended lane defaults (guidance only, not enforced):
 | review | xhigh | shortest lane, highest stakes: a missed detection sails past the last gate into commit |
 
 A `brief_inputs:` step is the per-run context-digestion pattern: it runs once at
-run start (or when its inputs change), its `produces:` artifact survives attempt
-starts, and the dev/review agents read that digest instead of re-deriving repo
-rules and environment facts every attempt.
+run start (or when its inputs change), its engine-owned `attempt-brief.md`
+digest survives attempt starts, and the dev/review agents read that digest
+instead of re-deriving repo rules and environment facts every attempt.
 
 The brief digest is mechanically coverage-checked: the configured
 `brief_inputs.sections` headings must each appear on their own line, every

@@ -39,14 +39,14 @@ isolation:
 
 steps:
   - name: brief
-    agent: brief
     reasoning_effort: medium
-    produces: attempt-brief.md            # run-scoped: created once, reused every attempt
-    max_iterations: 12
-    # Per-run context digestion: a closed input list (resolved relative to
-    # the workspace root) plus the stable environment facts the brief agent
-    # must never discover by running commands. The resolved unit/plan docs and
-    # additional_files (../README.md) arrive through the loader context.
+    # Per-run context digestion: a native brief step (049) - `brief_inputs:` is
+    # the type discriminator, so there is no agent/produces/max_iterations.
+    # The prompt, capture file, and iteration cap are engine-owned. The closed
+    # input list (resolved relative to the workspace root) plus the stable
+    # environment facts the brief agent must never discover by running
+    # commands; the resolved unit/plan docs and additional_files (../README.md)
+    # arrive through the loader context.
     brief_inputs:
       include: [AGENTS.md, coding-standards-ddd.yaml]
       # 046: single-source the digest headings - the coverage gate and the
