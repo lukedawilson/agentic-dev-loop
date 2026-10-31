@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a47] - 2026-10-31
+
 ### Changed
 
 - fix(isolation): assign a distinct internal IP per egress proxy so a run
