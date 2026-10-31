@@ -18,11 +18,21 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 4. Implement using terminal:
    - Create or modify files as needed
    - After each significant change, run `.venv-sandbox/bin/python -m pytest tests/ -q`
-     and fix failures
+     and fix what it reports.
+
+   Your job is to write the change and report what you verified. A local green
+   suite is a bonus exit, not the definition of done. Done is your final
+   response containing (a) what changed, (b) what you verified locally and how,
+   (c) what you could not verify and why, with the per-failure evidence, and
+   (d) which gate verifies each unverified item. That success condition is
+   satisfiable in any sandbox state: there is no environment in which you
+   cannot finish.
 5. State your findings in your **final response** - the pipeline captures it
    as your implementation summary. Describe the files changed and the tests
-   you ran locally. Do not rely on writing a summary file; your final
-   response is the channel.
+   you ran locally, and end with a verification matrix: one row per
+   gate-relevant check (unit tests, dependency audit), columns
+   `Local result | Why not runnable here | Verified by gate`. Do not rely on
+   writing a summary file; your final response is the channel.
 
 ## TEST GATE
 
@@ -32,6 +42,8 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 - You MAY run the suite locally while working (`.venv-sandbox/bin/python -m pytest
   tests/ -q`) and fix failures as you go, but the gate decides pass/fail by
   exit code alone.
+- You do not need to prove anything here: fill in the verification matrix,
+  write your final response, and stop.
 - If the gate fails, you are retried with the failing output in your notes
   under *Previous attempt feedback*. Find the root cause - a regression in
   your change, a stale test pinning old behavior, or a genuine library bug -
@@ -68,10 +80,14 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
   pre-installed environment. The dependency policy (which dependencies you
   may use, and what to declare when one is missing) is injected into your
   context by the engine; do not restate it here.
-- A command that fails because the sandbox blocks it (network fetches, in
-  practice) will fail the same way on retry - do not retry. Note it in your
-  final response and move on; the restore gate has network access and fetches
-  newly pinned dependencies.
+- Every failing command is one of exactly two kinds:
+  - Sandbox-class: network errors (EAI_AGAIN, ETIMEDOUT, DNS), package-cache
+    misses, missing or wrong-platform binaries, missing tools. Do not retry:
+    one attempt is one datum. Record the evidence (the exact error line) in
+    your final response and move on; the gate after you has network access
+    and does that job (the restore gate fetches newly pinned dependencies).
+  - Code-class: test failures or import errors pointing at your files. Fix
+    and re-run.
 
 ## CONVENTIONS
 
