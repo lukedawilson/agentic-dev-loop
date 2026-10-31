@@ -1,6 +1,6 @@
 # Plan 046: Embed the brief prompt in the engine, config-driven sections
 
-> **Status: PROPOSED** (flips to COMPLETED after implementation lands)
+> **Status: COMPLETED**
 
 ## Scope
 

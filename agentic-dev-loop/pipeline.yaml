@@ -47,6 +47,9 @@ steps:
     # additional_files (../README.md) arrive through the loader context.
     brief_inputs:
       include: [AGENTS.md, coding-standards-ddd.yaml]
+      # 046: single-source the digest headings - the coverage gate and the
+      # embedded brief prompt both render from this list (neutral defaults).
+      sections: [Repo rules digest, Unit scope digest, Environment facts, Open risks]
       env_facts:
         - the workspace is an export with no .git; verify with find/ls, never git status
         - the sandbox is network-off by default; never run package-manager fetches

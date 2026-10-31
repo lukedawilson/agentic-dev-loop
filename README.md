@@ -205,7 +205,7 @@ steps:
 | --- | --- |
 | `agent:` / `command:` / `action:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
-| `brief_inputs:` | Optional agent-step input spec: `{ include: [<paths/globs>], env_facts: [<strings>] }`. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as that step's task message, and regenerates the step only when those inputs change. A produces-only agent step such as `brief` is the documented pattern for per-run context digestion. |
+| `brief_inputs:` | Optional agent-step input spec: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as that step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). A produces-only agent step such as `brief` is the documented pattern for per-run context digestion. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
 | `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
@@ -227,12 +227,14 @@ run start (or when its inputs change), its `produces:` artifact survives attempt
 starts, and the dev/review agents read that digest instead of re-deriving repo
 rules and environment facts every attempt.
 
-The brief digest is mechanically coverage-checked: the four section headings
-(`Repo rules digest`, `Unit scope and lane digest`, `Environment facts`, and
-`Open risks`) must appear, every anchor extracted from the `include` files
-(markdown `##` headings, and YAML category names plus `enforcement_levels`)
-must appear on its own line (case-insensitive, whitespace-collapsed, `**`
-decoration allowed), and every `env_facts` entry must appear verbatim. A miss
+The brief digest is mechanically coverage-checked: the configured
+`brief_inputs.sections` headings must each appear on their own line, every
+anchor extracted from the `include` files (markdown `##` headings, and YAML
+category names plus `enforcement_levels`) must appear on its own line
+(case-insensitive, whitespace-collapsed, `**` decoration allowed), and every
+`env_facts` entry must appear verbatim. The section list feeds both the
+engine-embedded brief prompt and the coverage gate, so the two can never
+disagree; a miss
 re-runs the brief agent once per missing set with a `## Coverage retry`
 correction note, bounded to three retries per input set; if the same items are
 still dropped after the cap, the run fails and `last-error.md` names the

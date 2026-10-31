@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a45] - 2026-10-31
+
+### Changed
+
+- feat: construct plan 046-embed-brief-prompt.md (agent dev loop)
+- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/046-embed-brief-prompt.md
+
 ## [1.0.0a44] - 2026-10-31
 
 ### Changed
