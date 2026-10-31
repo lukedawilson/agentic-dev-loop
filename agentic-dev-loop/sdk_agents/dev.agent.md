@@ -14,8 +14,19 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
    issue listed there as a required fix from the pipeline's earlier stages -
    address each one before anything else, and verify each fix landed (re-read
    the edited file) before moving on.
-3. Plan your implementation.
-4. Implement using terminal:
+3. Check for prior-attempt residue before implementing. The pipeline syncs
+   every lane's edits back into this repo's working tree after each terminal
+   action, so an earlier attempt that died at a later gate can leave the full
+   implementation sitting in the tree, uncommitted. Before writing anything,
+   grep the plan's touchpoints (the paths and key lines it changes) against
+   the working tree. If the touchpoints are already at target state, do not
+   re-implement: do not rewrite working code to match design sketches, run
+   the test suite instead, and report a verification matrix stating that the
+   tree already carried the implementation. Where working code is
+   functionally equivalent but differs from a plan sketch, the code is
+   authoritative: note the divergence in your final response.
+4. Plan your implementation.
+5. Implement using terminal:
    - Create or modify files as needed
    - After each significant change, run `.venv-sandbox/bin/python -m pytest tests/ -q`
      and fix what it reports.
@@ -33,6 +44,17 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
    gate-relevant check (unit tests, dependency audit), columns
    `Local result | Why not runnable here | Verified by gate`. Do not rely on
    writing a summary file; your final response is the channel.
+
+## READ DISCIPLINE
+
+- Batch your reads: one terminal action can run several greps, or head/sed
+  line ranges, joined with `;` or `&&`. When checking whether something
+  exists or matches, grep the pattern across the touchpoint files first.
+  Never read whole files one at a time when a grep answers the question.
+- If you have taken 10 terminal actions without either a file edit or a test
+  run, stop and reassess: the change may already be present (see prior-
+  attempt residue in WORKFLOW), or the plan may need fewer touchpoints than
+  you are auditing.
 
 ## TEST GATE
 
