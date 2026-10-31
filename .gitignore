@@ -15,3 +15,6 @@ uv.lock
 .review-venv/
 .notes.md
 
+
+# editor swap files
+*.swp
