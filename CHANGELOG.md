@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a43] - 2026-10-31
+
+### Changed
+
+- feat: construct plan 044-remove-stop-when-green.md (agent dev loop)
+- docs: plan 046 embed brief prompt, config-driven sections
+- docs: plan 045 setup-probe self-heal for non-venv cache warmers
+- fix(dev): report-shaped goal, failure classification, verification matrix in engine dev prompt
+- docs: plan 044 remove dormant stop-when-green
+- chore(pipeline): refresh additional_files, harden dev step
+- Uncommitted changes: README.md, planning-docs/044-remove-stop-when-green.md
+
 ## [1.0.0a42] - 2026-10-31
 
 ### Changed

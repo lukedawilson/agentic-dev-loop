@@ -1,6 +1,6 @@
 # Plan 044: Remove the dormant stop-when-green feature
 
-> **Status: PROPOSED** (flips to COMPLETED after implementation lands)
+> **Status: COMPLETED**
 
 ## Scope
 
