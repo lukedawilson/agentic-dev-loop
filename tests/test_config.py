@@ -180,6 +180,40 @@ def test_extra_body_llm_key_rejected(tmp_path):
         _load(tmp_path, data)
 
 
+def test_llm_reasoning_effort_round_trips(tmp_path):
+    data = _base()
+    data["llm"]["reasoning_effort"] = "medium"
+    assert _load(tmp_path, data).llm.reasoning_effort == "medium"
+
+
+def test_llm_reasoning_effort_defaults_none(tmp_path):
+    assert _load(tmp_path, _base()).llm.reasoning_effort is None
+
+
+def test_llm_reasoning_effort_unknown_value_rejected(tmp_path):
+    data = _base()
+    data["llm"]["reasoning_effort"] = "maximum"
+    with pytest.raises(ValidationError):
+        _load(tmp_path, data)
+
+
+def test_step_reasoning_effort_round_trips(tmp_path):
+    data = _base()
+    data["steps"][0]["reasoning_effort"] = "xhigh"
+    assert _load(tmp_path, data).steps[0].reasoning_effort == "xhigh"
+
+
+def test_step_reasoning_effort_defaults_none(tmp_path):
+    assert _load(tmp_path, _base()).steps[0].reasoning_effort is None
+
+
+def test_step_reasoning_effort_unknown_value_rejected(tmp_path):
+    data = _base()
+    data["steps"][0]["reasoning_effort"] = "banana"
+    with pytest.raises(ValidationError):
+        _load(tmp_path, data)
+
+
 def test_unknown_route_key_rejected(tmp_path):
     data = _base()
     data["steps"][0]["on_pass"] = {"goto": "success", "bogus": 1}

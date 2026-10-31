@@ -48,13 +48,20 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
     LLM.format_messages_for_llm = _repair_reasoning_passback
 
 
-def build_llm(cfg: LlmConfig) -> LLM:
+def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
     api_key = os.environ.get(cfg.api_key_env)
     if not api_key:
         raise RuntimeError(f"{cfg.api_key_env} environment variable is required")
-    return LLM(
-        model=cfg.model,
-        api_key=api_key,
-        base_url=cfg.base_url,
-        timeout=cfg.timeout,  # policy: no LLM timeout unless explicitly set
-    )
+    # 047 (D2/D7): an explicit per-step override wins, else the llm block's
+    # value applies, else the field is omitted entirely and the SDK default
+    # ("high") is in force. The reasoning_content shims above stay untouched.
+    effort = reasoning_effort if reasoning_effort is not None else cfg.reasoning_effort
+    kwargs = {
+        "model": cfg.model,
+        "api_key": api_key,
+        "base_url": cfg.base_url,
+        "timeout": cfg.timeout,  # policy: no LLM timeout unless explicitly set
+    }
+    if effort is not None:
+        kwargs["reasoning_effort"] = effort
+    return LLM(**kwargs)

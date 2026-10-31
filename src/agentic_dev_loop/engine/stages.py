@@ -42,6 +42,7 @@ from .egress_policy import assemble_egress_policy
 from .forbidden import resolve_forbidden_rules
 from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
                         resolve_sandbox_env)
+from .llm import build_llm
 from .mounts import resolve_mount_set
 from .outputs import CapturedOutput
 from .secrets import redact_values, step_secret_env
@@ -174,11 +175,18 @@ class Runtime:
                              if step is not None else None),
                     forbidden_commands=forbidden_commands,
                     allowlist=allowlist)
+            # 047 (D7): a step's reasoning_effort overrides the llm block's;
+            # self.llm already carries the block value (or the SDK default),
+            # so only build a fresh LLM when the step overrides it.
+            llm = self.llm
+            if step is not None and step.reasoning_effort is not None:
+                llm = build_llm(self.cfg.llm,
+                                reasoning_effort=step.reasoning_effort)
             if step is not None and step.brief_inputs is not None:
                 agent = load_brief_agent(
-                    agent_name, step.brief_inputs.sections, self.llm)
+                    agent_name, step.brief_inputs.sections, llm)
             else:
-                agent = load_agent(self.agents_dir, agent_name, self.llm)
+                agent = load_agent(self.agents_dir, agent_name, llm)
             callbacks = []
             if finalize_controller is not None:
                 callbacks.append(finalize_controller.on_event)

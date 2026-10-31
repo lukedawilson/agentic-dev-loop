@@ -1,6 +1,6 @@
 # Plan 049: Startup reaper retains registry entries when removal fails
 
-> **Status: PROPOSED**
+> **Status: APPROVED**
 
 ## Scope
 
@@ -77,12 +77,12 @@ close path's confirmation semantics.
 
 | # | Decision | Proposal | Answer |
 |---|---|---|---|
-| D1 | Daemon-confirmed pruning in the reaper | After each `docker rm -f` / `docker network rm` attempt, confirm absence with the same helpers the close path uses. Prune the entry only when the object is confirmed gone; otherwise keep the entry in `remaining` so the next startup reaper retries, and do not list the name as reaped. | PROPOSED |
-| D2 | One "object gone" helper pair | Extract module-level `_container_gone(runner, name)` and `_network_gone(runner, name)` from the `DockerBackend` methods (which delegate to them). Single source of truth shared by `_verify_and_prune_registry` and the reaper; no duplicated logic. | PROPOSED |
-| D3 | Accurate reporting | `reaped` (and its `_announce`) contains only confirmed removals. Retained entries stay in the registry and surface in the `containers` report as `orphaned`. The CLI `--reap` JSON shape is unchanged. | PROPOSED |
-| D4 | TDD tests | Unit (FakeRunner seam): rm fails and object still present = entry retained, name not returned; rm fails and object absent = entry pruned (existing tolerated-missing contract); rm succeeds = entry pruned, name returned; network variants of both failure cases. Update the exact-calls assertions in the existing reaper tests (they now see a second confirm call). Close-path tests stay green unchanged, proving the D2 refactor is neutral. | PROPOSED |
-| D5 | No config surface | Always-on fix, no pipeline.yaml keys (mirrors 048 D5). | PROPOSED |
-| D6 | Rollout | Engine change lands through the loop itself from the published wheel (the dogfood pattern of 030/048). Consumer repos need no pipeline or prompt change; a pipx reinstall picks up the new wheel. | PROPOSED |
+| D1 | Daemon-confirmed pruning in the reaper | After each `docker rm -f` / `docker network rm` attempt, confirm absence with the same helpers the close path uses. Prune the entry only when the object is confirmed gone; otherwise keep the entry in `remaining` so the next startup reaper retries, and do not list the name as reaped. | APPROVED as proposed |
+| D2 | One "object gone" helper pair | Extract module-level `_container_gone(runner, name)` and `_network_gone(runner, name)` from the `DockerBackend` methods (which delegate to them). Single source of truth shared by `_verify_and_prune_registry` and the reaper; no duplicated logic. | APPROVED as proposed |
+| D3 | Accurate reporting | `reaped` (and its `_announce`) contains only confirmed removals. Retained entries stay in the registry and surface in the `containers` report as `orphaned`. The CLI `--reap` JSON shape is unchanged. | APPROVED as proposed |
+| D4 | TDD tests | Unit (FakeRunner seam): rm fails and object still present = entry retained, name not returned; rm fails and object absent = entry pruned (existing tolerated-missing contract); rm succeeds = entry pruned, name returned; network variants of both failure cases. Update the exact-calls assertions in the existing reaper tests (they now see a second confirm call). Close-path tests stay green unchanged, proving the D2 refactor is neutral. | APPROVED as proposed |
+| D5 | No config surface | Always-on fix, no pipeline.yaml keys (mirrors 048 D5). | APPROVED as proposed |
+| D6 | Rollout | Engine change lands through the loop itself from the published wheel (the dogfood pattern of 030/048). Consumer repos need no pipeline or prompt change; a pipx reinstall picks up the new wheel. | APPROVED as proposed |
 
 ## Out of scope
 

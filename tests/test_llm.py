@@ -43,6 +43,46 @@ class TestBuildLlm:
 
         assert mock_cls.call_args.kwargs["timeout"] == 30
 
+    def test_reasoning_effort_omitted_when_unset(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg())
+
+        assert "reasoning_effort" not in mock_cls.call_args.kwargs
+
+    def test_reasoning_effort_passed_through_when_set(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg(reasoning_effort="medium"))
+
+        assert mock_cls.call_args.kwargs["reasoning_effort"] == "medium"
+
+
+class TestReasoningEffortResolution:
+    """D7: the step's value wins, else the llm block's value, else unset
+    (the SDK default "high" applies)."""
+
+    def test_step_override_wins_over_block(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg(reasoning_effort="low"), reasoning_effort="xhigh")
+
+        assert mock_cls.call_args.kwargs["reasoning_effort"] == "xhigh"
+
+    def test_block_value_applies_without_step_override(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg(reasoning_effort="medium"))
+
+        assert mock_cls.call_args.kwargs["reasoning_effort"] == "medium"
+
+    def test_unset_everywhere_omits_the_field(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg())
+
+        assert "reasoning_effort" not in mock_cls.call_args.kwargs
+
 
 class TestReasoningContentShim:
     """DeepSeek thinking mode 400s on multi-turn requests unless prior

@@ -6,7 +6,7 @@ import hashlib
 import re
 import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -34,6 +34,11 @@ DEFAULT_BRIEF_SECTIONS = [
     "Environment facts",
     "Open risks",
 ]
+
+# 047: the full SDK reasoning_effort literal, passed through verbatim. The
+# engine is provider-generic, so it validates shape only - whether a given
+# provider accepts every value (notably "none") is operator risk (D3).
+ReasoningEffort = Literal["low", "medium", "high", "xhigh", "none"]
 
 
 def _validate_mount_path(path: str) -> str:
@@ -385,6 +390,9 @@ class StepConfig(BaseModel):
     terminal_timeout: float | None = Field(default=None, gt=0)  # seconds, agent steps only (032)
     finalize_nudge_turns: int | None = Field(default=None, gt=0)  # agent steps only (035)
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
+    # 047 (D7): per-step opt-in override; unset falls back to the llm block,
+    # then the SDK default. Full SDK literal, passthrough semantics.
+    reasoning_effort: ReasoningEffort | None = None
     custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
@@ -552,6 +560,10 @@ class LlmConfig(BaseModel):
     base_url: str | None = None
     api_key_env: str
     timeout: float | None = None  # omitted → opinionated no-timeout default
+    # 047 (D1): opt-in passthrough; unset means the field is not passed at
+    # all, so the SDK default ("high") applies and today's behavior is
+    # byte-identical. No default may move without an observed run (D6).
+    reasoning_effort: ReasoningEffort | None = None
 
 
 class PipelineConfig(BaseModel):

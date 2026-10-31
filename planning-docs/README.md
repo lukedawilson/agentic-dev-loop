@@ -21,6 +21,13 @@ that touch tooling paths must say so explicitly.
 
 ## Plan status
 
+Plans are authored directly with the status line
+`> **Status: APPROVED**`. There is no proposal-then-approval gate: the
+author writes the plan as the approved record and reports a summary in
+chat; the user reviews it and asks for changes if any decision is
+wrong. Changes are applied by editing the plan in place, and the status
+stays APPROVED throughout. Never author a plan as PROPOSED.
+
 A plan's `Status` line flips to COMPLETED only when all its deliverables
 are on main, including any human-committed tooling files. If a tooling
 deliverable is outstanding, the plan is not complete yet.
