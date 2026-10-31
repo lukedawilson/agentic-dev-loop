@@ -1,6 +1,6 @@
 # Plan 047: reasoning_effort as an opt-in configurable pipeline and per-step field
 
-> **Status: PROPOSED** (flips to COMPLETED after implementation lands)
+> **Status: APPROVED** (flips to COMPLETED after implementation lands)
 
 ## Scope
 
@@ -59,12 +59,12 @@ Verified facts:
 
 | # | Decision | Proposal | Answer |
 |---|---|---|---|
-| D1 | Field shape: `LlmConfig.reasoning_effort: Literal["low","medium","high","xhigh","none"] \| None = None`. Unset means the field is not passed at all: the SDK default (high) applies and today's behavior is byte-identical. Full SDK literal, passthrough semantics (the engine is provider-generic) | Opt-in optional, full SDK literal | PENDING |
-| D2 | Passthrough: `build_llm` adds `reasoning_effort` to the constructor kwargs only when it is not None. `timeout` keeps its existing explicit-pass behavior | Conditional kwarg | PENDING |
-| D3 | Validation: pydantic Literal rejects unknown values at config load, so a bad value fails at `--dry-run` / run start, never mid-run. No provider-specific value restriction: whether DeepSeek accepts every literal value for deepseek-v4-pro (notably `"none"`) is unproven and documented as operator risk; D6 covers the safe path | Literal validation only | PENDING |
-| D4 | Tests (TDD, red first): (a) config: reasoning_effort accepted, defaults to None, unknown value raises ValidationError; (b) llm: reasoning_effort omitted from kwargs when unset, passed through when set | Red first, then green | PENDING |
-| D5 | Docs: README `llm` block example gains an optional commented `reasoning_effort` line and a note that the value is forwarded only for models the SDK/LiteLLM mark as supporting it, and that an unsupported value fails at the first LLM call | README only | PENDING |
-| D6 | Rollout: no pipeline sets a value at implementation time. The engine change requires a reinstall of the pipx package before any run can see it. Before the consumer pipeline adopts a value, one observed run at the D8 lane defaults must prove it end to end: lower per-turn latency, green suite, no 400s. Only then does the consumer pipeline set a value | Observed run gates adoption | PENDING |
+| D1 | Field shape: `LlmConfig.reasoning_effort: Literal["low","medium","high","xhigh","none"] \| None = None`. Unset means the field is not passed at all: the SDK default (high) applies and today's behavior is byte-identical. Full SDK literal, passthrough semantics (the engine is provider-generic) | Opt-in optional, full SDK literal | APPROVED |
+| D2 | Passthrough: `build_llm` adds `reasoning_effort` to the constructor kwargs only when it is not None. `timeout` keeps its existing explicit-pass behavior | Conditional kwarg | APPROVED |
+| D3 | Validation: pydantic Literal rejects unknown values at config load, so a bad value fails at `--dry-run` / run start, never mid-run. No provider-specific value restriction: whether DeepSeek accepts every literal value for deepseek-v4-pro (notably `"none"`) is unproven and documented as operator risk; D6 covers the safe path | Literal validation only | APPROVED |
+| D4 | Tests (TDD, red first): (a) config: reasoning_effort accepted, defaults to None, unknown value raises ValidationError; (b) llm: reasoning_effort omitted from kwargs when unset, passed through when set | Red first, then green | APPROVED |
+| D5 | Docs: README `llm` block example gains an optional commented `reasoning_effort` line and a note that the value is forwarded only for models the SDK/LiteLLM mark as supporting it, and that an unsupported value fails at the first LLM call | README only | APPROVED |
+| D6 | Rollout: no pipeline sets a value at implementation time. The engine change requires a reinstall of the pipx package before any run can see it. Before the consumer pipeline adopts a value, one observed run at the D8 lane defaults must prove it end to end: lower per-turn latency, green suite, no 400s. Only then does the consumer pipeline set a value | Observed run gates adoption | APPROVED |
 | D7 | Per-step override: `StepConfig.reasoning_effort: Literal["low","medium","high","xhigh","none"] \| None = None`. Resolution order at LLM construction: the step's value if set, else the `llm` block's value (D1), else the SDK default ("high"). Unset anywhere means untouched today-behavior | Per-step opt-in, falls back to the block | APPROVED |
 | D8 | Lane defaults shipped as guidance, not enforced values: brief=medium (digest and classify, no design work); dev=high (hold the line: dev caught a real plan bug and a real sandbox triage this unit; revisit only if plans demonstrably tighten); qa=medium (classification discipline must stay reliable: misclassifying an environmental failure as a code defect sends dev on a futile cycle); review=xhigh (shortest lane, highest stakes: a missed detection sails past the last gate into commit) | Recommended per-lane table in README | APPROVED |
 
