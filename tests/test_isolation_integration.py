@@ -3,16 +3,18 @@ reason when no daemon or integration image is present; never silently skipped
 in CI (the workflows pre-install Docker and the image)."""
 from __future__ import annotations
 
+import http.server
 import json
 import os
 import shutil
 import subprocess
 import sys
+import threading
 
 import pytest
 
 from agentic_dev_loop.core.config import IsolationConfig, MountSpec
-from agentic_dev_loop.engine.egress_policy import EgressPolicy
+from agentic_dev_loop.engine.egress_policy import EgressPolicy, TargetEntry
 from agentic_dev_loop.engine.isolation import (
     CONTAINER_REGISTRY, DockerBackend, SandboxExecutionRequest, SandboxError,
     SubprocessRunner, probe_docker, process_start, read_stamp,
@@ -409,3 +411,79 @@ class TestReaperE2E:
              "--format", "{{.Names}}"],
             timeout=30)
         assert name not in inspect.stdout
+
+
+
+class TestTwoProxyDistinctIpsE2E:
+    """048: two distinct egress policies on one run network each get their
+    own proxy container (distinct internal IP) and both relay an allowed
+    loopback dial through the host gateway."""
+
+    def _target(self, body):
+        class _Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                payload = body.encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, *args):
+                pass
+
+        server = http.server.ThreadingHTTPServer(("0.0.0.0", 0), _Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        return server
+
+    def _backend_with_export(self, tmp_path):
+        reason = _docker_available()
+        if reason is not None:
+            pytest.skip(reason)
+        ws = tmp_path / "ws"
+        (ws / "src").mkdir(parents=True)
+        (ws / "src" / "a.py").write_text("orig")
+        export = tmp_path / "state" / "exports" / "r1"
+        StepWorkspace.materialise(ws, [], "linux", export)
+        profile = resolve_effective_profile(IsolationConfig(image=TEST_IMAGE))
+        b = DockerBackend(image=TEST_IMAGE, workspace=str(ws),
+                          iso_state_dir=str(tmp_path / "state"), profile=profile,
+                          export_root=str(export))
+        b.ensure_image()
+        b.create_execution_container()
+        return b, export
+
+    def test_two_proxies_attach_and_relay(self, tmp_path):
+        server_a = self._target("hello-from-a")
+        server_b = self._target("hello-from-b")
+        b, export = self._backend_with_export(tmp_path)
+        try:
+            cases = [
+                (EgressPolicy(targets=(TargetEntry(
+                    host="host.docker.internal",
+                    port=server_a.server_address[1]),)),
+                 server_a.server_address[1], "hello-from-a"),
+                (EgressPolicy(targets=(TargetEntry(
+                    host="host.docker.internal",
+                    port=server_b.server_address[1]),)),
+                 server_b.server_address[1], "hello-from-b"),
+            ]
+            ms = resolve_mount_set([MountSpec(path=".", mode="ro")])
+            for policy, port, body in cases:
+                code = (
+                    "import urllib.request;"
+                    f"print(urllib.request.urlopen('http://host.docker.internal:{port}/').read().decode())"
+                )
+                req = SandboxExecutionRequest(
+                    argv=["python", "-c", code],
+                    cwd=str(export),
+                    env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp"},
+                    network=True, mount_set=ms, egress_policy=policy)
+                result = b.run(req)
+                assert result.exit_code == 0, result.stderr
+                assert body in result.stdout
+            ips = sorted(b._proxy_ips.values())
+            assert len(ips) == 2 and ips[0] != ips[1]
+        finally:
+            b.close()
+            server_a.shutdown()
+            server_b.shutdown()

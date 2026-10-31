@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- fix(isolation): assign a distinct internal IP per egress proxy so a run
+  with multiple egress policies no longer collides on one address; a failed
+  proxy attach now carries the daemon stderr tail in the AE-SBX-020 message
+
 ## [1.0.0a46] - 2026-10-31
 
 ### Changed

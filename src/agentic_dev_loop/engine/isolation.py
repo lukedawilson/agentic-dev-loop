@@ -299,10 +299,10 @@ def proxy_container_name(run_id: str, profile_key: str) -> str:
     return f"{run_id}-proxy-{profile_key}"
 
 
-def proxy_url(proxy_name: str, port: int = EGRESS_PROXY_PORT) -> str:
-    """The sandbox-reachable proxy URL: the proxy container's internal DNS
-    name on the internal network (038, D3). Never 127.0.0.1 or the host-gateway."""
-    return f"http://{proxy_name}:{port}"
+def proxy_url(proxy_host: str, port: int = EGRESS_PROXY_PORT) -> str:
+    """The sandbox-reachable proxy URL: the proxy's internal address on the
+    internal network (038, D3). Never 127.0.0.1 or the host-gateway."""
+    return f"http://{proxy_host}:{port}"
 
 
 def egress_events_path(iso_state_dir: str | Path, run_id: str) -> Path:
@@ -310,8 +310,10 @@ def egress_events_path(iso_state_dir: str | Path, run_id: str) -> Path:
     return Path(iso_state_dir) / f"{EGRESS_EVENTS_PREFIX}-{run_id}.jsonl"
 
 
-def first_usable_ip(subnets: str) -> str | None:
-    """First usable non-gateway IPv4 address from one or more CIDR subnets."""
+def proxy_usable_ips(subnets: str) -> list[str]:
+    """Usable non-gateway IPv4 host addresses from the first viable subnet
+    (048 D1): ``hosts[1:]``, skipping the gateway at ``hosts[0]``. Empty when
+    no subnet offers a non-gateway host."""
     for token in subnets.split():
         try:
             network = ipaddress.ip_network(token, strict=False)
@@ -322,8 +324,8 @@ def first_usable_ip(subnets: str) -> str | None:
         hosts = list(network.hosts())
         if len(hosts) < 2:
             continue
-        return str(hosts[1])
-    return None
+        return [str(host) for host in hosts[1:]]
+    return []
 
 
 
@@ -964,6 +966,7 @@ class DockerBackend(Sandbox):
         self._run_net = run_network_name(self._run_id)
         self._network_created = False
         self._proxy_containers: list[str] = []
+        self._proxy_ips: dict[str, str] = {}
         self._egress_events_path = egress_events_path(self._iso_state_dir,
                                                       self._run_id)
         self._sandbox_venv_dir = sandbox_venv_dir  # 022 relocated venv (opt-in)
@@ -1309,9 +1312,9 @@ class DockerBackend(Sandbox):
         proxy_url_value: str | None = None
         if network and self._export_root is not None:
             proxy_name = proxy_container_name(self._run_id, key[0][:16])
-            self._start_proxy_container(proxy_name, policy,
-                                         self._dial_rewrites)
-            proxy_url_value = proxy_url(proxy_name)
+            proxy_ip = self._start_proxy_container(proxy_name, policy,
+                                                    self._dial_rewrites)
+            proxy_url_value = proxy_url(proxy_ip)
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=network,
@@ -1334,7 +1337,7 @@ class DockerBackend(Sandbox):
                                  started=True)
 
     def _start_proxy_container(self, name: str, policy: EgressPolicy,
-                               dial_rewrites: dict[str, str] | None = None) -> None:
+                               dial_rewrites: dict[str, str] | None = None) -> str:
         """Create one containerized proxy (038 D2/D5, 039 D1-D4): host-access
         network at create time with a pinned internal IP, then attach the internal
         network; the proxy binds that address only and is readiness probed from
@@ -1350,7 +1353,7 @@ class DockerBackend(Sandbox):
         policy_json = egress_proxy_module.policy_to_json(policy)
         dial_rewrites = dict(dial_rewrites or {})
         dial_rewrites_json = json.dumps(dial_rewrites, sort_keys=True)
-        bind_host = self._proxy_internal_ip()
+        bind_host = self._proxy_internal_ip(name)
         payload = docker_proxy_payload(
             run_id=self._run_id, image=self._image, name=name,
             policy_json=policy_json, dial_rewrites_json=dial_rewrites_json,
@@ -1379,9 +1382,11 @@ class DockerBackend(Sandbox):
                 f"{bind_host}:{EGRESS_PROXY_PORT} after "
                 f"{PROXY_READY_ATTEMPTS} readiness probes")
         self._proxy_containers.append(name)
+        return bind_host
 
-    def _proxy_internal_ip(self) -> str:
-        """Return the pinned first-usable IPv4 address on the internal network."""
+    def _proxy_internal_ip(self, proxy_name: str) -> str:
+        """Return the per-proxy pinned IPv4 address on the internal network
+        (048 D1): inspect the subnet, then allocate the next free host."""
         inspect = self._runner.run(
             ["docker", "network", "inspect", "-f",
              "{{range .IPAM.Config}}{{.Subnet}} {{end}}", self._run_net],
@@ -1390,11 +1395,32 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 f"AE-SBX-021: internal network inspect failed: "
                 f"{inspect.stderr.strip() or inspect.stdout.strip()}")
-        ip = first_usable_ip(inspect.stdout)
-        if ip is None:
+        return self._allocate_proxy_ip(inspect.stdout, proxy_name)
+
+    def _allocate_proxy_ip(self, subnets: str, proxy_name: str) -> str:
+        """Allocate one internal IPv4 address per proxy (048 D1/D2). An
+        existing allocation for ``proxy_name`` is reused; otherwise the first
+        free non-gateway host wins (the first proxy keeps ``hosts[1]``). Raises
+        when the subnet has no free host instead of letting the daemon emit a
+        confusing collision error."""
+        existing = self._proxy_ips.get(proxy_name)
+        if existing is not None:
+            return existing
+        hosts = proxy_usable_ips(subnets)
+        if not hosts:
             raise SandboxError(
                 f"AE-SBX-021: internal network has no usable IPv4 subnet: "
-                f"{inspect.stdout.strip()!r}")
+                f"{subnets.strip()!r}")
+        taken = set(self._proxy_ips.values())
+        free = [host for host in hosts if host not in taken]
+        if not free:
+            raise SandboxError(
+                f"AE-SBX-021: internal network {subnets.strip()!r} has "
+                f"{len(hosts)} usable proxy address(es) but "
+                f"{len(self._proxy_ips) + 1} egress proxies were requested - "
+                f"no free address to assign")
+        ip = free[0]
+        self._proxy_ips[proxy_name] = ip
         return ip
 
     def _wait_proxy_ready(self, name: str, host: str) -> bool:
@@ -1541,6 +1567,7 @@ class DockerBackend(Sandbox):
         for name in self._proxy_containers:
             self._rm_container(name)
         self._proxy_containers.clear()
+        self._proxy_ips.clear()
         if self._network_created:
             self._runner.run(["docker", "network", "rm", self._run_net], timeout=60)
             self._network_created = False

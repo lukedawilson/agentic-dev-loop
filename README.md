@@ -340,10 +340,11 @@ steps:
   structurally enforced.** A networked step runs on a per-run internal
   docker network with no route to the host. Its traffic is forced
   through a containerized egress proxy (injected via
-  `HTTP_PROXY`/`HTTPS_PROXY`, pointed at the proxy container's DNS name
-  on the internal network); a request to an undeclared host is denied
-  and logged as an enforcement event. The engine never adds an
-  undeclared target. `egress: { class: browser }` is the explicit
+  `HTTP_PROXY`/`HTTPS_PROXY`, pointed at the proxy's internal IP
+  on the internal network; each distinct egress policy gets its own
+  proxy with a distinct internal IP); a request to an undeclared host
+  is denied and logged as an enforcement event. The engine never adds
+  an undeclared target. `egress: { class: browser }` is the explicit
   broad-but-logged class (every connection logged, nothing filtered); command
   and agent steps default to a strict allowlist.
 - **Command, agent, and sandbox-action steps** may declare it. The host-side

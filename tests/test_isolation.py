@@ -1581,7 +1581,7 @@ class TestUnit5RuntimeEnforcement:
 
     def test_profile_container_mounts_and_proxy_env(self, tmp_path):
         """038: a step's mount set + egress policy key a pooled container;
-        the proxy env points at the proxy container's internal DNS name
+        the proxy env points at the proxy container's internal IP
         (never 127.0.0.1 or the host-gateway), the proxy binds a pinned
         internal IP after a readiness probe, and the exec cwd is the export
         root."""
@@ -1633,7 +1633,7 @@ class TestUnit5RuntimeEnforcement:
                           if a.startswith("HTTP_PROXY=")
                           or a.startswith("HTTPS_PROXY=")]
             assert proxy_envs and all(
-                f"http://{proxy_name}:3128" in a for a in proxy_envs)
+                "http://172.18.0.2:3128" in a for a in proxy_envs)
             assert run_argv[run_argv.index("--workdir") + 1] == str(export)
             inspect = runner.calls[6]
             assert inspect == ["docker", "inspect", "-f",
@@ -2432,6 +2432,50 @@ class TestNetworkEgressEnforcement:
         assert merged["hostname"] == "pypi.org"
         assert not backend._egress_events_path.exists()
 
+
+
+class TestProxyIpAllocation:
+    """048: per-proxy internal IP allocation - distinct ``--ip`` per proxy,
+    the first proxy keeps ``hosts[1]``, subnet exhaustion fails fast, and a
+    failed attach surfaces the daemon stderr."""
+
+    def test_two_proxies_get_distinct_ips(self, tmp_path):
+        runner = FakeRunner(
+            ok(""), ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""),
+            ok("172.18.0.0/16 "), ok("proxy"), ok(""), ok(""))
+        backend = _backend(tmp_path, runner, network=True)
+        backend._start_proxy_container("r-proxy-aaa", EgressPolicy())
+        backend._start_proxy_container("r-proxy-bbb", EgressPolicy())
+        connects = [c for c in backend._runner.calls if "--ip" in c]
+        assert [c[c.index("--ip") + 1] for c in connects] == \
+            ["172.18.0.2", "172.18.0.3"]
+        runs = [c for c in backend._runner.calls if "--host" in c]
+        assert [c[c.index("--host") + 1] for c in runs] == \
+            ["172.18.0.2", "172.18.0.3"]
+
+    def test_allocation_reused_for_same_name(self, tmp_path):
+        backend = _backend(tmp_path, FakeRunner())
+        first = backend._allocate_proxy_ip("172.18.0.0/16 ", "p1")
+        again = backend._allocate_proxy_ip("172.18.0.0/16 ", "p1")
+        assert first == "172.18.0.2"
+        assert again == first
+
+    def test_exhaustion_raises_naming_subnet_and_count(self, tmp_path):
+        backend = _backend(tmp_path, FakeRunner())
+        backend._allocate_proxy_ip("172.18.0.0/30 ", "p1")
+        with pytest.raises(SandboxError,
+                           match=r"1 usable proxy address.*2 egress proxies"):
+            backend._allocate_proxy_ip("172.18.0.0/30 ", "p2")
+
+    def test_connect_failure_message_carries_stderr_tail(self, tmp_path):
+        runner = FakeRunner(
+            ok(""), ok("172.18.0.0/16 "), ok("proxy"),
+            fail(1, "Error response from daemon: Address already in use"))
+        backend = _backend(tmp_path, runner, network=True)
+        with pytest.raises(SandboxError,
+                           match="Address already in use") as exc:
+            backend._start_proxy_container("r-proxy-abc", EgressPolicy())
+        assert "AE-SBX-020" in str(exc.value)
 
 
 class TestRegisterBeforeCreate:
