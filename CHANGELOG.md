@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a50] - 2026-10-31
+
+### Changed
+
+- fix(isolation): the startup reaper now prunes a registry entry only after
+  the daemon confirms the object is gone (050). A failed removal keeps the
+  entry so the next startup reaper retries it instead of dropping the record
+  and stranding an invisible orphan.
+
 ## [1.0.0a49] - 2026-10-31
 
 ### Breaking

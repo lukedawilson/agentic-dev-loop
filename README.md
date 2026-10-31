@@ -125,7 +125,10 @@ engine-owned object to its owning run and a `live`, `orphaned`,
 registry-owned orphans whose owner pid is dead (never unregistered names).
 A SIGTERM to a running pipeline still closes the sandbox (the graph's
 `finally` runs); SIGKILL is unhandleable, so its containers are reclaimed by
-the startup reaper on the next run or by `containers --reap`. Pass
+the startup reaper on the next run or by `containers --reap`. The reaper
+and `--reap` prune a registry entry only after the daemon confirms the
+object is gone; a surviving object (a failed removal) keeps its entry so
+the next startup retries it. Pass
 `--state-dir` to point at a custom `isolation.state_dir`.
 
 **What a run looks like** (the shipped self-loop example):

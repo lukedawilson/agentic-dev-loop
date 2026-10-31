@@ -49,3 +49,15 @@ reliably reaps containers when a run ends or is abandoned (SIGTERM runs
 `close()`; a post-create startup failure also reaps the container it created),
 and `agentic-dev-loop containers` is the verification protocol for declaring a
 container an orphan.
+
+---
+
+## 2. Pre-042 survivors without registry records are `unregistered` (2026-10-31)
+
+Containers leaked before plan 042 landed carry no registry record, so
+`agentic-dev-loop containers` classifies them `unregistered`. Ownership is
+unproven, so `containers --reap` never auto-reaps them: they surface in the
+report and are removed only after ownership is proven from the audit. The
+2026-10-31 manual cleanup of four such survivors, removed by operator
+instruction once the audit showed no live engine process owned them, is the
+worked example.

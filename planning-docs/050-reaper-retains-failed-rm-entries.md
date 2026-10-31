@@ -1,6 +1,6 @@
 # Plan 050: Startup reaper retains registry entries when removal fails
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 
