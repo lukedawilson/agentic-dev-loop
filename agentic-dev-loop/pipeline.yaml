@@ -40,6 +40,7 @@ isolation:
 steps:
   - name: brief
     agent: brief
+    reasoning_effort: medium
     produces: attempt-brief.md            # run-scoped: created once, reused every attempt
     max_iterations: 12
     # Per-run context digestion: a closed input list (resolved relative to
@@ -68,6 +69,7 @@ steps:
 
   - name: dev
     agent: dev
+    reasoning_effort: high
     max_iterations: 100        # 035: turn cap; hard outer bound against verification spirals
     finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
     produces: implementation-summary.md   # hygiene-tracked, no verdict
@@ -111,6 +113,7 @@ steps:
 
   - name: review
     agent: review
+    reasoning_effort: xhigh
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     mounts: [{path: ".", mode: ro}]
@@ -128,6 +131,7 @@ steps:
 
   - name: qa
     agent: qa
+    reasoning_effort: medium
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE, env: ENV }
     max_iterations: 100
