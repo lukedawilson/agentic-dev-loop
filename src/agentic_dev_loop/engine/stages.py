@@ -661,8 +661,16 @@ def build_brief_context(runtime: Runtime, step: StepConfig,
         parts.append(
             "## Coverage retry\n\n"
             "The captured brief is missing the following required items. "
-            "Regenerate the digest so every listed item appears on its own "
-            "line, verbatim where the contract requires verbatim:\n\n"
+            "Regenerate the digest so every listed item occupies its own "
+            "line, exactly as listed: the item alone on the line, no "
+            "trailing colon and no content. Put the compressed content on "
+            "the following line:\n\n"
+            "- general_principles\n"
+            "  Simplest thing that works; defer decisions to the last "
+            "responsible moment.\n\n"
+            "A line like `general_principles: Simplest thing that works; "
+            "...` does not satisfy coverage; the item must be the only "
+            "text on its line:\n\n"
             + coverage_note)
     return "\n\n".join(parts)
 

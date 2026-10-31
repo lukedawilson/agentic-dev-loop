@@ -42,6 +42,9 @@ behavior together on one line>
 
 <the open risks that survive the brief, or "None">
 
+The four section headings must appear exactly as written above, including
+`## Unit scope and lane digest`; do not shorten or rename them.
+
 ## RULES
 
 - One pass, no exploration. Read the listed inputs, emit the brief, finish.
@@ -57,7 +60,14 @@ behavior together on one line>
   follows it. YAML anchors are each `- name:` entry under `categories:` plus
   the `enforcement_levels` preamble: keep each name verbatim. No top-level
   section or category may be dropped; merging is allowed only between a
-  section and its own subsections.
+  section and its own subsections. The anchor line holds the heading and
+  nothing else; the compressed rules go on the following line:
+
+  - general_principles
+    Simplest thing that works; defer decisions to the last responsible moment.
+
+  A line like `general_principles: Simplest thing that works; ...` does not
+  satisfy coverage; the heading must be the only text on its line.
 - Keep the environment-facts entries verbatim: each fact and the behavior it
   implies travel together.
 - ASCII only. Do not use em dash characters.

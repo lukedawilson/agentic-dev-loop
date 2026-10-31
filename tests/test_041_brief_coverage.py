@@ -17,6 +17,7 @@ from agentic_dev_loop.engine.registry import default_registry
 from agentic_dev_loop.engine.stages import (
     Runtime,
     brief_inputs_hash,
+    build_brief_context,
     make_brief_node,
 )
 
@@ -174,6 +175,33 @@ class TestMissingAnchors:
     def test_bold_wrapped_heading_passes(self):
         assert missing_anchors(_brief_ok(), ["error handling", "mock policy"],
                                ["offline; never fetch"]) == []
+
+
+class TestCoverageNoteWording:
+    """The retry note must state the line rule unambiguously (043): a
+    correction that the model can misread as "the item starts its own line"
+    produced anchor: content one-liners for three straight retries in run
+    5367f0c488d8."""
+
+    def test_note_states_line_rule_and_example(self, runtime):
+        note = "- mock policy"
+        message = build_brief_context(
+            runtime, runtime.cfg.steps[0], {"plan.md": "THE PLAN"},
+            coverage_note=note)
+        assert "## Coverage retry" in message
+        assert ("the item alone on the line, no trailing colon and no "
+                "content") in message
+        assert "- general_principles\n  Simplest thing that works" in message
+        assert "does not satisfy coverage" in message
+        assert "the item must be the only text on its line" in message
+        assert note in message
+
+    def test_note_keeps_missing_items_verbatim(self, runtime):
+        note = "- mock policy\n- default development mode \u2014 ask before coding"
+        message = build_brief_context(
+            runtime, runtime.cfg.steps[0], {"plan.md": "THE PLAN"},
+            coverage_note=note)
+        assert "\n\n" + note in message
 
 
 class TestBriefNodeCoverage:

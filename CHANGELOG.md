@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a42] - 2026-10-31
+
+### Changed
+
+- docs: add unit-8 intent (parallel fan-out driver)
+- release: v1.0.0a41
+- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
+- Uncommitted changes: CHANGELOG.md, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/043-brief-coverage-flap-fix.md, pyproject.toml, src/agentic_dev_loop/engine/stages.py, tests/test_041_brief_coverage.py
+
+## [1.0.0a42] - 2026-10-31
+
+### Changed
+
+- docs: add unit-8 intent (parallel fan-out driver)
+- release: v1.0.0a41
+- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
+- Uncommitted changes: agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/043-brief-coverage-flap-fix.md, src/agentic_dev_loop/engine/stages.py, tests/test_041_brief_coverage.py
+
 ## [1.0.0a41] - 2026-10-29
 
 ### Changed
