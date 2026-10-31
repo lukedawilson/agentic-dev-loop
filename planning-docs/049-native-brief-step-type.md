@@ -1,4 +1,4 @@
-# Plan 050: Brief as a native step type
+# Plan 049: Brief as a native step type
 
 > **Status: APPROVED**
 

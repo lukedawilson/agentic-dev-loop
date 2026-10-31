@@ -1,4 +1,4 @@
-# Plan 049: Startup reaper retains registry entries when removal fails
+# Plan 050: Startup reaper retains registry entries when removal fails
 
 > **Status: APPROVED**
 
