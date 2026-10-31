@@ -3,13 +3,14 @@ name: agentic-dev-loop-construction
 extensions:
   - agentic_dev_loop.engine.extensions.aidlc:AidlcExtension   # bundled; loading IS choosing
 
-additional_files:                    # top-level, standalone, optional
-  - ../README.md                     # resolved relative to the pipeline file's dir;
-                                     # listed-but-missing → fail fast
-  - ../aidlc-docs/domain-model-erd.md   # project domain model (aidlc-docs)
-  - ../planning-docs/038-network-level-egress-enforcement.md  # 039's predecessor: D8 semantics, manual probe matrix, 038 Changes 4/6
-  - ../CHANGELOG.md                  # release history for the code under change (unit-5 egress entries)
-  - ../docs/known-issues.md          # known container-lifecycle issues touching isolation.py
+additional_files:
+  - ../README.md                                              # resolved relative to the pipeline file's dir;
+                                                              # listed-but-missing → fail fast
+  - ../coding-standards-ddd.yaml                              # resolved relative to pipeline file's dir
+  - ../AGENTS.md                                              # (agentic-dev-loop/) → repo root
+  - ../aidlc-docs/domain-model-erd.md                         # project domain model (aidlc-docs)
+  - ../CHANGELOG.md                                           # release history for the code under change (unit-5 egress entries)
+  - ../docs/known-issues.md                                   # known container-lifecycle issues touching isolation.py
 
 llm:
   model: openai/deepseek-v4-pro
@@ -63,6 +64,8 @@ steps:
 
   - name: dev
     agent: dev
+    max_iterations: 100        # 035: turn cap; hard outer bound against verification spirals
+    finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
     produces: implementation-summary.md   # hygiene-tracked, no verdict
     mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
     # Banned-command deny-list: custom entries append after the engine
