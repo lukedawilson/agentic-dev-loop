@@ -1,6 +1,6 @@
 # Plan 051: Step run times and loop total in the viz sidebar
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 

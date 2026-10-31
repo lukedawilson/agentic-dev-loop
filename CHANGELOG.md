@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a51] - 2026-11-01
+
+### Changed
+
+- feat: construct plan 051-step-runtime-display.md (agent dev loop)
+- Uncommitted changes: planning-docs/051-step-runtime-display.md
+
 ## [1.0.0a50] - 2026-10-31
 
 ### Changed
