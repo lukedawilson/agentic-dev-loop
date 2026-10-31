@@ -84,7 +84,8 @@ def emit_node(bus: viz.VizBus, name: str, state: dict | None = None,
     time.sleep(EVENT_GAP)
     bus.publish({"type": "heartbeat", "node": name,
                  "elapsed_seconds": int(time.monotonic() - started)})
-    bus.publish({"type": "node_finished", "node": name, "ok": ok})
+    bus.publish({"type": "node_finished", "node": name, "ok": ok,
+                 "elapsed_seconds": int(time.monotonic() - started)})
     time.sleep(NODE_GAP)
 
 
@@ -95,8 +96,10 @@ def run_scenario(bus: viz.VizBus, scenario: str, flood: int = 0) -> None:
     The mechanical `test` command gate runs between `dev` and `review` on
     every attempt. `flood` lines are emitted by the attempt-1 dev node
     (see emit_node)."""
+    scenario_start = time.monotonic()
     bus.publish({"type": "run_started", "subject": SUBJECT,
-                 "max_attempts": 3, "thread_id": "viz-demo", "attempt": 1})
+                 "max_attempts": 3, "thread_id": "viz-demo", "attempt": 1,
+                 "started_at": time.time()})
     bus.publish({"type": "console", "node": None, "stream": "stdout",
                  "text": "[demo] pipeline started"})
     time.sleep(NODE_GAP)
@@ -108,7 +111,9 @@ def run_scenario(bus: viz.VizBus, scenario: str, flood: int = 0) -> None:
                                                 "review": "pass"}})
     if scenario == "failure":
         emit_node(bus, "qa", ok=False)
-        bus.publish({"type": "run_finished", "success": False, "attempts": 1})
+        bus.publish({"type": "run_finished", "success": False,
+                     "attempts": 1,
+                     "elapsed_seconds": int(time.monotonic() - scenario_start)})
         return
 
     emit_node(bus, "qa", {"step_verdicts": {"test": "pass",
@@ -125,7 +130,8 @@ def run_scenario(bus: viz.VizBus, scenario: str, flood: int = 0) -> None:
                                             "qa": "pass"}})
     emit_node(bus, "commit")
     emit_node(bus, "success", {"outcome": "success"})
-    bus.publish({"type": "run_finished", "success": True, "attempts": 2})
+    bus.publish({"type": "run_finished", "success": True, "attempts": 2,
+                 "elapsed_seconds": int(time.monotonic() - scenario_start)})
 
 
 def main() -> int:

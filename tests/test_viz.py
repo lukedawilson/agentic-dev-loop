@@ -764,9 +764,22 @@ class TestServer:
         assert "elapsed_seconds" in PAGE
         assert "elapsed" in PAGE
 
-    def test_page_constant_clears_elapsed(self):
-        assert "clearElapsed" in PAGE
-        assert 'id="elapsed"' in PAGE
+    def test_page_constant_has_total(self):
+        assert 'id="total"' in PAGE
+        assert "total " in PAGE
+
+    def test_page_constant_has_step_time(self):
+        assert "stepTimes" in PAGE
+        assert ".stage-time" in PAGE
+        assert "stage-time" in PAGE
+        assert "liveElapsed" in PAGE
+
+    def test_page_constant_has_loop_total(self):
+        assert "renderTotal" in PAGE
+        assert "started_at" in PAGE
+        assert "setInterval" in PAGE
+        assert "clearInterval" in PAGE
+        assert "total " in PAGE
 
     def test_page_constant_buffers_sse_until_topology_ready(self):
         assert "topologyReady" in PAGE
@@ -933,7 +946,7 @@ El.prototype.querySelectorAll = function (sel) {
 };
 El.prototype.scrollIntoView = function () {};
 
-var STATIC_IDS = ["subject", "attempt", "thread-id", "elapsed", "verdicts",
+var STATIC_IDS = ["subject", "attempt", "thread-id", "total", "verdicts",
                   "stages", "run-log", "mermaid-container", "run-banner",
                   "divider", "sidebar"];
 STATIC_IDS.forEach(function (id) { registry[id] = new El(id); });
@@ -961,6 +974,7 @@ var esInstance = null;
 globalThis.document = document;
 globalThis.window = window;
 var copiedText = null;
+var intervalFn = null;
 // node 21+ ships a read-only `navigator` global, so defineProperty is needed
 Object.defineProperty(globalThis, "navigator", {
   configurable: true,
@@ -990,6 +1004,10 @@ globalThis.fetch = function () {
 };
 globalThis.requestAnimationFrame = function (fn) { fn(); };
 globalThis.setTimeout = function () { return 0; };
+globalThis.setInterval = function (fn) { intervalFn = fn; return 1; };
+globalThis.clearInterval = function () {};
+var fakeNow = 0;
+Date.now = function () { return fakeNow; };
 globalThis.EventSource = function (url) {
   this.url = url;
   this.onmessage = null;
@@ -1012,15 +1030,37 @@ function nodeClasses() {
 }
 function fire(ev) { esInstance.onmessage({ data: JSON.stringify(ev) }); }
 
+function stageTimes() {
+  var out = {};
+  ["dev", "test", "review"].forEach(function (n) {
+    var section = document.getElementById("stage-" + n);
+    var header = section.querySelector(".stage-header");
+    var t = header.querySelector(".stage-time");
+    out[n] = t ? t.textContent : null;
+  });
+  return out;
+}
+function totalText() {
+  var total = document.getElementById("total");
+  return { text: total.textContent, display: total.style.display };
+}
+
 var snapshots = [];
 async function main() {
   // let the topology fetch microtask chain resolve so events are handled
   // live (synchronously inside es.onmessage) instead of buffered
   await new Promise(function (res) { setImmediate(res); });
   EVENTS.forEach(function (ev) {
+    if (ev.type === "__tick") {
+      fakeNow = ev.now;
+      if (intervalFn) { intervalFn(); }
+      return;
+    }
     fire(ev);
     if (ev.type === "state") {
-      snapshots.push({ ev: ev, badges: badges(), classes: nodeClasses() });
+      snapshots.push({ ev: ev, badges: badges(), classes: nodeClasses(),
+                       times: stageTimes(), total: totalText(),
+                       timer: intervalFn !== null });
     }
   });
   // exercise the copy button on the dev console
@@ -1029,7 +1069,9 @@ async function main() {
   copyBtn.listeners["click"]();
   await new Promise(function (res) { setImmediate(res); });
   snapshots.push({ copy: { text: copiedText,
-                           title: copyBtn.getAttribute("title") } });
+                           title: copyBtn.getAttribute("title") },
+                   times: stageTimes(), total: totalText(),
+                   timer: intervalFn !== null });
   console.log(JSON.stringify(snapshots));
 }
 main();
@@ -1165,6 +1207,71 @@ main();
         # no console lines: no clipboard write, informative title instead
         assert snaps[-1]["copy"]["text"] is None
         assert snaps[-1]["copy"]["title"] == "Nothing to copy"
+
+
+    def test_step_header_shows_accumulated_time(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "node_finished", "node": "dev", "ok": True,
+             "elapsed_seconds": 135},
+            {"type": "state", "attempt": 1, "failed": False},
+            {"type": "node_finished", "node": "dev", "ok": True,
+             "elapsed_seconds": 45},
+            {"type": "state", "attempt": 1, "failed": False},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[-1]["times"]["dev"] == "3:00"
+        assert snaps[-1]["times"]["test"] == ""
+        assert snaps[-1]["times"]["review"] == ""
+
+    def test_running_stage_shows_live_heartbeat_time(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "heartbeat", "node": "dev", "elapsed_seconds": 27},
+            {"type": "state", "attempt": 1, "failed": False},
+            {"type": "node_finished", "node": "dev", "ok": True,
+             "elapsed_seconds": 28},
+            {"type": "state", "attempt": 1, "failed": False},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["times"]["dev"] == "0:27"
+        assert snaps[1]["times"]["dev"] == "0:28"
+
+    def test_loop_total_ticks_then_freezes(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "__tick", "now": 1065000},
+            {"type": "state", "attempt": 1, "failed": False},
+            {"type": "run_finished", "success": True, "attempts": 1,
+             "elapsed_seconds": 200},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["total"]["text"] == "total 1:05"
+        assert snaps[0]["total"]["display"] == "block"
+        assert snaps[-1]["total"]["text"] == "total 3:20"
+
+    def test_loop_total_fallback_without_started_at(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t"},
+            {"type": "state", "attempt": 1, "failed": False},
+            {"type": "run_finished", "success": True, "attempts": 1,
+             "elapsed_seconds": 95},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["timer"] is False
+        assert snaps[0]["total"] == {"text": "", "display": "none"}
+        assert snaps[-1]["total"]["text"] == "total 1:35"
+        assert snaps[-1]["total"]["display"] == "block"
 
 
 class TestDemo:

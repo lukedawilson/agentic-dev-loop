@@ -7,6 +7,7 @@ everything else - files, git, checkpoints - is real."""
 
 import argparse
 import queue
+import time
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -452,6 +453,25 @@ class TestVizStream:
         assert events[0]["max_attempts"] == 3
         assert events[-1]["success"] is True
         assert events[-1]["attempts"] == 1
+
+    def test_run_events_carry_timings(self, repo, fake_agents):
+        script_all_pass(fake_agents)
+        before = time.time()
+        bus = VizBus()
+        ok, attempts = run_pipeline("pipeline.yaml", args(), viz_bus=bus)
+        after = time.time()
+        assert (ok, attempts) == (True, 1)
+        events = drain_events(bus)
+        run_started = next(e for e in events if e["type"] == "run_started")
+        assert isinstance(run_started["started_at"], (int, float))
+        assert before <= run_started["started_at"] <= after
+        run_finished = next(e for e in events if e["type"] == "run_finished")
+        assert isinstance(run_finished["elapsed_seconds"], int)
+        assert run_finished["elapsed_seconds"] >= 0
+        for event in events:
+            if event["type"] == "node_finished":
+                assert isinstance(event["elapsed_seconds"], int)
+                assert event["elapsed_seconds"] >= 0
 
     def test_stream_path_failure_returns_same(self, repo, fake_agents):
         fake_agents.set("check", [("write", "ci-fix.md", "VERDICT: FAIL")])

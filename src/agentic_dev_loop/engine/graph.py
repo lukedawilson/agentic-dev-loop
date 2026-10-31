@@ -8,6 +8,7 @@ steer the retry cycle, and a SQLite checkpointer makes runs crash-resumable
 from __future__ import annotations
 
 import operator
+import time
 import uuid
 import webbrowser
 from pathlib import Path
@@ -279,12 +280,14 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
         if bus is not None:
             start_state = initial if initial is not None \
                 else graph.get_state(config).values
+            run_start = time.monotonic()
             bus.publish({
                 "type": "run_started",
                 "subject": start_state["subject"],
                 "max_attempts": start_state["max_attempts"],
                 "thread_id": thread_id,
                 "attempt": start_state["attempt"],
+                "started_at": time.time(),
             })
             watch = viz.NodeWatch()
             capture = viz.ConsoleCapture(bus, watch)
@@ -292,6 +295,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             heartbeat = viz.HeartbeatThread(watch, bus)
             heartbeat.start()
             final = None
+            step_starts: dict[str, float] = {}
             try:
                 for part in graph.stream(initial, config,
                                          stream_mode=["tasks", "updates"],
@@ -299,8 +303,13 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                     for event in viz.translate(part):
                         if event["type"] == "node_started":
                             watch.start(event["node"])
+                            step_starts[event["node"]] = time.monotonic()
                         elif event["type"] == "node_finished":
                             watch.finish(event["node"])
+                            if event["node"] in step_starts:
+                                event["elapsed_seconds"] = max(
+                                    0, int(round(time.monotonic()
+                                                - step_starts[event["node"]])))
                         bus.publish(event)
                 final = graph.get_state(config).values
             finally:
@@ -317,8 +326,13 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                 else:
                     success = False
                     attempts = 0
-                bus.publish({"type": "run_finished",
-                             "success": success, "attempts": attempts})
+                bus.publish({
+                    "type": "run_finished",
+                    "success": success,
+                    "attempts": attempts,
+                    "elapsed_seconds": max(
+                        0, int(round(time.monotonic() - run_start))),
+                })
                 capture.detach()
         else:
             final = graph.invoke(initial, config)

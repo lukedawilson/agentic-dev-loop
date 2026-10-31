@@ -466,7 +466,7 @@ PAGE = """<!doctype html>
   #thread code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
                  background: #f5f5f5; padding: 2px 6px; border-radius: 4px;
                  cursor: pointer; user-select: all; }
-  #elapsed { font-size: 14px; color: #1976d2; display: none; }
+  #total { font-size: 14px; color: #1976d2; display: none; }
   #verdicts { display: flex; flex-wrap: wrap; gap: 6px; }
   .badge { font-size: 12px; padding: 3px 8px; border-radius: 10px;
            background: #f0f0f0; color: #333; }
@@ -477,12 +477,15 @@ PAGE = """<!doctype html>
   #stages { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex;
             flex-direction: column; gap: 8px; }
   .stage { border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; }
-  .stage-header { display: block; width: 100%; text-align: left; cursor: pointer;
+  .stage-header { display: flex; align-items: baseline; width: 100%;
+                  text-align: left; cursor: pointer;
                   font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI",
                   Roboto, Helvetica, Arial, sans-serif; padding: 6px 10px;
                   border: 0; background: #f7f7f7; }
   .stage-glyph { display: inline-block; width: 1.1em; }
   .stage-status { margin-left: 0.4em; }
+  .stage-time { margin-left: auto; color: #555;
+                font-variant-numeric: tabular-nums; }
   .status-pending { color: #555; }
   .status-running { color: #1976d2; }
   .status-pass { color: #2e7d32; }
@@ -531,7 +534,7 @@ PAGE = """<!doctype html>
     <h2 id="subject">agentic-dev-loop pipeline</h2>
     <div id="attempt">attempt ?/?</div>
     <div id="thread">thread id: <code id="thread-id" title="click to select">\u2014</code></div>
-    <div id="elapsed"></div>
+    <div id="total"></div>
     <div id="verdicts"></div>
     <div id="stages"></div>
     <ul id="run-log"></ul>
@@ -554,6 +557,10 @@ PAGE = """<!doctype html>
   var renderCount = 0;
   var mermaidFailed = !!window.__mermaidFailed;
   var pendingCompletion = null;
+  var stepTimes = {};
+  var liveElapsed = {};
+  var runStartWall = null;
+  var totalTimer = null;
   var topologyReady = false;
   var pendingEvents = [];
   var MAX_CONSOLE = 500;
@@ -602,10 +609,16 @@ PAGE = """<!doctype html>
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
-  function clearElapsed() {
-    var line = el("elapsed");
-    line.textContent = "";
-    line.style.display = "none";
+  function renderTotal() {
+    var line = el("total");
+    if (runStartWall === null) {
+      line.textContent = "";
+      line.style.display = "none";
+      return;
+    }
+    line.textContent = "total " + mmss(Math.max(0,
+      Math.round(Date.now() / 1000 - runStartWall)));
+    line.style.display = "block";
   }
 
   function statusOf(n) {
@@ -723,6 +736,9 @@ PAGE = """<!doctype html>
     header.appendChild(glyph);
     header.appendChild(name);
     header.appendChild(status);
+    var time = document.createElement("span");
+    time.className = "stage-time";
+    header.appendChild(time);
 
     var console = document.createElement("pre");
     console.className = "stage-console";
@@ -768,6 +784,10 @@ PAGE = """<!doctype html>
       else if (v === "env") { suffix = " (verdict: ENV)"; }
     }
     status.textContent = (word ? " " + word : "") + suffix;
+    header.querySelector(".stage-time").textContent =
+      (word === "completed" && stepTimes[node]) ? mmss(stepTimes[node])
+      : (word === "running" && liveElapsed[node] !== undefined)
+        ? mmss(liveElapsed[node]) : "";
     header.className = "stage-header status-" + renderStatusOf(node);
   }
 
@@ -1033,6 +1053,13 @@ PAGE = """<!doctype html>
     switch (ev.type) {
       case "run_started":
         flushPending();
+        stepTimes = {};
+        liveElapsed = {};
+        if (totalTimer !== null) { clearInterval(totalTimer); totalTimer = null; }
+        runStartWall = (typeof ev.started_at === "number")
+          ? ev.started_at : null;
+        if (runStartWall !== null) { totalTimer = setInterval(renderTotal, 1000); }
+        renderTotal();
         clearConsoles();
         resetVerdicts();
         if (ev.attempt !== undefined) {
@@ -1051,14 +1078,18 @@ PAGE = """<!doctype html>
         if (!nodeIds.has(ev.node)) { break; }
         nodeStatus[ev.node] = "running";
         stageWord[ev.node] = "running";
+        liveElapsed = {};
+        liveElapsed[ev.node] = 0;
         Array.from(nodeIds).forEach(function (n) {
           if (n === ev.node) { expandStage(n); } else { collapseStage(n); }
         });
         renderGraph();
         break;
       case "node_finished":
-        clearElapsed();
         if (!nodeIds.has(ev.node)) { break; }
+        if (ev.elapsed_seconds !== undefined) {
+          stepTimes[ev.node] = (stepTimes[ev.node] || 0) + ev.elapsed_seconds;
+        }
         if (!fatalNodes.has(ev.node)) {
           nodeStatus[ev.node] = ev.ok ? "pass" : "fail";
         }
@@ -1071,9 +1102,9 @@ PAGE = """<!doctype html>
         renderGraph();
         break;
       case "heartbeat":
-        if (nodeStatus[ev.node] === "running") {
-          el("elapsed").textContent = ev.node + " running \u2014 " + mmss(ev.elapsed_seconds) + " elapsed";
-          el("elapsed").style.display = "block";
+        if (nodeIds.has(ev.node) && nodeStatus[ev.node] === "running") {
+          liveElapsed[ev.node] = ev.elapsed_seconds;
+          renderStageHeader(ev.node);
         }
         break;
       case "state":
@@ -1106,7 +1137,12 @@ PAGE = """<!doctype html>
         updateAttempt();
         break;
       case "run_finished":
-        clearElapsed();
+        if (totalTimer !== null) { clearInterval(totalTimer); totalTimer = null; }
+        if (ev.elapsed_seconds !== undefined) {
+          runStartWall = null;
+          el("total").textContent = "total " + mmss(ev.elapsed_seconds);
+          el("total").style.display = "block";
+        }
         flushPending();
         if (!ev.success) {
           Object.keys(nodeStatus).forEach(function (n) {
