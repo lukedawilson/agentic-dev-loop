@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
+from agentic_dev_loop.engine.agents import BRIEF_AGENT_NAME
 from agentic_dev_loop.engine.graph import run_pipeline
 from agentic_dev_loop.engine.registry import default_registry
 from agentic_dev_loop.engine.stages import (
@@ -53,9 +54,6 @@ BRIEF_OK_NEW = BRIEF_OK.replace("SCOPE", "SCOPE NEW")
 
 BRIEF_STEP = {
     "name": "brief",
-    "agent": "brief",
-    "produces": "attempt-brief.md",
-    "max_iterations": 12,
     "brief_inputs": {
         "include": ["AGENTS.md", "CLAUDE.md"],
         "env_facts": ["the workspace is an export with no .git; verify with find/ls, never git status"],
@@ -81,7 +79,7 @@ class TestBriefInputsConfig:
     def test_single_strings_coerced(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": "AGENTS.md",
                              "env_facts": "offline; never fetch"},
             "on_pass": "success",
@@ -96,7 +94,7 @@ class TestBriefInputsConfig:
     def test_unknown_key_rejected(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["AGENTS.md"], "bogus": 1},
             "on_pass": "success",
         }]
@@ -109,7 +107,7 @@ class TestBriefInputsConfig:
             "name": "brief", "command": "true",
             "brief_inputs": {"include": ["AGENTS.md"]},
         }]
-        with pytest.raises(ValidationError, match="'brief_inputs' requires 'agent'"):
+        with pytest.raises(ValidationError, match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
             _load(tmp_path, data)
 
     def test_rejected_on_action_step(self, tmp_path):
@@ -118,38 +116,27 @@ class TestBriefInputsConfig:
             "name": "brief", "action": "commit",
             "brief_inputs": {"include": ["AGENTS.md"]},
         }]
-        with pytest.raises(ValidationError, match="'brief_inputs' requires 'agent'"):
-            _load(tmp_path, data)
-
-    def test_requires_produces(self, tmp_path):
-        data = _base()
-        data["steps"] = [{
-            "name": "brief", "agent": "brief",
-            "brief_inputs": {"include": ["AGENTS.md"]},
-            "on_pass": "success",
-        }]
-        with pytest.raises(ValidationError,
-                           match="'brief_inputs' requires 'produces'"):
+        with pytest.raises(ValidationError, match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
             _load(tmp_path, data)
 
     def test_rejects_artifact_verdicts(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief",
+            "name": "brief",
             "artifact": "brief.md",
             "verdicts": {"pass": "PASS", "fail": "FAIL"},
             "brief_inputs": {"include": ["AGENTS.md"]},
             "on_pass": "success",
         }]
         with pytest.raises(ValidationError,
-                           match="produces-only agent step"):
+                           match="drop 'artifact'"):
             _load(tmp_path, data)
 
     @pytest.mark.parametrize("bad", ["/etc/passwd", "../AGENTS.md", ".git/config"])
     def test_include_rejects_unsafe_paths(self, tmp_path, bad):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": [bad]},
             "on_pass": "success",
         }]
@@ -159,7 +146,7 @@ class TestBriefInputsConfig:
     def test_env_facts_empty_entry_rejected(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["AGENTS.md"], "env_facts": [""]},
             "on_pass": "success",
         }]
@@ -190,7 +177,7 @@ class TestBriefInputsConfig:
     def test_sections_empty_rejected(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["AGENTS.md"], "sections": []},
             "on_pass": "success",
         }]
@@ -200,7 +187,7 @@ class TestBriefInputsConfig:
     def test_sections_duplicate_rejected(self, tmp_path):
         data = _base()
         data["steps"] = [{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["AGENTS.md"],
                              "sections": ["Rules", "Rules"]},
             "on_pass": "success",
@@ -234,8 +221,7 @@ def runtime(tmp_path, fake_sandbox):
     (tmp_path / "README.md").write_text("README")
     (tmp_path / "standards.yaml").write_text("STANDARDS")
     steps = [
-        {"name": "brief", "agent": "brief", "produces": "attempt-brief.md",
-         "max_iterations": 12,
+        {"name": "brief",
          "brief_inputs": {"include": ["AGENTS.md", "CLAUDE.md"],
                           "env_facts": ["offline; never fetch"]},
          "on_pass": "dev"},
@@ -257,7 +243,7 @@ class TestResolveBriefInputs:
 
     def test_unknown_include_fails_loud(self, runtime):
         step = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["NO-SUCH.md"]},
             "on_pass": "success",
         }]).steps[0]
@@ -269,7 +255,7 @@ class TestResolveBriefInputs:
         (tmp_path / "a.md").write_text("A")
         (tmp_path / "b.md").write_text("B")
         cfg = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["*.md"]},
             "on_pass": "success",
         }])
@@ -282,7 +268,7 @@ class TestResolveBriefInputs:
 
     def test_glob_matching_nothing_fails_loud(self, runtime):
         step = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["*.nope"]},
             "on_pass": "success",
         }]).steps[0]
@@ -292,7 +278,7 @@ class TestResolveBriefInputs:
     def test_literal_directory_fails_loud(self, runtime, tmp_path):
         (tmp_path / "adir").mkdir()
         step = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["adir"]},
             "on_pass": "success",
         }]).steps[0]
@@ -316,18 +302,6 @@ class TestBuildBriefContext:
                                   {"AGENTS.md": "REPO RULES FROM DOCS"})
         assert ctx.count("## AGENTS.md") == 1
         assert "REPO RULES FROM DOCS" in ctx
-
-    def test_custom_prompt_between_docs_and_env_facts(self, runtime):
-        step = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
-            "brief_inputs": {"include": ["AGENTS.md"], "env_facts": ["offline"]},
-            "custom_prompt": "brief scope", "on_pass": "success",
-        }]).steps[0]
-        ctx = build_brief_context(runtime, step, {"plan.md": "THE PLAN"})
-        assert "## Run-specific instructions\n\nbrief scope" in ctx
-        assert ctx.count("## Run-specific instructions") == 1
-        assert ctx.index("## plan.md") < ctx.index("## Run-specific instructions")
-        assert ctx.index("## Run-specific instructions") < ctx.index("## Environment facts")
 
 
 class TestBriefInputsHash:
@@ -354,7 +328,7 @@ class TestBriefInputsHash:
 
 class TestBriefNode:
     def test_first_run_calls_agent_and_stores_hash(self, runtime, fake_agents):
-        fake_agents.set("brief", [("write", "attempt-brief.md", BRIEF_OK)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("write", "attempt-brief.md", BRIEF_OK)])
         update = make_brief_node(runtime, runtime.cfg.steps[0])(make_state())
         assert update["step_verdicts"] == {"brief": "pass"}
         assert update["failed"] is False
@@ -362,21 +336,21 @@ class TestBriefNode:
         assert update["brief_hashes"] == {
             "brief": brief_inputs_hash(runtime, runtime.cfg.steps[0],
                                        make_state()["docs"])}
-        (msg,) = fake_agents.messages_for("brief")
+        (msg,) = fake_agents.messages_for(BRIEF_AGENT_NAME)
         assert "## AGENTS.md\n\nREPO RULES" in msg
         assert "## Environment facts\n\n- offline; never fetch" in msg
 
     def test_unchanged_inputs_skip_llm(self, runtime, fake_agents):
-        fake_agents.set("brief", [("write", "attempt-brief.md", BRIEF_OK)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("write", "attempt-brief.md", BRIEF_OK)])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         first = node(make_state())
         second = node(make_state(artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
         assert second == {"step_verdicts": {"brief": "pass"}, "failed": False}
-        assert fake_agents.agents_called() == ["brief"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME]
 
     def test_changed_inputs_rerun(self, runtime, fake_agents):
-        fake_agents.set("brief", [
+        fake_agents.set(BRIEF_AGENT_NAME, [
             ("write", "attempt-brief.md", BRIEF_OK),
             ("write", "attempt-brief.md", BRIEF_OK_NEW),
         ])
@@ -386,30 +360,30 @@ class TestBriefNode:
         second = node(make_state(artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
         assert second["artifacts"] == {"brief": BRIEF_OK_NEW}
-        assert fake_agents.agents_called() == ["brief", "brief"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, BRIEF_AGENT_NAME]
 
     def test_loader_doc_disk_edit_reruns_brief(self, runtime, fake_agents,
                                                   tmp_path):
         plan = tmp_path / "plan.md"
         plan.write_text("PLAN V1")
-        fake_agents.set("brief", [
+        fake_agents.set(BRIEF_AGENT_NAME, [
             ("write", "attempt-brief.md", BRIEF_OK),
             ("write", "attempt-brief.md", BRIEF_OK_NEW),
         ])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         first = node(make_state(docs={"plan.md": "PLAN V1"},
                                 doc_sources={"plan.md": str(plan)}))
-        assert fake_agents.agents_called() == ["brief"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME]
         plan.write_text("PLAN V2")
         second = node(make_state(docs={"plan.md": "PLAN V1"},
                                  doc_sources={"plan.md": str(plan)},
                                  artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
         assert second["artifacts"] == {"brief": BRIEF_OK_NEW}
-        assert fake_agents.agents_called() == ["brief", "brief"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, BRIEF_AGENT_NAME]
 
     def test_empty_response_is_unclear(self, runtime, fake_agents):
-        fake_agents.set("brief", [("ok",)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("ok",)])
         update = make_brief_node(runtime, runtime.cfg.steps[0])(make_state())
         assert update["step_verdicts"] == {"brief": None}
         assert update["retry_target"] == "brief"
@@ -521,8 +495,6 @@ class TestDryRunBriefInputs:
             "deps_policy: open\n"
             "steps:\n"
             "  - name: brief\n"
-            "    agent: brief\n"
-            "    produces: attempt-brief.md\n"
             "    brief_inputs:\n"
             "      include: [NO-SUCH.md]\n"
             "    on_pass: success\n")
@@ -546,8 +518,6 @@ class TestDryRunBriefInputs:
             "deps_policy: open\n"
             "steps:\n"
             "  - name: brief\n"
-            "    agent: brief\n"
-            "    produces: attempt-brief.md\n"
             "    brief_inputs:\n"
             "      include: [AGENTS.md]\n"
             "    on_pass: success\n")
@@ -571,9 +541,6 @@ agents_dir: sdk_agents
 deps_policy: open
 steps:
   - name: brief
-    agent: brief
-    produces: attempt-brief.md
-    max_iterations: 12
     brief_inputs:
       include: [AGENTS.md]
       env_facts:
@@ -623,16 +590,16 @@ class TestBriefPipeline:
             "- the workspace is an export with no .git; verify with find/ls, never git status\n\n"
             "## Open risks\n\nNone\n"
         )
-        fake_agents.set("brief", [("write", "attempt-brief.md", brief_digest)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("write", "attempt-brief.md", brief_digest)])
         fake_agents.set("dev", [("write", "implementation-summary.md", "did the work")])
 
         ok, attempts = run_pipeline("pipeline.yaml", _args())
         assert (ok, attempts) == (True, 1)
-        assert fake_agents.agents_called() == ["brief", "dev"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, "dev"]
         (dev_msg,) = fake_agents.messages_for("dev")
         assert "## Stage artifacts" in dev_msg
         assert "BRIEF DIGEST" in dev_msg
-        (brief_msg,) = fake_agents.messages_for("brief")
+        (brief_msg,) = fake_agents.messages_for(BRIEF_AGENT_NAME)
         assert "## AGENTS.md\n\nREPO RULES" in brief_msg
         assert "## Environment facts" in brief_msg
         assert _git(repo, "log", "-1", "--pretty=%s") == \

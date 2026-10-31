@@ -93,10 +93,9 @@ def build_graph(runtime: Runtime, checkpointer=None):
     graph = StateGraph(LoopState)
     for step in runtime.cfg.steps:
         if step.kind == "agent":
-            if step.brief_inputs is not None:
-                node = make_brief_node(runtime, step)
-            else:
-                node = make_agent_node(runtime, step)
+            node = make_agent_node(runtime, step)
+        elif step.kind == "brief":
+            node = make_brief_node(runtime, step)
         elif step.kind == "command":
             node = make_command_node(runtime, step)
         else:

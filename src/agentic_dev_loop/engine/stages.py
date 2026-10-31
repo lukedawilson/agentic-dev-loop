@@ -32,7 +32,8 @@ from langgraph.graph import END
 from openhands.sdk import Conversation
 
 from .agent_error_guide import guide_section
-from .agents import load_agent, load_brief_agent, register_sandbox_terminal
+from .agents import (BRIEF_AGENT_NAME, load_agent, load_brief_agent,
+                      register_sandbox_terminal)
 from .brief_coverage import extract_anchors, missing_anchors
 from .brief_prompt import BRIEF_PROMPT_VERSION
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
@@ -182,7 +183,7 @@ class Runtime:
             if step is not None and step.reasoning_effort is not None:
                 llm = build_llm(self.cfg.llm,
                                 reasoning_effort=step.reasoning_effort)
-            if step is not None and step.brief_inputs is not None:
+            if step is not None and step.kind == "brief":
                 agent = load_brief_agent(
                     agent_name, step.brief_inputs.sections, llm)
             else:
@@ -398,7 +399,7 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
     parts.append("## Dependency policy\n\n" + policy_injection(runtime.cfg))
     lines = []
     for step in runtime.cfg.steps:
-        if step.agent is None:
+        if step.kind not in ("agent", "brief"):
             continue
         for produced in step.produces:
             lines.append(f"{step.name} agent writes: `{prompt_dir(runtime)}/{produced}`")
@@ -428,7 +429,7 @@ def run_scoped_artifacts(cfg: PipelineConfig) -> list[str]:
     outputs are exempt from per-attempt hygiene."""
     files = []
     for step in cfg.steps:
-        if step.brief_inputs is None:
+        if step.kind != "brief":
             continue
         files.extend(step.produces)
         if step.artifact is not None:
@@ -778,7 +779,7 @@ def _warn_vendored_brief(runtime: Runtime, step: StepConfig) -> None:
     The embedded prompt is authoritative, so a leftover
     ``<agents_dir>/<agent>.agent.md`` for a ``brief_inputs:`` step is ignored;
     the warning names it without failing the run."""
-    vendored = runtime.agents_dir / f"{step.agent}.agent.md"
+    vendored = runtime.agents_dir / "brief.agent.md"
     if vendored.is_file():
         print(
             f"[{runtime.cfg.name}] ignoring vendored brief prompt {vendored} - "
@@ -845,8 +846,8 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
                                       state.get("doc_sources"),
                                       coverage_note=coverage_note)
 
-        print(f"[{subject}] Running {step.agent} agent...", flush=True)
-        result = runtime.run_agent(step.agent, message,
+        print(f"[{subject}] Running {step.name} agent...", flush=True)
+        result = runtime.run_agent(BRIEF_AGENT_NAME, message,
                                     max_iterations=max_iterations, step=step)
         if not result.ok:
             print(f"[{subject}] {step.name} agent failed on attempt {attempt}.",
@@ -1125,7 +1126,7 @@ def make_bump_node(runtime: Runtime):
         # re-enter that brief step so it regenerates once and refreshes its
         # hash. Unchanged inputs keep the failing step's retry_target.
         for step in runtime.cfg.steps:
-            if step.brief_inputs is None:
+            if step.kind != "brief":
                 continue
             try:
                 current = brief_inputs_hash(runtime, step,

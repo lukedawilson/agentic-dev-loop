@@ -8,6 +8,7 @@ import pytest
 from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import PipelineConfig
+from agentic_dev_loop.engine.agents import BRIEF_AGENT_NAME
 from agentic_dev_loop.engine.brief_coverage import (
     extract_anchors,
     missing_anchors,
@@ -79,8 +80,7 @@ def runtime(tmp_path, fake_sandbox):
         "## Error handling\n\nNever fall back silently.\n\n"
         "## Mock policy\n\nNo mocks unless unavoidable.\n")
     steps = [
-        {"name": "brief", "agent": "brief", "produces": "attempt-brief.md",
-         "max_iterations": 12,
+        {"name": "brief",
          "brief_inputs": {"include": ["AGENTS.md"],
                           "env_facts": ["offline; never fetch"]},
          "on_pass": "dev"},
@@ -219,7 +219,7 @@ class TestBriefNodeCoverage:
     def test_miss_returns_retry_note_and_reruns(self, runtime, fake_agents):
         good = _brief_ok()
         bad = _brief_missing_mock()
-        fake_agents.set("brief", [
+        fake_agents.set(BRIEF_AGENT_NAME, [
             ("write", "attempt-brief.md", bad),
             ("write", "attempt-brief.md", good),
         ])
@@ -240,15 +240,15 @@ class TestBriefNodeCoverage:
         assert second["failed"] is False
         assert second["artifacts"] == {"brief": good}
         assert second["brief_retries"] == {"brief": 0}
-        assert fake_agents.agents_called() == ["brief", "brief"]
-        messages = fake_agents.messages_for("brief")
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, BRIEF_AGENT_NAME]
+        messages = fake_agents.messages_for(BRIEF_AGENT_NAME)
         assert "## Coverage retry" in messages[1]
         assert "mock policy" in messages[1]
 
     def test_cap_exhausted_writes_last_error_and_fails(self, runtime,
                                                        fake_agents):
         bad = _brief_missing_mock()
-        fake_agents.set("brief", [("write", "attempt-brief.md", bad)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("write", "attempt-brief.md", bad)])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         state = _make_state()
 
@@ -260,7 +260,7 @@ class TestBriefNodeCoverage:
         update = node(state)
         assert update["failed"] is True
         assert update["failed_step"] == "brief"
-        assert fake_agents.agents_called() == ["brief", "brief", "brief", "brief"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME] * 4
         error = (runtime.state_dir / "last-error.md").read_text(encoding="utf-8")
         assert "Brief coverage failed" in error
         assert "mock policy" in error
@@ -269,7 +269,7 @@ class TestBriefNodeCoverage:
                                                         fake_agents):
         good = _brief_ok()
         bad = _brief_missing_mock()
-        fake_agents.set("brief", [("write", "attempt-brief.md", good)])
+        fake_agents.set(BRIEF_AGENT_NAME, [("write", "attempt-brief.md", good)])
         node = make_brief_node(runtime, runtime.cfg.steps[0])
         state = _make_state(artifacts={"brief": bad},
                             brief_hashes={"brief": brief_inputs_hash(
@@ -277,8 +277,8 @@ class TestBriefNodeCoverage:
                                 _make_state()["docs"])})
         update = node(state)
         assert update["artifacts"] == {"brief": good}
-        assert fake_agents.agents_called() == ["brief"]
-        (message,) = fake_agents.messages_for("brief")
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME]
+        (message,) = fake_agents.messages_for(BRIEF_AGENT_NAME)
         assert "## Coverage retry" in message
 
     def test_passing_reused_digest_skips_llm(self, runtime, fake_agents):

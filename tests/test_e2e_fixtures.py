@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from agentic_dev_loop.engine.agents import load_agent
+from agentic_dev_loop.engine.agents import (BRIEF_AGENT_NAME,
+                                           load_agent)
 from agentic_dev_loop.engine.cli import main
 from agentic_dev_loop.core.config import load_config
 from agentic_dev_loop.engine.llm import build_llm
@@ -75,7 +76,7 @@ _BRIEF_DIGEST = (
 
 def _passing_scripts(fake_agents, **overrides):
     scripts = {
-        "brief": [("write", "attempt-brief.md", _BRIEF_DIGEST)],
+        BRIEF_AGENT_NAME: [("write", "attempt-brief.md", _BRIEF_DIGEST)],
         "dev": [("write", "implementation-summary.md", "Implemented the fix.\n")],
         "review": [("write", "review-findings.md",
                     "Looks good.\n\nVERDICT: APPROVED\n")],
@@ -184,8 +185,6 @@ def _stub_pipeline(tmp_path: Path, additional: list[str],
         additional_files: {additional}
         steps:
           - name: brief
-            agent: brief
-            produces: [attempt-brief.md]
             brief_inputs:
               include: {include}
               env_facts: []
@@ -232,7 +231,7 @@ class TestHistoricalFixtures:
              "## CI analysis\n\nEverything is fine.\n\n**VERDICT: PASS**\n")])
         rc = main([str(consumer_repo / "agentic-dev-loop" / "pipeline.yaml"), "--plan", "plan.md", "--no-viz"])
         assert rc == 0
-        assert fake_agents.agents_called() == ["brief", "dev", "review", "qa"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, "dev", "review", "qa"]
         assert "feat: construct plan plan.md (agent dev loop)" in _log(
             consumer_repo)
 
@@ -313,7 +312,7 @@ class TestCommandGate:
     def test_gate_passes_through(self, consumer_repo, fake_agents):
         _passing_scripts(fake_agents)
         assert self._run(consumer_repo) == 0
-        assert fake_agents.agents_called() == ["brief", "dev", "review", "qa"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, "dev", "review", "qa"]
         assert "feat: construct plan plan.md (agent dev loop)" in _log(
             consumer_repo)
 
@@ -322,7 +321,7 @@ class TestCommandGate:
         _passing_scripts(fake_agents)
         _script_test(("fail", "2 failed, 1 passed in 0.05s\n"), ("pass",))
         assert self._run(consumer_repo) == 0
-        assert fake_agents.agents_called() == ["brief", "dev", "dev", "review", "qa"]
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME, "dev", "dev", "review", "qa"]
         second_dev = fake_agents.messages_for("dev")[1]
         assert "2 failed, 1 passed" in second_dev
         assert "test output (attempt 1)" in second_dev
@@ -339,7 +338,7 @@ class TestCommandGate:
         _passing_scripts(fake_agents)
         _script_test(("fail", "boom\n"))
         assert self._run(consumer_repo) != 0
-        assert fake_agents.agents_called() == ["brief"] + ["dev"] * 10
+        assert fake_agents.agents_called() == [BRIEF_AGENT_NAME] + ["dev"] * 10
         assert "(agent dev loop)" not in _log(consumer_repo)
 
 

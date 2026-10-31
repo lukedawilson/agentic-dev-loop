@@ -158,7 +158,7 @@ class TestInjection:
     def test_brief_context_contains_guide_before_docs(self, runtime):
         (runtime.workspace / "AGENTS.md").write_text("REPO RULES")
         step = make_cfg([{
-            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "name": "brief",
             "brief_inputs": {"include": ["AGENTS.md"],
                              "env_facts": ["offline"]},
             "on_pass": "success",

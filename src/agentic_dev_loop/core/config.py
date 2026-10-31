@@ -35,6 +35,13 @@ DEFAULT_BRIEF_SECTIONS = [
     "Open risks",
 ]
 
+# 049: a brief step is engine-owned end to end - the capture file and the
+# iteration cap are fixed, not configurable. Downstream consumers (capture
+# write, hygiene, context, retry classification) keep reading `produces` and
+# `max_iterations`; parse-time normalization applies these after validation.
+BRIEF_PRODUCES = ["attempt-brief.md"]
+BRIEF_MAX_ITERATIONS = 12
+
 # 047: the full SDK reasoning_effort literal, passed through verbatim. The
 # engine is provider-generic, so it validates shape only - whether a given
 # provider accepts every value (notably "none") is operator risk (D3).
@@ -372,9 +379,9 @@ class BriefInputsSpec(BaseModel):
 
 class StepConfig(BaseModel):
     """One pipeline step. Its type IS the key it carries: exactly one of
-    `agent`, `action`, or `command` - empty values do not count, anything
-    else fails to load. See the `kind` property (the single discriminator
-    graph-building dispatches on)."""
+    `agent`, `action`, `command`, or `brief_inputs` - empty values do not
+    count, anything else fails to load. See the `kind` property (the single
+    discriminator graph-building dispatches on)."""
     model_config = ConfigDict(extra="forbid")
 
     name: str
@@ -413,10 +420,12 @@ class StepConfig(BaseModel):
 
     @property
     def kind(self) -> str:
-        """The step's type: 'agent', 'command', or 'action'. Which of the
-        three keys is set is the ONLY signal; validation has already
+        """The step's type: 'brief', 'agent', 'command', or 'action'. Which
+        of the four keys is set is the ONLY signal; validation has already
         guaranteed exactly one is set and non-empty by the time any instance
         exists."""
+        if self.brief_inputs is not None:
+            return "brief"
         if self.agent is not None:
             return "agent"
         if self.command is not None:
@@ -470,11 +479,48 @@ class StepConfig(BaseModel):
                 raise ValueError(
                     f"step {self.name!r}: {key!r} must be a non-empty string"
                 )
-        if sum(k is not None for k in (self.agent, self.action, self.command)) != 1:
+        if sum(k is not None for k in
+               (self.agent, self.action, self.command, self.brief_inputs)) != 1:
             raise ValueError(
-                f"step {self.name!r}: exactly one of 'agent', 'action', or "
-                "'command' is required"
+                f"step {self.name!r}: exactly one of 'agent', 'action', "
+                "'command', or 'brief_inputs' is required"
             )
+        if self.brief_inputs is not None:
+            if self.produces:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps write "
+                    f"{BRIEF_PRODUCES[0]!r}; drop 'produces'")
+            if self.artifact is not None:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps have no "
+                    "verdicts; drop 'artifact'")
+            if self.verdicts is not None:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps have no "
+                    "verdicts; drop 'verdicts'")
+            if self.params:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps take no "
+                    "'params'")
+            if self.max_iterations is not None:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps use the "
+                    f"engine cap ({BRIEF_MAX_ITERATIONS}); drop "
+                    "'max_iterations'")
+            if self.timeout is not None:
+                raise ValueError(
+                    f"step {self.name!r}: 'timeout' is command-only; drop it "
+                    "from a 'brief_inputs' step")
+            if self.custom_prompt is not None:
+                raise ValueError(
+                    f"step {self.name!r}: the brief prompt is engine-owned; "
+                    "drop 'custom_prompt'")
+            if self.finalize_nudge_turns is not None:
+                raise ValueError(
+                    f"step {self.name!r}: 'brief_inputs' steps have no "
+                    "verdicts; drop 'finalize_nudge_turns'")
+            self.produces = list(BRIEF_PRODUCES)
+            self.max_iterations = BRIEF_MAX_ITERATIONS
         if self.command is not None:
             for field, empty in (("artifact", None), ("verdicts", None),
                                  ("produces", []), ("params", {}),
@@ -495,9 +541,11 @@ class StepConfig(BaseModel):
             raise ValueError(
                 f"step {self.name!r}: 'timeout' requires 'command'"
             )
-        if self.terminal_timeout is not None and self.agent is None:
+        if (self.terminal_timeout is not None
+                and self.agent is None and self.brief_inputs is None):
             raise ValueError(
-                f"step {self.name!r}: 'terminal_timeout' requires 'agent'"
+                f"step {self.name!r}: 'terminal_timeout' requires 'agent' or "
+                "'brief_inputs'"
             )
         if self.finalize_nudge_turns is not None and self.agent is None:
             raise ValueError(
@@ -514,37 +562,20 @@ class StepConfig(BaseModel):
                 f"step {self.name!r}: 'finalize_nudge_turns' must be less "
                 "than 'max_iterations'"
             )
-        if self.brief_inputs is not None and self.agent is None:
-            raise ValueError(
-                f"step {self.name!r}: 'brief_inputs' requires 'agent'"
-            )
         if self.custom_prompt is not None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'custom_prompt' requires 'agent'"
             )
-        if (self.brief_inputs is not None
-                and (self.artifact is not None or self.verdicts is not None)):
+        if (self.setup is not None and self.command is None
+                and self.agent is None and self.brief_inputs is None):
             raise ValueError(
-                f"step {self.name!r}: 'brief_inputs' is only valid on a "
-                "produces-only agent step"
-            )
-        if self.brief_inputs is not None and not self.produces:
-            raise ValueError(
-                f"step {self.name!r}: 'brief_inputs' requires 'produces'"
-            )
-        if self.setup is not None and self.command is None and self.agent is None:
-            raise ValueError(
-                f"step {self.name!r}: 'setup' is only allowed on 'command' or 'agent' steps"
+                f"step {self.name!r}: 'setup' is only allowed on 'command', "
+                "'agent', or 'brief_inputs' steps"
             )
         if self.setup_probe is not None and self.setup is None:
             raise ValueError(
                 f"step {self.name!r}: 'setup_probe' requires 'setup'"
             )
-        # `network` is NOT rejected here: the schema can't tell a host-side
-        # built-in action (e.g. `commit`, which must never take egress) from
-        # a sandbox-executed consumer action (which may, like a command step).
-        # That distinction is enforced once the registry is known - see
-        # `validate_action_network` (020).
         if self.secrets and self.action is not None:
             raise ValueError(
                 f"step {self.name!r}: 'secrets' is only allowed on 'agent' or "

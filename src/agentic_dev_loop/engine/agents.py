@@ -25,6 +25,12 @@ if TYPE_CHECKING:
 
     from .isolation import Sandbox
 
+# 049, D3: the internal brief agent name is a fixed UUID4 string, never the
+# literal "brief", so a consumer vendoring a `brief.agent.md` cannot mint a
+# second AgentDefinition under the same name. The vendored-file warning still
+# keys on the literal filename `brief.agent.md` (that is the file to delete).
+BRIEF_AGENT_NAME = "4f1c9e2b-7a3d-4e5f-8b6c-0d1a2f3c4d5e"
+
 
 def load_agent(agents_dir: Path | str, name: str, llm: LLM) -> "Agent":
     """Load `<agents_dir>/<name>.agent.md` and build the Agent via the SDK

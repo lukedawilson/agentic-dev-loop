@@ -4,7 +4,9 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from agentic_dev_loop.core.config import Route, default_state_dir, load_config
+from agentic_dev_loop.core.config import (BRIEF_MAX_ITERATIONS,
+                                        BRIEF_PRODUCES, Route,
+                                        default_state_dir, load_config)
 
 # The plan's reference pipeline (consumer-equivalent) (009, YAML schema section),
 # verbatim except for two substitutions: 012 replaced the agent step named
@@ -275,7 +277,7 @@ def test_both_agent_and_action_rejected(tmp_path):
     data = _base()
     data["steps"][0]["action"] = "commit"
     with pytest.raises(ValidationError,
-                       match="exactly one of 'agent', 'action', or 'command'"):
+                       match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
         _load(tmp_path, data)
 
 
@@ -283,7 +285,7 @@ def test_neither_agent_nor_action_rejected(tmp_path):
     data = _base()
     del data["steps"][0]["agent"]
     with pytest.raises(ValidationError,
-                       match="exactly one of 'agent', 'action', or 'command'"):
+                       match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
         _load(tmp_path, data)
 
 
@@ -337,7 +339,7 @@ def test_command_and_agent_rejected(tmp_path):
     data = _base()
     data["steps"][0]["command"] = "true"
     with pytest.raises(ValidationError,
-                       match="exactly one of 'agent', 'action', or 'command'"):
+                       match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
         _load(tmp_path, data)
 
 
@@ -345,7 +347,7 @@ def test_command_and_action_rejected(tmp_path):
     data = _base()
     data["steps"] = [{"name": "x", "action": "commit", "command": "true"}]
     with pytest.raises(ValidationError,
-                       match="exactly one of 'agent', 'action', or 'command'"):
+                       match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
         _load(tmp_path, data)
 
 
@@ -354,7 +356,7 @@ def test_agent_action_command_rejected(tmp_path):
     data["steps"][0]["action"] = "commit"
     data["steps"][0]["command"] = "true"
     with pytest.raises(ValidationError,
-                       match="exactly one of 'agent', 'action', or 'command'"):
+                       match="exactly one of 'agent', 'action', 'command', or 'brief_inputs'"):
         _load(tmp_path, data)
 
 
@@ -462,6 +464,80 @@ def test_command_step_banned_fields_rejected(tmp_path, field, value):
     with pytest.raises(ValidationError,
                        match=f"'command' steps cannot set '{field}'"):
         _load(tmp_path, data)
+
+
+class TestBriefStep:
+    def _brief(self, **over):
+        data = _base()
+        data["steps"] = [{
+            "name": "brief",
+            "brief_inputs": {"sections": ["Repo rules digest"]},
+            "on_pass": "success",
+            **over,
+        }]
+        return data
+
+    def test_kind_is_brief(self, tmp_path):
+        assert _load(tmp_path, self._brief()).steps[0].kind == "brief"
+
+    def test_defaults_applied_at_parse(self, tmp_path):
+        step = _load(tmp_path, self._brief()).steps[0]
+        assert step.produces == BRIEF_PRODUCES
+        assert step.max_iterations == BRIEF_MAX_ITERATIONS
+
+    def test_name_free_form_and_multiple_brief_steps(self, tmp_path):
+        data = _base()
+        data["steps"] = [
+            {"name": "first", "brief_inputs": {"sections": ["A"]},
+             "on_pass": "success"},
+            {"name": "second", "brief_inputs": {"sections": ["B"]},
+             "on_pass": "success"},
+        ]
+        assert [s.kind for s in _load(tmp_path, data).steps] == \
+            ["brief", "brief"]
+
+    @pytest.mark.parametrize("field,value,match", [
+        ("produces", ["a.md"], "drop 'produces'"),
+        ("artifact", "a.md", "drop 'artifact'"),
+        ("verdicts", {"pass": "P", "fail": "F"}, "drop 'verdicts'"),
+        ("params", {"x": 1}, "take no 'params'"),
+        ("max_iterations", 99, "drop 'max_iterations'"),
+        ("timeout", 60, "command-only"),
+        ("custom_prompt", "do x", "drop 'custom_prompt'"),
+        ("finalize_nudge_turns", 3, "drop 'finalize_nudge_turns'"),
+    ])
+    def test_engine_owned_fields_rejected(self, tmp_path, field, value, match):
+        data = self._brief(**{field: value})
+        with pytest.raises(ValidationError, match=match):
+            _load(tmp_path, data)
+
+    @pytest.mark.parametrize("field,value", [
+        ("agent", "dev"),
+        ("action", "commit"),
+        ("command", "true"),
+    ])
+    def test_brief_mutually_exclusive_with_other_types(self, tmp_path, field,
+                                                       value):
+        data = self._brief(**{field: value})
+        with pytest.raises(
+                ValidationError,
+                match="exactly one of 'agent', 'action', 'command', or "
+                      "'brief_inputs'"):
+            _load(tmp_path, data)
+
+    def test_terminal_timeout_allowed(self, tmp_path):
+        data = self._brief(terminal_timeout=900)
+        assert _load(tmp_path, data).steps[0].terminal_timeout == 900
+
+    def test_setup_allowed(self, tmp_path):
+        data = self._brief(setup="make warm")
+        assert _load(tmp_path, data).steps[0].setup == "make warm"
+
+    def test_finalize_nudge_rejected(self, tmp_path):
+        data = self._brief(finalize_nudge_turns=3)
+        with pytest.raises(ValidationError,
+                           match="drop 'finalize_nudge_turns'"):
+            _load(tmp_path, data)
 
 
 def test_artifact_without_verdicts_rejected(tmp_path):
@@ -619,7 +695,7 @@ class TestStepEnvAndSetup:
                           "on_pass": "success"}]
         with pytest.raises(
                 ValidationError,
-                match="'setup' is only allowed on 'command' or 'agent' steps"):
+                match="'setup' is only allowed on 'command', 'agent', or 'brief_inputs' steps"):
             _load(tmp_path, data)
 
     def test_env_round_trip(self, tmp_path):
