@@ -2251,7 +2251,11 @@ class TestReaper:
         runner = FakeRunner()
         reaped = reap_orphaned_containers(tmp_path / "state", runner)
         assert reaped == [name]
-        assert runner.calls == [["docker", "rm", "-f", name]]
+        assert runner.calls == [
+            ["docker", "rm", "-f", name],
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"],
+        ]
         assert self._read(tmp_path / "state") == []
 
     def test_live_pid_left_alone(self, tmp_path):
@@ -2282,9 +2286,13 @@ class TestReaper:
             "run_id": "r", "name": name, "kind": "network",
             "pid": proc.pid, "process_start": None, "created_at": "now",
         }])
-        runner = FakeRunner()
-        reap_orphaned_containers(tmp_path / "state", runner)
-        assert runner.calls == [["docker", "network", "rm", name]]
+        runner = FakeRunner(ok(""), fail(1, "No such network"))
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == [name]
+        assert runner.calls == [
+            ["docker", "network", "rm", name],
+            ["docker", "network", "inspect", name],
+        ]
         assert self._read(tmp_path / "state") == []
 
     def test_malformed_name_skipped(self, tmp_path):
@@ -2300,10 +2308,64 @@ class TestReaper:
         proc.wait()
         name = f"{'e' * 32}-exec"
         self._write(tmp_path / "state", [self._entry(name, proc.pid)])
-        runner = FakeRunner(fail(1, "No such container"))
-        reap_orphaned_containers(tmp_path / "state", runner)
-        assert runner.calls == [["docker", "rm", "-f", name]]
+        runner = FakeRunner(fail(1, "No such container"), ok(""))
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == [name]
+        assert runner.calls == [
+            ["docker", "rm", "-f", name],
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"],
+        ]
         assert self._read(tmp_path / "state") == []
+
+    def test_rm_failure_container_survives_retained(self, tmp_path):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-exec"
+        entry = self._entry(name, proc.pid)
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner(fail(1, "daemon busy"), ok(name + "\n"))
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == []
+        assert self._read(tmp_path / "state") == [entry]
+        assert runner.calls == [
+            ["docker", "rm", "-f", name],
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"],
+        ]
+
+    def test_rm_failure_network_survives_retained(self, tmp_path):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-net"
+        entry = {"run_id": "r", "name": name, "kind": "network",
+                 "pid": proc.pid, "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner(fail(1, "daemon busy"), ok(name))
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == []
+        assert self._read(tmp_path / "state") == [entry]
+        assert runner.calls == [
+            ["docker", "network", "rm", name],
+            ["docker", "network", "inspect", name],
+        ]
+
+    def test_missing_network_tolerated(self, tmp_path):
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
+        proc.wait()
+        name = f"{'a' * 32}-net"
+        entry = {"run_id": "r", "name": name, "kind": "network",
+                 "pid": proc.pid, "process_start": None, "created_at": "now"}
+        self._write(tmp_path / "state", [entry])
+        runner = FakeRunner(fail(1, "No such network"),
+                            fail(1, "No such network"))
+        reaped = reap_orphaned_containers(tmp_path / "state", runner)
+        assert reaped == [name]
+        assert self._read(tmp_path / "state") == []
+        assert runner.calls == [
+            ["docker", "network", "rm", name],
+            ["docker", "network", "inspect", name],
+        ]
 
     def test_no_registry_is_a_noop(self, tmp_path):
         runner = FakeRunner()

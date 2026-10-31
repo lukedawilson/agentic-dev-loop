@@ -1632,23 +1632,12 @@ class DockerBackend(Sandbox):
         _write_registry(self._iso_state_dir, remaining)
 
     def _container_gone(self, name: str) -> bool:
-        """True only when the daemon confirms the container no longer exists.
-        A nonzero daemon exit keeps the entry."""
-        res = self._runner.run(
-            ["docker", "ps", "-a", "--filter", f"name={name}",
-             "--format", "{{.Names}}"], timeout=30)
-        if res.exit_code != 0:
-            return False
-        return name not in res.stdout.splitlines()
+        """Thin delegation to the module-level confirm helper (050 D2)."""
+        return _container_gone(self._runner, name)
 
     def _network_gone(self, name: str) -> bool:
-        """True only when the daemon reports the network is missing. Any
-        other inspect failure (daemon unreachable) keeps the entry."""
-        res = self._runner.run(
-            ["docker", "network", "inspect", name], timeout=30)
-        if res.exit_code == 0:
-            return False
-        return "No such network" in f"{res.stderr} {res.stdout}"
+        """Thin delegation to the module-level confirm helper (050 D2)."""
+        return _network_gone(self._runner, name)
 
     # -- internal -----------------------------------------------------------
 
@@ -1882,6 +1871,28 @@ def _pid_alive_matches(pid: int, recorded_start: str | None) -> bool:
     return current == recorded_start
 
 
+def _container_gone(runner: CommandRunner, name: str) -> bool:
+    """True only when the daemon confirms the container no longer exists.
+    A nonzero daemon exit keeps the entry."""
+    res = runner.run(
+        ["docker", "ps", "-a", "--filter", f"name={name}",
+         "--format", "{{.Names}}"], timeout=30)
+    if res.exit_code != 0:
+        return False
+    return name not in res.stdout.splitlines()
+
+
+def _network_gone(runner: CommandRunner, name: str) -> bool:
+    """True only when the daemon reports the network is missing. Any
+    other inspect failure (daemon unreachable) keeps the entry."""
+    res = runner.run(
+        ["docker", "network", "inspect", name], timeout=30)
+    if res.exit_code == 0:
+        return False
+    return "No such network" in f"{res.stderr} {res.stdout}"
+
+
+
 def reap_orphaned_containers(state_dir: str | Path,
                              runner: CommandRunner | None = None,
                              *, announce: bool = True) -> list[str]:
@@ -1889,7 +1900,9 @@ def reap_orphaned_containers(state_dir: str | Path,
     and the per-run internal network whose owning CLI process is gone (crashed
     before close()). Exact by construction - only engine registry names are
     touched, and a live owner (pid alive with the same start time) is left
-    alone. Best-effort: never raises."""
+    alone. A surviving object (rm failure) keeps its entry so the next
+    startup reaper retries; only a daemon-confirmed absence prunes it (050
+    D1). Best-effort: never raises."""
     runner = runner or _default_runner
     entries = _read_registry(Path(state_dir))
     if not entries:
@@ -1909,6 +1922,9 @@ def reap_orphaned_containers(state_dir: str | Path,
                 remaining.append(entry)
                 continue
             runner.run(["docker", "network", "rm", name], timeout=60)
+            if not _network_gone(runner, name):
+                remaining.append(entry)
+                continue
             if announce:
                 _announce(f"reaped orphaned sandbox network {name}")
             reaped.append(name)
@@ -1924,6 +1940,9 @@ def reap_orphaned_containers(state_dir: str | Path,
             remaining.append(entry)
             continue
         runner.run(["docker", "rm", "-f", name], timeout=60)
+        if not _container_gone(runner, name):
+            remaining.append(entry)
+            continue
         if announce:
             _announce(f"reaped orphaned sandbox container {name}")
         reaped.append(name)

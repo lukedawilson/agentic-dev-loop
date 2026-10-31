@@ -123,7 +123,11 @@ class TestReapReturnValue:
         _write(tmp_path / "state", [_entry(name, proc.pid, None)])
         runner = FakeRunner(ok(""))
         assert reap_orphaned_containers(tmp_path / "state", runner) == [name]
-        assert runner.calls == [["docker", "rm", "-f", name]]
+        assert runner.calls == [
+            ["docker", "rm", "-f", name],
+            ["docker", "ps", "-a", "--filter", f"name={name}",
+             "--format", "{{.Names}}"],
+        ]
 
     def test_reap_live_owner_returns_empty(self, tmp_path):
         name = f"{'b' * 32}-exec"
