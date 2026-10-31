@@ -1,6 +1,6 @@
 # Plan 047: reasoning_effort as an opt-in configurable pipeline and per-step field
 
-> **Status: APPROVED** (flips to COMPLETED after implementation lands)
+> **Status: COMPLETED**
 
 ## Scope
 

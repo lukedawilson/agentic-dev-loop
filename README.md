@@ -155,6 +155,7 @@ llm:
   model: openai/deepseek-v4-pro
   base_url: https://api.deepseek.com
   api_key_env: OPENAI_API_KEY
+  # reasoning_effort: medium                        # optional: low | medium | high | xhigh | none
 
 max_attempts: 10                                        # CLI --max-attempts overrides
 agents_dir: sdk_agents                                  # your <name>.agent.md files
@@ -184,6 +185,7 @@ steps:
     agent: review
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
+    # reasoning_effort: xhigh                        # per-step override; falls back to the llm block, then SDK default
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -209,6 +211,7 @@ steps:
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
 | `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
+| `reasoning_effort:` | Optional `low` / `medium` / `high` / `xhigh` / `none`. Set on the `llm` block (pipeline-global) or per-step (overrides the block). Unset anywhere = the field is not passed and the SDK default (`high`) applies, so today's behavior is unchanged. Forwarded only for models the SDK/LiteLLM mark as supporting it; an unsupported value fails at the first LLM call. See [Reasoning effort](#reasoning-effort-opt-in). |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` provisions the sandbox before the step runs (command or agent steps; network ON; stamp-cached, re-runs when the pipeline's lockfiles change); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `setup_probe:` | Optional consumer-authored in-container probe run on a warm `setup:` stamp instead of the venv probe. Exit 0 trusts the stamp (skips); any nonzero re-provisions with network on (fail toward freshness). The probe text is NOT part of the stamp key, so a probe-only change needs `--refresh` or `--clean-stamps` to take effect. Example (asserting a warmed esbuild binary is Linux-shaped): `file frontend-editor/node_modules/esbuild/bin/esbuild | grep -q ELF`. |
@@ -221,6 +224,30 @@ steps:
 | `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
 | `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from the real workspace (auto-created if missing); a `setup:` hook can warm them (the provision container carries the same cache mounts); `sync_excludes:` names scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
 | `merge_on_conflict:` | Top-level run-wide list of append-style logs (same path vocabulary as `sync_excludes:`, default `[]`). A concurrent host edit to a listed path is union-merged instead of raising: the host file wins and the sandbox's export-only lines are appended in order; both sides converge and the run continues. See [docs/setup.md](docs/setup.md). |
+
+### Reasoning effort (opt-in)
+
+`reasoning_effort` is an opt-in latency dial on the pipeline `llm` block and
+on individual agent steps. It takes one of `low`, `medium`, `high`, `xhigh`,
+or `none`; unset means the field is never passed and the SDK default
+(`high`) applies, so a pipeline that omits it behaves exactly as before. A
+step's value overrides the `llm` block's value, so the review lane can hold
+a higher effort than the rest.
+
+The value is forwarded only for models the SDK/LiteLLM mark as supporting
+it; an unsupported value fails at the first LLM call (the schema rejects
+unknown names at load time, but cannot know provider capability). No
+pipeline ships a value: adopt one only after an observed run proves lower
+per-turn latency with a green suite and no provider 400s.
+
+Recommended lane defaults (guidance only, not enforced):
+
+| Lane | reasoning_effort | Why |
+| --- | --- | --- |
+| brief | medium | digest and classify, no design work |
+| dev | high | hold the line: dev caught a real plan bug and a real sandbox triage this unit |
+| qa | medium | classification discipline must stay reliable |
+| review | xhigh | shortest lane, highest stakes: a missed detection sails past the last gate into commit |
 
 A `brief_inputs:` step is the per-run context-digestion pattern: it runs once at
 run start (or when its inputs change), its `produces:` artifact survives attempt

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a46] - 2026-10-31
+
+### Changed
+
+- Planning docs fixes
+- Planning docs
+- Se cpus
+- docs(planning): approve plan 047 decisions D1-D6
+- docs(planning): amend plan 047 with per-step reasoning_effort override and lane defaults
+- docs(planning): add plan 048 egress-proxy ip-collision fix
+- feat(trigger): add --resume <thread-id> mode with exclusivity enforcement
+- feat(publish): mandate Consumer adoption notes for consumer-facing plans
+- Uncommitted changes: README.md, planning-docs/047-reasoning-effort-config.md
+
 ## [1.0.0a45] - 2026-10-31
 
 ### Changed
