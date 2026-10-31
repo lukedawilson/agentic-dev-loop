@@ -362,6 +362,7 @@ class StepConfig(BaseModel):
     custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # BR-13: command steps only
+    setup_probe: str | None = None  # 045: consumer probe replacing the venv probe on a warm stamp; requires `setup`; probe text is NOT part of the stamp key (a probe-only change needs --refresh/--clean-stamps)
     forbidden_commands: list[str] = []  # banned-command regex deny-list (036 D1)
     network: bool = False  # per-stage egress (command/agent + sandbox actions; host-side actions reject at registry time)
     # unit-5: per-step mount granularity + egress policy. Empty mounts =
@@ -418,6 +419,13 @@ class StepConfig(BaseModel):
     def _nonempty_custom_prompt(cls, v: str | None) -> str | None:
         if v is not None and not v.strip():
             raise ValueError("custom_prompt must be a non-empty string")
+        return v
+
+    @field_validator("setup_probe")
+    @classmethod
+    def _nonempty_setup_probe(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("setup_probe must be a non-empty string")
         return v
 
     @model_validator(mode="after")
@@ -493,6 +501,10 @@ class StepConfig(BaseModel):
         if self.setup is not None and self.command is None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'setup' is only allowed on 'command' or 'agent' steps"
+            )
+        if self.setup_probe is not None and self.setup is None:
+            raise ValueError(
+                f"step {self.name!r}: 'setup_probe' requires 'setup'"
             )
         # `network` is NOT rejected here: the schema can't tell a host-side
         # built-in action (e.g. `commit`, which must never take egress) from

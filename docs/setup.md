@@ -249,6 +249,18 @@ with `AE-SBX-014`. When `sandbox_venv_dir` relocates the venv (022), only the
 outside dir's contents are removed - the mount-source dir itself is kept so the
 still-running container stays valid (§3).
 
+**Consumer-authored probe (045).** A `setup:` hook may declare a
+`setup_probe:` - a shell command the engine runs inside the execution
+container instead of the venv probe when a warm stamp is found. Exit 0 trusts
+the stamp (skip); any nonzero - a broken artifact or a probe that cannot run -
+falls through to re-provision with network on (fail toward freshness). The
+probe text is not part of the stamp key, so a probe-only change needs
+`--refresh` or `--clean-stamps` to take effect. For example, a hook that warms
+`frontend-editor/node_modules` can assert the warmed native binary is
+Linux-shaped:
+
+    setup_probe: file frontend-editor/node_modules/esbuild/bin/esbuild | grep -q ELF
+
 ## 5. Troubleshooting
 
 Every fail-fast error points here (`AE-SBX-<NNN>`):

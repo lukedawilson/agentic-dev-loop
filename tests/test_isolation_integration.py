@@ -224,6 +224,25 @@ class TestVenvSelfHealE2E:
         assert read_stamp(stamp_dir, key)
 
 
+class TestSetupProbeE2E:
+    """045 repro: a warm stamp plus a consumer-authored probe that fails inside
+    the container must re-provision (remove-free - the setup hook re-warms)
+    instead of blind-skipping a poisoned artifact."""
+
+    def test_consumer_probe_failure_reprovisions(self, backend, tmp_path):
+        b, ws = backend
+        (ws / "warmed").write_text("poisoned")
+        stamp_dir = tmp_path / "stamps"
+        key = "warm-probe"
+        write_stamp(stamp_dir, key)
+
+        b.provision("printf fresh > warmed", key, str(stamp_dir),
+                    force=False, setup_probe="grep -q fresh warmed")
+
+        assert (ws / "warmed").read_text() == "fresh"
+        assert read_stamp(stamp_dir, key)
+
+
 class TestRelocatedVenvE2E:
     """022: `sandbox_venv_dir` relocates the sandbox venv outside the workspace.
     The outside dir is bind-mounted at `{ws}/.venv-sandbox` in BOTH containers,

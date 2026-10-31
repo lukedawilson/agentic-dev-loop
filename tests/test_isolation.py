@@ -33,7 +33,7 @@ from agentic_dev_loop.engine.isolation import (
     probe_docker, process_start, read_stamp, reap_orphaned_containers,
     remove_sandbox_venv, resolve_effective_profile, resolve_image_ref,
     resolve_sandbox_env, resolve_sandbox_venv_dir, select_backend,
-    setup_stamp_key, translate_mount_path, venv_probe_argv,
+    probe_argv, setup_stamp_key, translate_mount_path, venv_probe_argv,
     venv_probe_command, venv_probe_state, write_stamp,
 )
 
@@ -280,6 +280,16 @@ class TestVenvProbe:
     ])
     def test_state_classification(self, stdout, exit_code, expected):
         assert venv_probe_state(stdout, exit_code) == expected
+
+
+class TestProbeArgv:
+    def test_assembly(self):
+        argv = probe_argv("file .warmed | grep -q ELF", "c1", "/ws")
+        assert argv[1] == "exec"
+        assert argv[2] == "-w"
+        assert argv[3] == "/ws"
+        assert argv[4] == "c1"
+        assert argv[5:] == ["/bin/sh", "-c", "file .warmed | grep -q ELF"]
 
 
 class TestRemoveSandboxVenv:
@@ -969,6 +979,39 @@ class TestProvisionStampsAudit:
         # the rolled file holds the earlier record, the fresh one the later
         rolled = (state / "sandbox-audit.jsonl.1").read_text()
         assert "x" * 8 in rolled
+
+
+class TestSetupProbeProvision:
+    def test_probe_exit_zero_skips(self, tmp_path):
+        runner = FakeRunner(ok(""))
+        backend = _backend(tmp_path, runner)
+        stamp_dir = tmp_path / "stamps"
+        write_stamp(stamp_dir, "key1")
+        backend.provision("make warm-cache", "key1", str(stamp_dir),
+                          force=False, setup_probe="file .warmed | grep -q ELF")
+        assert [c for c in runner.calls if c[1] == "exec"]
+        assert not [c for c in runner.calls if c[1] == "run"]
+
+    def test_probe_nonzero_reprovisions(self, tmp_path):
+        runner = FakeRunner(fail(1, "not ELF"), ok(""))
+        backend = _backend(tmp_path, runner)
+        stamp_dir = tmp_path / "stamps"
+        write_stamp(stamp_dir, "key1")
+        backend.provision("make warm-cache", "key1", str(stamp_dir),
+                          force=False, setup_probe="file .warmed | grep -q ELF")
+        assert [c for c in runner.calls if c[1] == "run"]
+        assert read_stamp(stamp_dir, "key1")
+
+    def test_probe_run_failure_reprovisions(self, tmp_path):
+        # A probe that cannot run (exec failure) is treated as a broken artifact.
+        runner = FakeRunner(fail(125, "no such container"), ok(""))
+        backend = _backend(tmp_path, runner)
+        stamp_dir = tmp_path / "stamps"
+        write_stamp(stamp_dir, "key1")
+        backend.provision("make warm-cache", "key1", str(stamp_dir),
+                          force=False, setup_probe="file .warmed | grep -q ELF")
+        assert [c for c in runner.calls if c[1] == "run"]
+        assert read_stamp(stamp_dir, "key1")
 
 
 class TestStartupSandbox:
@@ -2298,14 +2341,18 @@ def test_declared_setups_includes_agent_steps(tmp_path):
             {"name": "dev", "agent": "dev",
              "setup": "cd frontend-editor && npm ci", "on_pass": "success"},
             {"name": "t", "command": "make", "setup": "echo warm",
+             "setup_probe": "file .warmed | grep -q ELF",
              "on_pass": "success"},
         ],
     }
     p = tmp_path / "pipeline.yaml"
     p.write_text(yaml.safe_dump(data))
     cfg = load_config(p)
-    assert set(dict(_declared_setups(cfg, tmp_path))) == {
+    declared = list(_declared_setups(cfg, tmp_path))
+    assert {s for s, _k, _p in declared} == {
         "cd frontend-editor && npm ci", "echo warm"}
+    assert {p for _s, _k, p in declared} == {
+        None, "file .warmed | grep -q ELF"}
 
 
 def test_provision_payload_mounts_declared_caches():

@@ -534,11 +534,19 @@ def venv_probe_command() -> str:
     )
 
 
+def probe_argv(probe_cmd: str, container: str, workspace: str) -> list[str]:
+    """``docker exec`` argv that runs an arbitrary in-container probe command
+    (045) inside the already-running execution container against the
+    bind-mounted workspace. ``probe_cmd`` is a consumer-authored shell command
+    string passed verbatim to ``/bin/sh -c``."""
+    return ["docker", "exec", "-w", workspace, container,
+            "/bin/sh", "-c", probe_cmd]
+
+
 def venv_probe_argv(container: str, workspace: str) -> list[str]:
     """``docker exec`` argv that runs the venv probe inside the (already
     running) execution container against the bind-mounted workspace."""
-    return ["docker", "exec", "-w", workspace, container,
-            "/bin/sh", "-c", venv_probe_command()]
+    return probe_argv(venv_probe_command(), container, workspace)
 
 
 def venv_probe_state(stdout: str, exit_code: int | None) -> str:
@@ -1133,7 +1141,7 @@ class DockerBackend(Sandbox):
                                        self._sync_excludes)
 
     def provision(self, setup_cmd: str, stamp_key: str, stamp_dir: str,
-                  force: bool) -> None:
+                  force: bool, setup_probe: str | None = None) -> None:
         """Run one ``setup:`` hook in the provision container (network ON),
         stamp-cached. Nonzero exit → AE-SBX-009, no stamp written.
 
@@ -1143,13 +1151,21 @@ class DockerBackend(Sandbox):
         broken in the Linux container. A ``broken`` probe removes the venv
         (fail loud if removal is impossible) and falls through to re-provision;
         ``valid``/``missing``/``unknown`` keep the stamp skip.
+
+        045: when ``setup_probe`` is set it replaces the venv probe for this
+        hook. Exit 0 trusts the stamp (skip); any nonzero - a broken artifact
+        or a failed probe run - falls through to re-provision (fail toward
+        freshness).
         """
         if not force and read_stamp(Path(stamp_dir), stamp_key):
-            if self._probe_venv() == "broken":
+            if setup_probe is not None:
+                if self._probe(setup_probe).exit_code == 0:
+                    return
+            else:
+                if self._probe_venv() != "broken":
+                    return
                 remove_sandbox_venv(self._workspace,
                                     sandbox_venv_dir=self._sandbox_venv_dir)
-            else:
-                return
         payload = docker_provision_payload(
             run_id=self._run_id, image=self._image, workspace=self._workspace,
             setup_cmd=setup_cmd, sandbox_venv_dir=self._sandbox_venv_dir,
@@ -1162,13 +1178,18 @@ class DockerBackend(Sandbox):
                 f"- stamp not written (docs/setup.md §5)")
         write_stamp(Path(stamp_dir), stamp_key)
 
+    def _probe(self, probe_cmd: str) -> CmdResult:
+        """Run an arbitrary in-container probe command (045). The workdir
+        follows the export root when one is materialised, else the workspace."""
+        workdir = self._export_root or self._workspace
+        return self._runner.run(
+            probe_argv(probe_cmd, self._container, workdir), timeout=30)
+
     def _probe_venv(self) -> str:
         """Run the in-container venv probe and classify it (016 self-heal).
         With an export the venv is mounted at ``{export}/.venv-sandbox``, so
         the probe workdir follows the export root."""
-        workdir = self._export_root or self._workspace
-        res = self._runner.run(
-            venv_probe_argv(self._container, workdir), timeout=30)
+        res = self._probe(venv_probe_command())
         return venv_probe_state(res.stdout, res.exit_code)
 
     # -- execution ----------------------------------------------------------
@@ -1903,7 +1924,8 @@ def _declared_setups(cfg: PipelineConfig, workspace: Path):
         if step.setup is not None and (
             step.command is not None or step.agent is not None
         ):
-            yield step.setup, setup_stamp_key(step.setup, hashes)
+            yield (step.setup, setup_stamp_key(step.setup, hashes),
+                   step.setup_probe)
 
 
 def isolation_state_dir(cfg: PipelineConfig) -> Path:
@@ -2017,10 +2039,11 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         _announce("execution container started")
         if refresh is None:
             refresh = bool(cfg.isolation and cfg.isolation.refresh)
-        for setup_cmd, stamp_key in _declared_setups(cfg, workspace):
+        for setup_cmd, stamp_key, setup_probe in _declared_setups(cfg, workspace):
             _announce(f"provisioning setup (stamp {stamp_key[:8]})")
             backend.provision(setup_cmd, stamp_key,
-                              str(iso_state_dir / "stamps"), force=refresh)
+                              str(iso_state_dir / "stamps"), force=refresh,
+                              setup_probe=setup_probe)
         _announce("sandbox ready")
         return backend
     except BaseException:

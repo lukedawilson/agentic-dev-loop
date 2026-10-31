@@ -596,6 +596,37 @@ class TestStepEnvAndSetup:
         assert rt.env == {"A": "x", "B": None}
 
 
+class TestSetupProbe:
+    def test_defaults_none(self, tmp_path):
+        assert _load(tmp_path, _base()).steps[0].setup_probe is None
+
+    def test_parses_with_setup(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "t", "command": "make",
+                          "setup": "make warm-cache",
+                          "setup_probe": "file node_modules/esbuild/bin/esbuild | grep -q ELF",
+                          "on_pass": "success"}]
+        step = _load(tmp_path, data).steps[0]
+        assert step.setup_probe == (
+            "file node_modules/esbuild/bin/esbuild | grep -q ELF")
+
+    def test_requires_setup(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "t", "command": "make",
+                          "setup_probe": "file node_modules/esbuild/bin/esbuild | grep -q ELF",
+                          "on_pass": "success"}]
+        with pytest.raises(ValidationError,
+                           match="'setup_probe' requires 'setup'"):
+            _load(tmp_path, data)
+
+    def test_empty_rejected(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "t", "command": "make", "setup": "make warm-cache",
+                          "setup_probe": "  ", "on_pass": "success"}]
+        with pytest.raises(ValidationError, match="non-empty"):
+            _load(tmp_path, data)
+
+
 class TestStepNetwork:
     def test_network_defaults_false(self, tmp_path):
         step = _load(tmp_path, _base()).steps[0]
