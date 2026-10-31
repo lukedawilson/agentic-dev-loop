@@ -13,3 +13,5 @@ uv.lock
 .DS_Store
 
 .review-venv/
+.notes.md
+

@@ -331,6 +331,30 @@ def test_timeout_without_command_rejected(tmp_path):
         _load(tmp_path, data)
 
 
+def test_terminal_timeout_round_trip(tmp_path):
+    data = _base()
+    data["steps"][0]["terminal_timeout"] = 900
+    assert _load(tmp_path, data).steps[0].terminal_timeout == 900
+
+
+@pytest.mark.parametrize("step", [
+    {"name": "x", "command": "true", "terminal_timeout": 900},
+    {"name": "x", "action": "commit", "terminal_timeout": 900},
+])
+def test_terminal_timeout_requires_agent(tmp_path, step):
+    data = _base()
+    data["steps"] = [step]
+    with pytest.raises(ValidationError, match="'terminal_timeout' requires 'agent'"):
+        _load(tmp_path, data)
+
+
+def test_negative_terminal_timeout_rejected(tmp_path):
+    data = _base()
+    data["steps"][0]["terminal_timeout"] = -1
+    with pytest.raises(ValidationError):
+        _load(tmp_path, data)
+
+
 class TestCustomPrompt:
     def test_defaults_none(self, tmp_path):
         assert _load(tmp_path, _base()).steps[0].custom_prompt is None

@@ -188,6 +188,37 @@ class TestSandboxTerminalExecutor:
         assert fake_sandbox.requests[0].network is False
 
 
+class TestTerminalTimeoutOverride:
+    def test_defaults_to_terminal_timeout(self, fake_sandbox, tmp_path):
+        from openhands.tools.terminal import TerminalAction
+
+        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
+        ex = SandboxTerminalExecutor(
+            fake_sandbox, workspace=str(tmp_path), env={"PATH": "/bin"},
+            terminal_timeout=900)
+        ex(TerminalAction(command="echo hi"), None)
+        assert fake_sandbox.requests[0].timeout == 900
+
+    def test_action_timeout_wins(self, fake_sandbox, tmp_path):
+        from openhands.tools.terminal import TerminalAction
+
+        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
+        ex = SandboxTerminalExecutor(
+            fake_sandbox, workspace=str(tmp_path), env={"PATH": "/bin"},
+            terminal_timeout=900)
+        ex(TerminalAction(command="echo hi", timeout=30), None)
+        assert fake_sandbox.requests[0].timeout == 30
+
+    def test_unset_keeps_none(self, fake_sandbox, tmp_path):
+        from openhands.tools.terminal import TerminalAction
+
+        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
+        ex = SandboxTerminalExecutor(
+            fake_sandbox, workspace=str(tmp_path), env={"PATH": "/bin"})
+        ex(TerminalAction(command="echo hi"), None)
+        assert fake_sandbox.requests[0].timeout is None
+
+
 class TestRegisterSandboxTerminal:
     def test_resolves_to_sandbox_executor(self, fake_sandbox, tmp_path):
         from openhands.sdk.tool.registry import resolve_tool

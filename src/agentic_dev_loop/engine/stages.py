@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 import subprocess
 import sys
 import traceback
@@ -70,9 +69,9 @@ def custom_prompt_section(text: str) -> str:
 
 
 class _TurnPauseController:
-    """Turn-level pause callback (032): pause the SDK run loop after every
+    """Turn-level pause callback: pause the SDK run loop after every
     agent-sourced event so the caller can drive one turn at a time. The
-    finalize nudge (035) reuses this hook without any stop-when state."""
+    finalize nudge (035) reuses this hook."""
 
     def __init__(self) -> None:
         self.conversation = None
@@ -106,65 +105,6 @@ class _FinalizeNudgeController(_TurnPauseController):
 
     def message(self) -> str:
         return self._TEMPLATE.format(n=self.turns)
-
-
-class _StopWhenController(_TurnPauseController):
-    """Turn-level stop-when-green observation (032).
-
-    Pure per-event state machine - no knowledge of how the conversation is
-    driven. ``on_event`` is a SDK conversation callback: it records the most
-    recent matching terminal observation and any subsequent file-editor
-    write, and (via the base pause) pauses the conversation after every
-    agent-sourced event so the caller can drive one turn at a time.
-    """
-
-    NUDGE = "Step complete: produce your final response now"
-    _WRITE_COMMANDS = frozenset({"create", "str_replace", "insert", "undo_edit"})
-
-    def __init__(self, spec) -> None:
-        super().__init__()
-        self._pattern = re.compile(spec.green_command)
-        self.post_green_turns = spec.post_green_turns
-        self.green_hit = False
-        self.writes_since_green = False
-        self.nudged = False
-        self.post_nudge_turns = 0
-
-    @property
-    def green_signal(self) -> bool:
-        return self.green_hit and not self.writes_since_green
-
-    def on_event(self, event) -> None:
-        super().on_event(event)
-        if self.conversation is None:
-            return
-        from openhands.sdk.event import ObservationEvent
-
-        if isinstance(event, ObservationEvent):
-            self._record_observation(event)
-
-    def on_terminal_result(self, command: str | None, exit_code: int | None,
-                           wrote_workspace: bool) -> None:
-        """Feed the sandbox terminal result channel (032): a matching green
-        command is the signal; any other terminal write resets it."""
-        if command is not None and self._pattern.search(command):
-            self.green_hit = exit_code == 0
-            self.writes_since_green = False
-        elif wrote_workspace:
-            self.writes_since_green = True
-
-    def _record_observation(self, event) -> None:
-        observation = event.observation
-        tool_name = event.tool_name
-        if tool_name == "terminal":
-            command = getattr(observation, "command", None)
-            if command is not None and self._pattern.search(command):
-                self.green_hit = getattr(observation, "exit_code", None) == 0
-                self.writes_since_green = False
-        elif tool_name == "file_editor":
-            command = getattr(observation, "command", None)
-            if command in self._WRITE_COMMANDS and not observation.is_error:
-                self.writes_since_green = True
 
 
 @dataclass
@@ -201,9 +141,6 @@ class Runtime:
         try:
             from openhands.sdk.conversation.state import ConversationExecutionStatus
 
-            controller = None
-            if step is not None and step.stop_when is not None:
-                controller = _StopWhenController(step.stop_when)
             finalize_controller = None
             if step is not None and step.finalize_nudge_turns is not None:
                 finalize_controller = _FinalizeNudgeController(
@@ -232,29 +169,23 @@ class Runtime:
                     egress_policy=egress_policy,
                     terminal_timeout=(step.terminal_timeout
                                       if step is not None else None),
-                    on_terminal_result=(controller.on_terminal_result
-                                        if controller is not None else None),
                     secrets=(step_secret_env(self.cfg, step, self.secrets)
                              if step is not None else None),
                     forbidden_commands=forbidden_commands,
                     allowlist=allowlist)
             agent = load_agent(self.agents_dir, agent_name, self.llm)
             callbacks = []
-            if controller is not None:
-                callbacks.append(controller.on_event)
             if finalize_controller is not None:
                 callbacks.append(finalize_controller.on_event)
             conv = Conversation(agent=agent, workspace=str(self.workspace),
                                 max_iteration_per_run=max_iterations,
                                 callbacks=callbacks or None)
-            if controller is not None:
-                controller.attach(conv)
             if finalize_controller is not None:
                 finalize_controller.attach(conv)
             conv.send_message(message)
-            if controller is not None or finalize_controller is not None:
-                self._run_stop_when_loop(conv, controller, max_iterations,
-                                         finalize_controller)
+            if finalize_controller is not None:
+                self._run_finalize_loop(conv, max_iterations,
+                                        finalize_controller)
             else:
                 conv.run()
 
@@ -295,10 +226,9 @@ class Runtime:
             if conv is not None:
                 conv.close()
 
-    def _run_stop_when_loop(self, conv,
-                            controller: _StopWhenController | None,
-                            max_iterations: int,
-                            finalize_controller: _FinalizeNudgeController | None = None) -> None:
+    def _run_finalize_loop(self, conv,
+                           max_iterations: int,
+                           finalize_controller: _FinalizeNudgeController | None = None) -> None:
         """Drive one turn at a time so turn-level hooks can inject their
         nudges and enforce budgets. A controller's callback pauses the SDK
         run loop after every agent-sourced event, so each ``conv.run()`` here
@@ -326,19 +256,6 @@ class Runtime:
                 conv.send_message(finalize_controller.message())
                 finalize_controller.nudged = True
                 continue
-
-            if controller is not None:
-                if not controller.nudged and controller.green_signal:
-                    conv.send_message(controller.NUDGE)
-                    controller.nudged = True
-                    if controller.post_green_turns == 0:
-                        break
-                    continue
-
-                if controller.nudged:
-                    controller.post_nudge_turns += 1
-                    if controller.post_nudge_turns >= controller.post_green_turns:
-                        break
 
 
 def prompt_dir(runtime: Runtime) -> str:

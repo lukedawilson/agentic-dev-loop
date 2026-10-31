@@ -47,6 +47,14 @@ dependencies = [
     # 3.32.7 carries CVE-2026-112907/-112913/-112940 (fixed in 4.2.1); pin a
     # floor so the restore step's pip-audit stays green.
     "filelock>=4.2.1",
+    # pyasn1 is a transitive dep (openhands-sdk, rsa, google-auth). 0.6.4
+    # carries CVE-2026-119194/-119195/-119196/-119197 (fixed in 0.6.5); pin a
+    # floor so the restore step's pip-audit stays green.
+    "pyasn1>=0.6.5",
+    # pypdf is a transitive dep (openhands-tools document loaders). 6.21.2
+    # carries CVE-2026-119203/-119204/-119205/-119206/-119207/-119208/-119209
+    # (fixed in 6.21.4); pin a floor so the restore step's pip-audit stays green.
+    "pypdf>=6.21.4",
 ]
 
 [project.urls]

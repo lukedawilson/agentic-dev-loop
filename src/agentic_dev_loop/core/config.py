@@ -306,36 +306,6 @@ class EgressSpec(BaseModel):
         return [_validate_egress_target(t) for t in v]
 
 
-class StopWhenSpec(BaseModel):
-    """Optional ``stop_when:`` termination signal on an agent step (032).
-
-    ``green_command`` is a regex matched against the agent's terminal
-    observation command; a matching observation that exits 0 - and no
-    workspace writes since - triggers one nudge turn, then
-    ``post_green_turns`` further turns before the engine closes the
-    conversation. Absent ``stop_when`` keeps the current run-to-finish
-    behaviour unchanged.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    green_command: str
-    post_green_turns: int = Field(default=2, ge=0)
-
-    @field_validator("green_command")
-    @classmethod
-    def _valid_regex(cls, v: str) -> str:
-        if not isinstance(v, str) or not v.strip():
-            raise ValueError(
-                "stop_when.green_command must be a non-empty string")
-        try:
-            re.compile(v)
-        except re.error as e:
-            raise ValueError(
-                f"stop_when.green_command is not a valid regex: {e}") from e
-        return v
-
-
 class BriefInputsSpec(BaseModel):
     """Optional ``brief_inputs:`` on an agent step (033): the closed input
     list a brief agent digests once per run. ``include`` is repo-relative
@@ -387,7 +357,6 @@ class StepConfig(BaseModel):
     max_iterations: int | None = None
     timeout: float | None = Field(default=None, gt=0)  # seconds, command steps only
     terminal_timeout: float | None = Field(default=None, gt=0)  # seconds, agent steps only (032)
-    stop_when: StopWhenSpec | None = None  # agent steps only (032)
     finalize_nudge_turns: int | None = Field(default=None, gt=0)  # agent steps only (035)
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
     custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
@@ -487,10 +456,6 @@ class StepConfig(BaseModel):
         if self.terminal_timeout is not None and self.agent is None:
             raise ValueError(
                 f"step {self.name!r}: 'terminal_timeout' requires 'agent'"
-            )
-        if self.stop_when is not None and self.agent is None:
-            raise ValueError(
-                f"step {self.name!r}: 'stop_when' requires 'agent'"
             )
         if self.finalize_nudge_turns is not None and self.agent is None:
             raise ValueError(

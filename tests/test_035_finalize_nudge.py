@@ -1,5 +1,5 @@
 """Finalize nudge (035): config surface, the turn-index injection, and the
-exactly-once guard on the shared 032 turn loop."""
+exactly-once guard on the shared turn loop."""
 
 from pathlib import Path
 from types import SimpleNamespace
@@ -90,6 +90,13 @@ class TestFinalizeNudgeConfig:
         with pytest.raises(ValidationError, match="requires 'agent'"):
             _load(tmp_path, data)
 
+    def test_stop_when_key_rejected(self, tmp_path):
+        data = _base()
+        data["steps"] = [{"name": "dev", "agent": "dev",
+                          "stop_when": {"green_command": "pytest"}}]
+        with pytest.raises(ValidationError, match="stop_when"):
+            _load(tmp_path, data)
+
 
 class TestFinalizeNudgeLoop:
     def _conv(self, finish_after):
@@ -114,7 +121,7 @@ class TestFinalizeNudgeLoop:
     def test_nudge_at_configured_turn_and_only_once(self):
         conv = self._conv(finish_after=9)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_stop_when_loop(None, conv, None, max_iterations=10,
+        Runtime._run_finalize_loop(None, conv, max_iterations=10,
                                     finalize_controller=controller)
         assert controller.nudged is True
         assert conv.sent == [(7, NUDGE)]
@@ -122,7 +129,7 @@ class TestFinalizeNudgeLoop:
     def test_no_nudge_when_finished_before_threshold(self):
         conv = self._conv(finish_after=3)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_stop_when_loop(None, conv, None, max_iterations=10,
+        Runtime._run_finalize_loop(None, conv, max_iterations=10,
                                     finalize_controller=controller)
         assert controller.nudged is False
         assert conv.sent == []
@@ -130,7 +137,7 @@ class TestFinalizeNudgeLoop:
     def test_turn_cap_still_applies_when_nudge_ignored(self):
         conv = self._conv(finish_after=999)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_stop_when_loop(None, conv, None, max_iterations=5,
+        Runtime._run_finalize_loop(None, conv, max_iterations=5,
                                     finalize_controller=controller)
         assert controller.nudged is True
         assert conv.state.execution_status == ConversationExecutionStatus.ERROR

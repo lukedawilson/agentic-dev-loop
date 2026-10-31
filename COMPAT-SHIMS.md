@@ -66,12 +66,12 @@ so it is pinned here.
 - **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_run_loop_still_breaks_on_stuck`
   fails loudly when the run loop no longer breaks on STUCK.
 
-## Turn-level pause seam (032 stop-when-green)
+## Turn-level pause seam (035 finalize-nudge turn loop)
 
-`_StopWhenController.on_event` (stages.py) runs as a user `callbacks=` entry on
+`_TurnPauseController.on_event` (stages.py) runs as a user `callbacks=` entry on
 `LocalConversation` and pauses after every agent-sourced event by writing
 `ConversationExecutionStatus.PAUSED` to `conversation.state`; the one-turn run
-loop (`Runtime._run_stop_when_loop`) relies on `LocalConversation.run` breaking
+loop (`Runtime._run_finalize_loop`) relies on `LocalConversation.run` breaking
 on PAUSED and on the SDK passing its composed callback to
 `agent.step(on_event=...)` so the callback sees agent events. This is a reliance
 on undocumented loop and callback behaviour (same class as the STUCK fast-stop
