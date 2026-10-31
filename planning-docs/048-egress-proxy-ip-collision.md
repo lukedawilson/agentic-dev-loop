@@ -1,6 +1,6 @@
 # 048-egress-proxy-ip-collision.md
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 

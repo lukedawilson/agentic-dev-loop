@@ -31,7 +31,7 @@ import sys
 import time
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -1386,22 +1386,32 @@ class DockerBackend(Sandbox):
 
     def _proxy_internal_ip(self, proxy_name: str) -> str:
         """Return the per-proxy pinned IPv4 address on the internal network
-        (048 D1): inspect the subnet, then allocate the next free host."""
+        (048 D1): inspect the subnet and the addresses containers already hold
+        on it, then allocate the next free host (profile containers join the
+        run network with a daemon auto-assigned IP, so those must be skipped
+        or the later ``network connect --ip`` collides)."""
         inspect = self._runner.run(
             ["docker", "network", "inspect", "-f",
-             "{{range .IPAM.Config}}{{.Subnet}} {{end}}", self._run_net],
+             "{{range .IPAM.Config}}{{.Subnet}} {{end}}|"
+             "{{range .Containers}}{{.IPv4Address}} {{end}}",
+             self._run_net],
             timeout=30)
         if inspect.exit_code != 0:
             raise SandboxError(
                 f"AE-SBX-021: internal network inspect failed: "
                 f"{inspect.stderr.strip() or inspect.stdout.strip()}")
-        return self._allocate_proxy_ip(inspect.stdout, proxy_name)
+        subnets, sep, in_use_part = inspect.stdout.partition("|")
+        in_use = in_use_part.split() if sep else ()
+        return self._allocate_proxy_ip(subnets, proxy_name, in_use)
 
-    def _allocate_proxy_ip(self, subnets: str, proxy_name: str) -> str:
+    def _allocate_proxy_ip(self, subnets: str, proxy_name: str,
+                           in_use: Iterable[str] = ()) -> str:
         """Allocate one internal IPv4 address per proxy (048 D1/D2). An
         existing allocation for ``proxy_name`` is reused; otherwise the first
-        free non-gateway host wins (the first proxy keeps ``hosts[1]``). Raises
-        when the subnet has no free host instead of letting the daemon emit a
+        free non-gateway host wins (the first proxy keeps ``hosts[1]``).
+        Addresses in ``in_use`` (held by other containers on the network) are
+        skipped alongside the already-allocated proxy IPs. Raises when the
+        subnet has no free host instead of letting the daemon emit a
         confusing collision error."""
         existing = self._proxy_ips.get(proxy_name)
         if existing is not None:
@@ -1412,6 +1422,14 @@ class DockerBackend(Sandbox):
                 f"AE-SBX-021: internal network has no usable IPv4 subnet: "
                 f"{subnets.strip()!r}")
         taken = set(self._proxy_ips.values())
+        for token in in_use:
+            addr = token.split("/", 1)[0].strip()
+            try:
+                ip = ipaddress.ip_address(addr)
+            except ValueError:
+                continue
+            if isinstance(ip, ipaddress.IPv4Address):
+                taken.add(str(ip))
         free = [host for host in hosts if host not in taken]
         if not free:
             raise SandboxError(

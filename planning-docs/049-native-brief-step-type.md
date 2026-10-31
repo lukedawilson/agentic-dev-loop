@@ -127,7 +127,16 @@ Verified facts:
    tests. New tests: defaults applied at parse, rejection messages,
    two brief steps with different names, vendored-file warning still
    fires on `brief.agent.md`.
-9. `CHANGELOG.md`: Breaking entry (loop commit).
+9. `tools/publish.py`: add `"-native-brief-step-type": "plan 049"` to the
+   `CONSUMER_ADOPTION_PLANS` registry (this plan adds consumer pipeline
+   obligations, so the release gate must enforce the adoption note).
+10. `CHANGELOG.md`: Breaking entry (loop commit). The entry MUST carry a
+    `### Consumer adoption` subsection naming exactly what the consumer
+    repo must change: rewrite the brief step to the new shape (drop
+    `agent:`, `produces:`, `max_iterations:`; keep `brief_inputs:` with
+    its declared `sections:`), and delete the vendored
+    `agentic-dev-loop/sdk_agents/brief.agent.md` (046 D5). Without it,
+    `publish.py` refuses the release (CONSUMER_ADOPTION_PLANS).
 
 ## Non-goals
 

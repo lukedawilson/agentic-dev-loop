@@ -2467,6 +2467,40 @@ class TestProxyIpAllocation:
                            match=r"1 usable proxy address.*2 egress proxies"):
             backend._allocate_proxy_ip("172.18.0.0/30 ", "p2")
 
+    def test_in_use_addresses_are_skipped(self, tmp_path):
+        """048 fix: addresses held by other containers on the network (the
+        profile containers auto-join it) must be skipped, not re-pinned."""
+        backend = _backend(tmp_path, FakeRunner())
+        first = backend._allocate_proxy_ip("172.18.0.0/16 ", "p1")
+        second = backend._allocate_proxy_ip(
+            "172.18.0.0/16 ", "p2", in_use=["172.18.0.3/16"])
+        assert first == "172.18.0.2"
+        assert second == "172.18.0.4"
+
+    def test_in_use_parsing_ignores_malformed_and_ipv6_tokens(self, tmp_path):
+        backend = _backend(tmp_path, FakeRunner())
+        backend._allocate_proxy_ip("172.18.0.0/16 ", "p1")
+        second = backend._allocate_proxy_ip(
+            "172.18.0.0/16 ", "p2",
+            in_use=["172.18.0.2/16", "172.18.0.3/16", "fd00::2/64",
+                    "garbage"])
+        assert second == "172.18.0.4"
+
+    def test_second_proxy_skips_container_held_ips(self, tmp_path):
+        """048 fix: the inspect output reports in-use container addresses;
+        the second proxy skips the first proxy's IP AND the auto-assigned
+        profile-container IP (the CI AE-SBX-020 collision)."""
+        runner = FakeRunner(
+            ok(""), ok("172.18.0.0/16 |"), ok("proxy"), ok(""), ok(""),
+            ok("172.18.0.0/16 |172.18.0.2/16 172.18.0.3/16 "),
+            ok("proxy"), ok(""), ok(""))
+        backend = _backend(tmp_path, runner, network=True)
+        backend._start_proxy_container("r-proxy-aaa", EgressPolicy())
+        backend._start_proxy_container("r-proxy-bbb", EgressPolicy())
+        connects = [c for c in backend._runner.calls if "--ip" in c]
+        assert [c[c.index("--ip") + 1] for c in connects] == \
+            ["172.18.0.2", "172.18.0.4"]
+
     def test_connect_failure_message_carries_stderr_tail(self, tmp_path):
         runner = FakeRunner(
             ok(""), ok("172.18.0.0/16 "), ok("proxy"),
