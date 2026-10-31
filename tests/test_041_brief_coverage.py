@@ -11,7 +11,6 @@ from agentic_dev_loop.core.config import PipelineConfig
 from agentic_dev_loop.engine.brief_coverage import (
     extract_anchors,
     missing_anchors,
-    required_sections,
 )
 from agentic_dev_loop.engine.registry import default_registry
 from agentic_dev_loop.engine.stages import (
@@ -24,6 +23,8 @@ from agentic_dev_loop.engine.stages import (
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS_MD = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
 STANDARDS_YAML = (ROOT / "coding-standards-ddd.yaml").read_text(encoding="utf-8")
+SECTIONS = ["Repo rules digest", "Unit scope digest",
+            "Environment facts", "Open risks"]
 
 
 def _brief_ok() -> str:
@@ -31,7 +32,7 @@ def _brief_ok() -> str:
         "## Repo rules digest\n\n"
         "**Error handling**\nNever fall back silently.\n\n"
         "**Mock policy**\nNo mocks unless unavoidable.\n\n"
-        "## Unit scope and lane digest\n\nunit scope\n\n"
+        "## Unit scope digest\n\nunit scope\n\n"
         "## Environment facts\n\n- offline; never fetch\n\n"
         "## Open risks\n\nNone\n"
     )
@@ -93,13 +94,12 @@ def runtime(tmp_path, fake_sandbox):
 
 
 class TestExtractAnchors:
-    def test_required_sections_are_the_four_template_headings(self):
-        assert required_sections() == [
-            "Repo rules digest",
-            "Unit scope and lane digest",
-            "Environment facts",
-            "Open risks",
-        ]
+    def test_required_sections_are_config_driven(self):
+        # 046: the required set is handed in, not read from an engine constant.
+        text = _brief_ok()
+        assert missing_anchors(text, [], [], SECTIONS) == []
+        assert "Renamed section" in missing_anchors(
+            text, [], [], ["Renamed section"])
 
     def test_markdown_headings_from_real_agents_md(self):
         anchors = extract_anchors(AGENTS_MD)
@@ -142,39 +142,42 @@ class TestMissingAnchors:
     def test_all_present_passes(self):
         assert missing_anchors(_brief_ok(),
                                ["error handling", "mock policy"],
-                               ["offline; never fetch"]) == []
+                               ["offline; never fetch"], SECTIONS) == []
 
     def test_missing_anchor_is_named(self):
         assert "mock policy" in missing_anchors(
             _brief_missing_mock(), ["error handling", "mock policy"],
-            ["offline; never fetch"])
+            ["offline; never fetch"], SECTIONS)
 
     def test_missing_section_heading_is_named(self):
         text = _brief_ok().replace("## Open risks\n\nNone\n", "")
         assert "Open risks" in missing_anchors(
-            text, ["error handling", "mock policy"], ["offline; never fetch"])
+            text, ["error handling", "mock policy"], ["offline; never fetch"],
+            SECTIONS)
 
     def test_altered_env_fact_is_named(self):
         text = _brief_ok().replace("offline; never fetch", "offline maybe")
         assert "offline; never fetch" in missing_anchors(
-            text, ["error handling", "mock policy"], ["offline; never fetch"])
+            text, ["error handling", "mock policy"], ["offline; never fetch"],
+            SECTIONS)
 
     def test_mid_line_mention_does_not_satisfy(self):
         text = _brief_ok().replace(
             "**Error handling**\nNever fall back silently.\n\n",
             "See error handling for the rules.\n\n")
         assert "error handling" in missing_anchors(
-            text, ["error handling", "mock policy"], ["offline; never fetch"])
+            text, ["error handling", "mock policy"], ["offline; never fetch"],
+            SECTIONS)
 
     def test_case_and_whitespace_variants_pass(self):
         text = _brief_ok().replace(
             "**Error handling**", "**  ERROR   HANDLING  **")
         assert missing_anchors(text, ["error handling", "mock policy"],
-                               ["offline; never fetch"]) == []
+                               ["offline; never fetch"], SECTIONS) == []
 
     def test_bold_wrapped_heading_passes(self):
         assert missing_anchors(_brief_ok(), ["error handling", "mock policy"],
-                               ["offline; never fetch"]) == []
+                               ["offline; never fetch"], SECTIONS) == []
 
 
 class TestCoverageNoteWording:
@@ -205,6 +208,14 @@ class TestCoverageNoteWording:
 
 
 class TestBriefNodeCoverage:
+    def test_vendored_brief_prompt_warns(self, runtime, capsys):
+        runtime.agents_dir.mkdir(exist_ok=True)
+        (runtime.agents_dir / "brief.agent.md").write_text("vendored\n")
+        make_brief_node(runtime, runtime.cfg.steps[0])
+        err = capsys.readouterr().err
+        assert "ignoring vendored brief prompt" in err
+        assert "embedded prompt is authoritative" in err
+
     def test_miss_returns_retry_note_and_reruns(self, runtime, fake_agents):
         good = _brief_ok()
         bad = _brief_missing_mock()

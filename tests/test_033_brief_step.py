@@ -44,7 +44,7 @@ def _load(tmp_path, data):
 
 BRIEF_OK = (
     "## Repo rules digest\n\nREPO RULES\n\n"
-    "## Unit scope and lane digest\n\nSCOPE\n\n"
+    "## Unit scope digest\n\nSCOPE\n\n"
     "## Environment facts\n\n- offline; never fetch\n\n"
     "## Open risks\n\nNone\n"
 )
@@ -164,6 +164,48 @@ class TestBriefInputsConfig:
             "on_pass": "success",
         }]
         with pytest.raises(ValidationError, match="non-empty"):
+            _load(tmp_path, data)
+
+
+    def test_sections_default_neutral(self, tmp_path):
+        data = _base()
+        data["steps"] = [BRIEF_STEP, {"name": "dev", "agent": "dev",
+                                      "on_pass": "success"}]
+        brief = _load(tmp_path, data).steps[0]
+        assert brief.brief_inputs.sections == [
+            "Repo rules digest", "Unit scope digest",
+            "Environment facts", "Open risks",
+        ]
+
+    def test_sections_override(self, tmp_path):
+        data = _base()
+        step = dict(BRIEF_STEP)
+        step["brief_inputs"] = {**step["brief_inputs"],
+                                "sections": ["Rules", "Scope", "Risks"]}
+        data["steps"] = [step, {"name": "dev", "agent": "dev",
+                                "on_pass": "success"}]
+        brief = _load(tmp_path, data).steps[0]
+        assert brief.brief_inputs.sections == ["Rules", "Scope", "Risks"]
+
+    def test_sections_empty_rejected(self, tmp_path):
+        data = _base()
+        data["steps"] = [{
+            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "brief_inputs": {"include": ["AGENTS.md"], "sections": []},
+            "on_pass": "success",
+        }]
+        with pytest.raises(ValidationError, match="non-empty list"):
+            _load(tmp_path, data)
+
+    def test_sections_duplicate_rejected(self, tmp_path):
+        data = _base()
+        data["steps"] = [{
+            "name": "brief", "agent": "brief", "produces": "attempt-brief.md",
+            "brief_inputs": {"include": ["AGENTS.md"],
+                             "sections": ["Rules", "Rules"]},
+            "on_pass": "success",
+        }]
+        with pytest.raises(ValidationError, match="unique"):
             _load(tmp_path, data)
 
 
@@ -486,8 +528,6 @@ class TestDryRunBriefInputs:
             "    on_pass: success\n")
         agents = repo / "agents"
         agents.mkdir()
-        (agents / "brief.agent.md").write_text(
-            "---\nname: brief\ntools: [terminal]\n---\nYou are brief.\n")
         monkeypatch.chdir(repo)
         from agentic_dev_loop.engine.dryrun import dry_run
         with pytest.raises(FileNotFoundError, match="NO-SUCH.md"):
@@ -513,8 +553,6 @@ class TestDryRunBriefInputs:
             "    on_pass: success\n")
         agents = repo / "agents"
         agents.mkdir()
-        (agents / "brief.agent.md").write_text(
-            "---\nname: brief\ntools: [terminal]\n---\nYou are brief.\n")
         monkeypatch.chdir(repo)
         from agentic_dev_loop.engine.dryrun import dry_run
         assert dry_run("pipeline.yaml",
@@ -580,7 +618,7 @@ class TestBriefPipeline:
 
         brief_digest = (
             "## Repo rules digest\n\nREPO RULES\n\n"
-            "## Unit scope and lane digest\n\nBRIEF DIGEST\n\n"
+            "## Unit scope digest\n\nBRIEF DIGEST\n\n"
             "## Environment facts\n\n"
             "- the workspace is an export with no .git; verify with find/ls, never git status\n\n"
             "## Open risks\n\nNone\n"

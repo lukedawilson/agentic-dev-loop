@@ -25,12 +25,16 @@ from .secrets import scan_env_files
 
 def _validate_agents(cfg: PipelineConfig, agents_dir: Path) -> None:
     """Every `agent:` step must resolve to an existing file under agents_dir
-    (the same fail-fast `load_agent` enforces at run time)."""
+    (the same fail-fast `load_agent` enforces at run time).
+
+    The brief prompt is engine-embedded (046), so a ``brief_inputs:`` step is
+    exempt from the agents_dir lookup - it never reads a vendored file."""
     for step in cfg.steps:
-        if step.agent is not None:
-            path = agents_dir / f"{step.agent}.agent.md"
-            if not path.is_file():
-                raise FileNotFoundError(f"Agent file not found: {path}")
+        if step.agent is None or step.brief_inputs is not None:
+            continue
+        path = agents_dir / f"{step.agent}.agent.md"
+        if not path.is_file():
+            raise FileNotFoundError(f"Agent file not found: {path}")
 
 
 def _validate_actions(cfg: PipelineConfig, registry: Registry) -> None:

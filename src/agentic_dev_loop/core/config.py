@@ -25,6 +25,16 @@ HOST_ONLY_MOUNT_DIRS = frozenset({".venv"})
 KNOWN_EGRESS_PRESETS = frozenset({"package-registries"})
 EGRESS_CLASSES = frozenset({"allowlist", "browser"})
 
+# The neutral default section headings a brief step must emit (046). A
+# consumer overrides them via `brief_inputs.sections`; the coverage gate
+# and the embedded brief prompt both render from this list.
+DEFAULT_BRIEF_SECTIONS = [
+    "Repo rules digest",
+    "Unit scope digest",
+    "Environment facts",
+    "Open risks",
+]
+
 
 def _validate_mount_path(path: str) -> str:
     """Validate one repo-relative mount path (BR-1.3).
@@ -318,8 +328,9 @@ class BriefInputsSpec(BaseModel):
 
     include: list[str] = []
     env_facts: list[str] = []
+    sections: list[str] = DEFAULT_BRIEF_SECTIONS
 
-    @field_validator("include", "env_facts", mode="before")
+    @field_validator("include", "env_facts", "sections", mode="before")
     @classmethod
     def _coerce_list(cls, v: Any) -> Any:
         return [v] if isinstance(v, str) else v
@@ -336,6 +347,21 @@ class BriefInputsSpec(BaseModel):
             if not isinstance(fact, str) or not fact.strip():
                 raise ValueError(
                     "brief_inputs.env_facts entries must be non-empty strings")
+        return v
+
+    @field_validator("sections")
+    @classmethod
+    def _valid_sections(cls, v: list[str]) -> list[str]:
+        for section in v:
+            if not isinstance(section, str) or not section.strip():
+                raise ValueError(
+                    "brief_inputs.sections entries must be non-empty strings")
+        if not v:
+            raise ValueError(
+                "brief_inputs.sections must be a non-empty list of headings")
+        if len(set(v)) != len(v):
+            raise ValueError(
+                "brief_inputs.sections entries must be unique")
         return v
 
 

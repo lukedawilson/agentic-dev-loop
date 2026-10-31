@@ -9,7 +9,7 @@ import pytest
 from openhands.sdk import LLM
 from openhands.sdk.agent.agent import Agent
 
-from agentic_dev_loop.engine.agents import load_agent
+from agentic_dev_loop.engine.agents import load_agent, load_brief_agent
 
 
 @pytest.fixture
@@ -86,6 +86,25 @@ class TestLoadAgent:
         assert agent.tools == []
         assert agent.include_default_tools == ["FinishTool", "ThinkTool"]
         assert agent.filter_tools_regex is None
+
+
+class TestLoadBriefAgent:
+    """The brief agent is engine-embedded (046): no vendored file is read,
+    and the rendered OUTPUT contract is driven by the configured sections."""
+
+    def test_builds_embedded_agent_without_file(self, tmp_path, llm):
+        sections = ["Repo rules digest", "Unit scope digest",
+                    "Environment facts", "Open risks"]
+        agent = load_brief_agent("brief", sections, llm)
+        assert isinstance(agent, Agent)
+        assert [t.name for t in agent.tools] == ["terminal"]
+
+    def test_does_not_read_agents_dir(self, tmp_path, llm):
+        agents_dir = tmp_path / "agents"
+        agents_dir.mkdir()
+        # No brief.agent.md exists; the embedded loader must not look for one.
+        agent = load_brief_agent("brief", ["Repo rules digest"], llm)
+        assert isinstance(agent, Agent)
 
 
 from agentic_dev_loop.engine.isolation import SandboxError

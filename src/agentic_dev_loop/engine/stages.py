@@ -32,8 +32,9 @@ from langgraph.graph import END
 from openhands.sdk import Conversation
 
 from .agent_error_guide import guide_section
-from .agents import load_agent, register_sandbox_terminal
+from .agents import load_agent, load_brief_agent, register_sandbox_terminal
 from .brief_coverage import extract_anchors, missing_anchors
+from .brief_prompt import BRIEF_PROMPT_VERSION
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
 from agentic_dev_loop.core.paths import _has_wildcards
 from .deps import extension_message, parse_missing_dependencies, policy_injection
@@ -173,7 +174,11 @@ class Runtime:
                              if step is not None else None),
                     forbidden_commands=forbidden_commands,
                     allowlist=allowlist)
-            agent = load_agent(self.agents_dir, agent_name, self.llm)
+            if step is not None and step.brief_inputs is not None:
+                agent = load_brief_agent(
+                    agent_name, step.brief_inputs.sections, self.llm)
+            else:
+                agent = load_agent(self.agents_dir, agent_name, self.llm)
             callbacks = []
             if finalize_controller is not None:
                 callbacks.append(finalize_controller.on_event)
@@ -543,6 +548,14 @@ def brief_inputs_hash(runtime: Runtime, step: StepConfig,
     brief step, otherwise the existing digest is reused without an LLM call."""
     sections, env_facts = _brief_sections(runtime, step, docs, doc_sources)
     digest = hashlib.sha256()
+    # 046, D6: the embedded prompt version and the configured section headings
+    # join the hash, so an engine upgrade or a sections edit busts the cached
+    # digest and forces a fresh capture.
+    digest.update(BRIEF_PROMPT_VERSION.encode("utf-8"))
+    digest.update(b"\0")
+    for section in step.brief_inputs.sections:
+        digest.update(section.encode("utf-8"))
+        digest.update(b"\0")
     for key in sorted(sections):
         digest.update(key.encode("utf-8"))
         digest.update(b"\0")
@@ -751,6 +764,20 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
     return node
 
 
+def _warn_vendored_brief(runtime: Runtime, step: StepConfig) -> None:
+    """Warn once per load when a vendored brief prompt exists (046, D5).
+
+    The embedded prompt is authoritative, so a leftover
+    ``<agents_dir>/<agent>.agent.md`` for a ``brief_inputs:`` step is ignored;
+    the warning names it without failing the run."""
+    vendored = runtime.agents_dir / f"{step.agent}.agent.md"
+    if vendored.is_file():
+        print(
+            f"[{runtime.cfg.name}] ignoring vendored brief prompt {vendored} - "
+            "the engine-embedded prompt is authoritative",
+            file=sys.stderr, flush=True)
+
+
 def make_brief_node(runtime: Runtime, step: StepConfig):
     """Node closure for a ``brief_inputs:`` agent step (033).
 
@@ -768,6 +795,7 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
     re-runs the agent with a ``## Coverage retry`` correction note. Exhausting
     the budget writes last-error.md and fails the run."""
     captures = step.artifact is not None or bool(step.produces)
+    _warn_vendored_brief(runtime, step)
 
     def node(state: dict) -> dict:
         attempt = state["attempt"]
@@ -780,6 +808,8 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
             anchors = _brief_anchors(runtime, step)
             env_facts = (list(step.brief_inputs.env_facts)
                          if step.brief_inputs is not None else [])
+            sections = (list(step.brief_inputs.sections)
+                        if step.brief_inputs is not None else [])
         except Exception:
             err = redact_values(traceback.format_exc(), runtime.secrets.values())
             print(err[-4000:], file=sys.stderr, flush=True)
@@ -793,7 +823,7 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
         reused = (existing is not None
                   and state.get("brief_hashes", {}).get(step.name) == current_hash)
 
-        if reused and not missing_anchors(existing, anchors, env_facts):
+        if reused and not missing_anchors(existing, anchors, env_facts, sections):
             print(f"[{subject}] {step.name} brief inputs unchanged - reusing.",
                   flush=True)
             merged = {**state["step_verdicts"], step.name: "pass"}
@@ -802,7 +832,7 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
         coverage_note = None
         if reused:
             coverage_note = _coverage_note_text(
-                missing_anchors(existing, anchors, env_facts))
+                missing_anchors(existing, anchors, env_facts, sections))
         message = build_brief_context(runtime, step, state["docs"],
                                       state.get("doc_sources"),
                                       coverage_note=coverage_note)
@@ -824,7 +854,7 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
                                             result.truncated, max_iterations)],
                     "retry_target": _unclear_target(runtime, step)}
 
-        missing = missing_anchors(result.response or "", anchors, env_facts)
+        missing = missing_anchors(result.response or "", anchors, env_facts, sections)
         if missing:
             prev_hash = state.get("brief_hashes", {}).get(step.name)
             retries = (0 if prev_hash != current_hash

@@ -64,7 +64,7 @@ def _script_test(*behaviors):
 
 _BRIEF_DIGEST = (
     "## Repo rules digest\n\n# AGENTS.md\n# coding-standards-ddd.yaml\n\n"
-    "## Unit scope and lane digest\n\nplan scope\n\n"
+    "## Unit scope digest\n\nplan scope\n\n"
     "## Environment facts\n\n"
     "- the workspace is an export with no .git; verify with find/ls, never git status\n"
     "- the sandbox is network-off by default; never run package-manager fetches\n"

@@ -12,13 +12,6 @@ from __future__ import annotations
 
 import re
 
-_REQUIRED_SECTIONS = (
-    "Repo rules digest",
-    "Unit scope and lane digest",
-    "Environment facts",
-    "Open risks",
-)
-
 
 def _normalize(text: str) -> str:
     """Case-fold and collapse whitespace - the matching normal form."""
@@ -36,11 +29,6 @@ def _normalize_line(line: str) -> str:
     stripped = re.sub(r"^#+\s*", "", stripped)
     stripped = re.sub(r"^[-*+]\s+", "", stripped)
     return _normalize(stripped)
-
-
-def required_sections() -> list[str]:
-    """The four template headings the brief must emit."""
-    return list(_REQUIRED_SECTIONS)
 
 
 def extract_anchors(content: str) -> list[str]:
@@ -75,16 +63,17 @@ def extract_anchors(content: str) -> list[str]:
 
 
 def missing_anchors(brief_text: str, anchors: list[str],
-                    env_facts: list[str]) -> list[str]:
+                    env_facts: list[str], sections: list[str]) -> list[str]:
     """Return every required item the captured brief fails to cover.
 
-    Required section headings and anchors are matched line-anchored
-    (case-insensitive, whitespace-collapsed, ``**`` decoration stripped). Env
-    facts are matched verbatim, exactly as handed to the brief agent. An empty
-    list means the digest passes coverage."""
+    Required section headings (from the configured ``brief_inputs.sections``)
+    and anchors are matched line-anchored (case-insensitive,
+    whitespace-collapsed, ``**`` decoration stripped). Env facts are matched
+    verbatim, exactly as handed to the brief agent. An empty list means the
+    digest passes coverage."""
     missing: list[str] = []
     lines = {_normalize_line(line) for line in brief_text.splitlines()}
-    for section in _REQUIRED_SECTIONS:
+    for section in sections:
         if _normalize(section) not in lines:
             missing.append(section)
     for anchor in anchors:

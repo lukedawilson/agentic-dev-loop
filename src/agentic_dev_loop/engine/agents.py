@@ -16,6 +16,7 @@ from openhands.tools.task_tracker import TaskTrackerTool  # noqa: F401 - registe
 from openhands.tools.terminal import TerminalTool  # noqa: F401 - registers "terminal"
 
 from .forbidden import ForbiddenRule, match_forbidden_command
+from .brief_prompt import render_brief_prompt
 from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
                         resolve_sandbox_env)
 
@@ -56,6 +57,24 @@ def load_agent(agents_dir: Path | str, name: str, llm: LLM) -> "Agent":
         raise ValueError(
             f"Agent file {path} name {agent_def.name!r} does not match "
             f"filename {stem!r}")
+    return agent_definition_to_factory(agent_def)(llm)
+
+
+def load_brief_agent(name: str, sections: list[str], llm: LLM) -> "Agent":
+    """Build the brief agent from the engine-embedded prompt (046).
+
+    The brief prompt is engine-owned and versioned; it is never loaded from
+    ``agents_dir``. The OUTPUT contract's headings are rendered from the
+    configured ``brief_inputs.sections``, so the prompt and the coverage gate
+    share one list and cannot diverge (043)."""
+    from openhands.sdk.subagent.registry import agent_definition_to_factory
+    from openhands.sdk.subagent.schema import AgentDefinition
+
+    agent_def = AgentDefinition(
+        name=name,
+        tools=["terminal"],
+        system_prompt=render_brief_prompt(sections),
+    )
     return agent_definition_to_factory(agent_def)(llm)
 
 
