@@ -1,6 +1,6 @@
 # Plan 045: Setup-probe self-heal for non-venv cache warmers
 
-> **Status: PROPOSED** (flips to COMPLETED after implementation lands)
+> **Status: COMPLETED**
 
 ## Scope
 

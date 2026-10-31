@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0a44] - 2026-10-31
+
+### Changed
+
+- feat: construct plan 045-setup-probe-self-heal.md (agent dev loop)
+- docs(planning): add plan 047 reasoning_effort config field
+- fix(dev): prior-attempt residue check and batched reads in dev prompt
+- docs: plan 046 decisions D1-D7 approved
+- chore: remove committed vim swap file, ignore *.swp
+- Uncommitted changes: README.md, planning-docs/045-setup-probe-self-heal.md
+
 ## [1.0.0a43] - 2026-10-31
 
 ### Changed
