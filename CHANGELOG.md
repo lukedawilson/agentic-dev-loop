@@ -11,7 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Uncommitted changes: planning-docs/048-egress-proxy-ip-collision.md, planning-docs/049-native-brief-step-type.md, src/agentic_dev_loop/engine/isolation.py, tests/test_isolation.py
+- fix(isolation): skip network addresses already held by containers when
+  allocating per-proxy egress IPs. Profile containers auto-join the run
+  network with a daemon-assigned IP, and the allocator previously re-pinned
+  one of those addresses for a second proxy, so the attach failed with
+  AE-SBX-020 "Address already in use". The network inspect now also reports
+  in-use container addresses and the allocator avoids them.
 
 ## [1.0.0a47] - 2026-10-31
 

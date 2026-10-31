@@ -264,6 +264,23 @@ class TestConsumerAdoption:
         assert proc.returncode == 0, proc.stderr
         assert read_version(repo) == "0.2.1"
 
+    def test_049_marker_without_adoption_section_fails(self, tmp_path):
+        """Plan 049 adds consumer pipeline obligations, so its slug must be
+        registered: a release entry referencing it without a
+        `### Consumer adoption` note gets refused."""
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: implement plan 049-native-brief-step-type\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode != 0
+        assert "Consumer adoption" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+
 
 class TestGitOps:
     def test_commit_tag_and_push(self, tmp_path):

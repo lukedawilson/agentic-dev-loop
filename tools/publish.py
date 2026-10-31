@@ -47,6 +47,7 @@ CONSUMER_ADOPTION_PLANS = {
     "-banned-commands-and-lane-boundary": "plan 036",
     "-network-level-egress-enforcement": "plan 038",
     "-egress-proxy-runtime-hardening": "plan 039",
+    "-native-brief-step-type": "plan 049",
 }
 
 
