@@ -49,6 +49,8 @@ fi
 # Document loader selection - exactly one of:
 #   --plan <path>        one plan doc as the run's full context
 #   --aidlc-unit <slug>  AI-DLC unit docs
+#   --resume <thread-id> re-enter a checkpointed run (docs come from the
+#                        checkpoint; the engine's --resume flag)
 # The engine refuses flags from two loaders in one invocation ("Flags from
 # multiple document loaders in one invocation"), so the trigger enforces
 # exclusivity up front and forwards the chosen flag. The positional `unit-*`
@@ -56,6 +58,7 @@ fi
 #   ./trigger-agentic-dev-loop.sh unit-3 --dry-run
 PLAN=""
 UNIT=""
+RESUME=""
 if [[ "${1:-}" == unit-* ]]; then
     UNIT="$1"
     shift
@@ -73,18 +76,30 @@ while [[ $# -gt 0 ]]; do
             UNIT="$2"; shift 2
             ;;
         --aidlc-unit=*) UNIT="${1#--aidlc-unit=}"; shift ;;
+        --resume)
+            [[ $# -ge 2 ]] || { echo "error: --resume requires a thread id" >&2; exit 1; }
+            RESUME="$2"; shift 2
+            ;;
+        --resume=*) RESUME="${1#--resume=}"; shift ;;
         *) REMAINING+=("$1"); shift ;;
     esac
 done
-if [[ -n "$PLAN" && -n "$UNIT" ]]; then
-    echo "error: pass exactly one of --plan <path> or --aidlc-unit <slug>, not both" >&2
+MODES=0
+[[ -n "$PLAN" ]] && MODES=$((MODES + 1))
+[[ -n "$UNIT" ]] && MODES=$((MODES + 1))
+[[ -n "$RESUME" ]] && MODES=$((MODES + 1))
+if [[ $MODES -gt 1 ]]; then
+    echo "error: pass exactly one of --plan <path>, --aidlc-unit <slug>, or --resume <thread-id>" >&2
     exit 1
 fi
-if [[ -z "$PLAN" && -z "$UNIT" ]]; then
-    echo "error: pass exactly one of --plan <path> or --aidlc-unit <slug> (e.g. --aidlc-unit unit-3)" >&2
+if [[ $MODES -eq 0 ]]; then
+    echo "error: pass exactly one of --plan <path>, --aidlc-unit <slug>, or --resume <thread-id> (e.g. --aidlc-unit unit-3)" >&2
     exit 1
 fi
 if [[ -n "$PLAN" ]]; then
     exec agentic-dev-loop "$ROOT/agentic-dev-loop/pipeline.yaml" --plan "$PLAN" "${REMAINING[@]+"${REMAINING[@]}"}"
 fi
-exec agentic-dev-loop "$ROOT/agentic-dev-loop/pipeline.yaml" --aidlc-unit "$UNIT" "${REMAINING[@]+"${REMAINING[@]}"}"
+if [[ -n "$UNIT" ]]; then
+    exec agentic-dev-loop "$ROOT/agentic-dev-loop/pipeline.yaml" --aidlc-unit "$UNIT" "${REMAINING[@]+"${REMAINING[@]}"}"
+fi
+exec agentic-dev-loop "$ROOT/agentic-dev-loop/pipeline.yaml" --resume "$RESUME" "${REMAINING[@]+"${REMAINING[@]}"}"

@@ -109,8 +109,8 @@ def test_trigger_rejects_both_flags(tmp_path):
                          env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert ("pass exactly one of --plan <path> or --aidlc-unit <slug>, "
-            "not both") in result.stderr
+    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
+            "--resume <thread-id>") in result.stderr
     assert "cli-ran:" not in result.stdout
 
 
@@ -120,8 +120,8 @@ def test_trigger_requires_exactly_one_flag(tmp_path):
     result = _run_script(env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert ("pass exactly one of --plan <path> or --aidlc-unit <slug>"
-            in result.stderr)
+    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
+            "--resume <thread-id>") in result.stderr
     assert "cli-ran:" not in result.stdout
 
 
@@ -133,6 +133,51 @@ def test_trigger_forwards_aidlc_unit(tmp_path):
     assert result.returncode == 0, result.stderr
     assert "cli-ran:" in result.stdout
     assert "--aidlc-unit unit-3" in result.stdout
+
+
+def test_trigger_forwards_resume(tmp_path):
+    bin_dir = _stub_env(tmp_path)
+
+    result = _run_script("--resume", "07a767a50de64529ac442759b3685a78",
+                         env=_env_with(bin_dir))
+
+    assert result.returncode == 0, result.stderr
+    assert "cli-ran:" in result.stdout
+    assert "--resume 07a767a50de64529ac442759b3685a78" in result.stdout
+    assert "--plan" not in result.stdout
+    assert "--aidlc-unit" not in result.stdout
+
+
+def test_trigger_resume_equals_form(tmp_path):
+    bin_dir = _stub_env(tmp_path)
+
+    result = _run_script("--resume=07a767a50de64529ac442759b3685a78",
+                         env=_env_with(bin_dir))
+
+    assert result.returncode == 0, result.stderr
+    assert "--resume 07a767a50de64529ac442759b3685a78" in result.stdout
+
+
+def test_trigger_resume_missing_value_is_usage_error(tmp_path):
+    bin_dir = _stub_env(tmp_path)
+
+    result = _run_script("--resume", env=_env_with(bin_dir))
+
+    assert result.returncode != 0
+    assert "--resume requires a thread id" in result.stderr
+    assert "cli-ran:" not in result.stdout
+
+
+def test_trigger_rejects_resume_with_plan(tmp_path):
+    bin_dir = _stub_env(tmp_path)
+
+    result = _run_script("--resume", "abc123", "--plan", "plan.md",
+                         env=_env_with(bin_dir))
+
+    assert result.returncode != 0
+    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
+            "--resume <thread-id>") in result.stderr
+    assert "cli-ran:" not in result.stdout
 
 
 def test_trigger_unit_positional_is_aidlc_shorthand(tmp_path):
