@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-02
+
+### Changed
+
+- feat: construct plan 053-viz-stream-watchdog.md (agent dev loop)
+- test: git-init docker fixtures for 052 sync-back
+
 ## [0.9.1] - 2026-11-02
 
 ### Breaking
