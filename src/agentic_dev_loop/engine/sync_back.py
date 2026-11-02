@@ -1,8 +1,8 @@
 """Sync-back (unit-5): copy declared-rw export changes back to the real repo.
 
 In-process shutil diff-copy (ID-5), git-aware: only declared-rw paths sync,
-``.git`` is never touched, and a conflict (the real repo changed underneath)
-is a loud failure, never an overwrite (BR-4).
+``.git`` and gitignored paths are never touched, and a conflict (the real
+repo changed underneath) is a loud failure, never an overwrite (BR-4).
 
 A declared-rw entry of ``.`` (or a blank entry) names the whole tree - but the
 bind-mounted caches and declared sync-excludes are excluded: caches are already
@@ -25,7 +25,9 @@ from typing import Mapping
 from agentic_dev_loop.core.paths import dir_excluded, path_allowed, path_excluded
 
 # Never sync these components, whatever the declaration says (BR-2/BR-4).
-_FORBIDDEN = frozenset({".git", ".venv"})
+# ``.venv`` and every other toolchain dir are now covered by gitignore-aware
+# copy/sync-back (052) instead of a hardcoded engine name.
+_FORBIDDEN = frozenset({".git"})
 
 
 @dataclass(frozen=True)
@@ -94,11 +96,28 @@ def _within_cache(parts: tuple[str, ...],
     return any(c and parts[:len(c)] == c for c in cache_parts)
 
 
+def _is_ignored(rel: str,
+                 ignored: frozenset[str] | set[str]) -> bool:
+    """True when ``rel`` or any ancestor directory is in the ignored set. The
+    ignored set is computed host-side (git check-ignore) and passed in; it may
+    contain both file and directory entries."""
+    if not ignored:
+        return False
+    parts = rel.split("/")
+    for i in range(1, len(parts) + 1):
+        if "/".join(parts[:i]) in ignored:
+            return True
+    return False
+
+
 def _declared(rel: str, declared_rw: list[str] | tuple[str, ...],
               cache_paths: list[str] | tuple[str, ...] = (),
-              excludes: list[str] | tuple[str, ...] = ()) -> bool:
+              excludes: list[str] | tuple[str, ...] = (),
+              ignored: frozenset[str] | set[str] = frozenset()) -> bool:
     parts = _parts(rel)
     if _forbidden(parts):
+        return False
+    if _is_ignored(rel, ignored):
         return False
     cache = [_parts(c) for c in cache_paths]
     if _within_cache(parts, cache):
@@ -119,15 +138,16 @@ def _declared(rel: str, declared_rw: list[str] | tuple[str, ...],
 def plan_sync_back(export_changes: Mapping[str, str],
                    declared_rw: list[str] | tuple[str, ...],
                    cache_paths: list[str] | tuple[str, ...] = (),
-                   excludes: list[str] | tuple[str, ...] = ()) -> SyncPlan:
+                   excludes: list[str] | tuple[str, ...] = (),
+                   ignored: frozenset[str] | set[str] = frozenset()) -> SyncPlan:
     """Pure plan (PBT-03): keep only declared-rw changes; split into copy,
-    delete, and conflict buckets. Non-declared, ``.git``/host-only paths,
-    declared caches, and sync-excludes never sync (BR-4.2/028)."""
+    delete, and conflict buckets. Non-declared, ``.git``/gitignored paths,
+    declared caches, and sync-excludes never sync (BR-4.2/028/052)."""
     to_copy: list[str] = []
     to_delete: list[str] = []
     conflicts: list[str] = []
     for rel, kind in export_changes.items():
-        if not _declared(rel, declared_rw, cache_paths, excludes):
+        if not _declared(rel, declared_rw, cache_paths, excludes, ignored):
             continue
         if kind == "conflict":
             conflicts.append(rel)
@@ -154,10 +174,11 @@ def _digest(path: Path) -> str:
 
 def _snapshot(root: Path,
               cache_paths: list[str] | tuple[str, ...] = (),
-              excludes: list[str] | tuple[str, ...] = ()) -> dict[str, str]:
+              excludes: list[str] | tuple[str, ...] = (),
+              ignored: frozenset[str] | set[str] = frozenset()) -> dict[str, str]:
     """rel-path -> sha256 for every file under root, excluding ``.git``,
-    host-only dirs, declared caches (BR-3: caches are bind-mounted, not
-    copied, so their contents are never part of the export), and declared
+    gitignored paths (052), declared caches (BR-3: caches are bind-mounted,
+    not copied, so their contents are never part of the export), and declared
     sync-excludes (028: scratch paths are never part of either snapshot).
     Symlinks are tracked by their link target (never resolved against the
     host), so dangling links snapshot fine."""
@@ -171,6 +192,7 @@ def _snapshot(root: Path,
             if d not in _FORBIDDEN
             and not _within_cache(rel_parts + (d,), cache)
             and not dir_excluded((rel_dir / d).as_posix(), excludes)
+            and not _is_ignored((rel_dir / d).as_posix(), ignored)
         ]
         for name in filenames:
             parts = rel_parts + (name,)
@@ -178,6 +200,8 @@ def _snapshot(root: Path,
                 continue
             rel = "/".join(parts)
             if path_excluded(rel, excludes):
+                continue
+            if _is_ignored(rel, ignored):
                 continue
             out[rel] = _digest(Path(dirpath) / name)
     return out
@@ -190,7 +214,8 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
               cache_paths: list[str] | tuple[str, ...] = (),
               excludes: list[str] | tuple[str, ...] = (),
               merge_on_conflict: list[str] | tuple[str, ...] = (),
-              allowlist: list[str] | tuple[str, ...] | None = None) -> SyncBackReport:
+              allowlist: list[str] | tuple[str, ...] | None = None,
+              ignored: frozenset[str] | set[str] = frozenset()) -> SyncBackReport:
     """Diff-copy declared-rw export changes into the real repo (ID-5).
 
     A conflict - a declared-rw path changed in the export AND in the real repo
@@ -206,13 +231,13 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
     export_root = Path(export_root)
     real_repo = Path(real_repo)
     baseline = dict(baseline or {})
-    export_files = _snapshot(export_root, cache_paths, excludes)
-    real_files = _snapshot(real_repo, cache_paths, excludes)
+    export_files = _snapshot(export_root, cache_paths, excludes, ignored)
+    real_files = _snapshot(real_repo, cache_paths, excludes, ignored)
 
     changes: dict[str, str] = {}
     all_rels = set(export_files) | set(real_files)
     for rel in sorted(all_rels):
-        if not _declared(rel, declared_rw, cache_paths, excludes):
+        if not _declared(rel, declared_rw, cache_paths, excludes, ignored):
             continue
         exp = export_files.get(rel)
         real = real_files.get(rel)
@@ -256,7 +281,8 @@ def sync_back(export_root: str | Path, real_repo: str | Path,
         else:
             plan_changes[rel] = kind
 
-    plan = plan_sync_back(plan_changes, declared_rw, cache_paths, excludes)
+    plan = plan_sync_back(plan_changes, declared_rw, cache_paths, excludes,
+                          ignored)
     host_added_paths = tuple(sorted(
         rel for rel, kind in changes.items() if kind == "host-added"))
     merged_paths = tuple(sorted(merged_paths))

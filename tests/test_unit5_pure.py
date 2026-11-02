@@ -118,10 +118,11 @@ class TestPlanStepWorkspace:
         (repo / "cache" / "c.bin").write_text("cache")
         return repo
 
-    def test_excludes_git_and_host_only(self, tmp_path):
+    def test_excludes_git_and_gitignored(self, tmp_path):
         repo = self._repo(tmp_path)
         plan = plan_step_workspace(repo, ["cache"], "linux",
-                                   tmp_path / "export")
+                                   tmp_path / "export",
+                                   ignored=frozenset({".venv"}))
         assert ".git/HEAD" not in plan.copy_paths
         assert ".venv/x" not in plan.copy_paths
         assert "src/a.py" in plan.copy_paths
@@ -133,10 +134,12 @@ class TestPlanStepWorkspace:
         assert "cache/c.bin" not in plan.copy_paths
         assert plan.cache_mounts[0].relative == "cache"
 
-    def test_missing_cache_loud(self, tmp_path):
+    def test_missing_cache_ok(self, tmp_path):
+        """052: caches are host-side - a cache path absent from the workspace
+        is the normal case, never an error."""
         repo = self._repo(tmp_path)
-        with pytest.raises(ValueError, match="does not exist"):
-            plan_step_workspace(repo, ["nope"], "linux", tmp_path / "export")
+        plan = plan_step_workspace(repo, ["nope"], "linux", tmp_path / "export")
+        assert plan.cache_mounts[0].relative == "nope"
 
     def test_no_git_in_any_path(self, tmp_path):
         repo = self._repo(tmp_path)
@@ -170,6 +173,15 @@ class TestPlanSyncBack:
     def test_git_never_syncs(self):
         plan = plan_sync_back({".git/config": "modified"}, ["."])
         assert plan.to_copy == () and plan.conflicts == ()
+
+    def test_gitignored_never_syncs(self):
+        plan = plan_sync_back(
+            {"node_modules/dep.js": "modified", ".venv/x": "modified",
+             "src/a.py": "modified"},
+            ["."], ignored=frozenset({"node_modules", ".venv"}))
+        assert plan.to_copy == ("src/a.py",)
+        assert plan.to_delete == ()
+        assert plan.conflicts == ()
 
 
 class TestPlanSyncBackWholeTreeAndCache:

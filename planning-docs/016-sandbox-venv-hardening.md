@@ -1,4 +1,5 @@
 # 016 - Sandbox venv hardening
+> **Status: SUPERSEDED by 052** (2026-11-02) - the stamp/probe/venv apparatus this plan describes is deleted; setup now runs fresh at the step boundary into the export.
 
 > **Status: COMPLETED** (2026-10-23) - shipped: setup-stamp venv self-heal implemented (isolation.py probes the venv before trusting a warm stamp).
 

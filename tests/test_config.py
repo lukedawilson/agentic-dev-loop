@@ -529,9 +529,11 @@ class TestBriefStep:
         data = self._brief(terminal_timeout=900)
         assert _load(tmp_path, data).steps[0].terminal_timeout == 900
 
-    def test_setup_allowed(self, tmp_path):
+    def test_setup_rejected(self, tmp_path):
         data = self._brief(setup="make warm")
-        assert _load(tmp_path, data).steps[0].setup == "make warm"
+        with pytest.raises(ValidationError,
+                           match="'setup' is only allowed on 'command' or 'agent'"):
+            _load(tmp_path, data)
 
     def test_finalize_nudge_rejected(self, tmp_path):
         data = self._brief(finalize_nudge_turns=3)
@@ -598,18 +600,16 @@ class TestIsolationConfig:
         from agentic_dev_loop.core.config import IsolationConfig
         iso = IsolationConfig()
         assert iso.image is None
-        assert iso.refresh is False
         assert iso.memory is None and iso.cpus is None
         assert iso.allow_git_mutations is False
         assert iso.state_dir == "~/.agentic-dev-loop/state"
 
     def test_accepts_overrides(self, tmp_path):
-        data = _base() | {"isolation": {"image": "img@sha256:x", "refresh": True,
+        data = _base() | {"isolation": {"image": "img@sha256:x",
                                         "memory": "8g", "cpus": 4.0,
                                         "allow_git_mutations": True}}
         iso = _load(tmp_path, data).isolation
         assert iso.image == "img@sha256:x"
-        assert iso.refresh is True
         assert iso.memory == "8g" and iso.cpus == 4.0
         assert iso.allow_git_mutations is True
 
@@ -618,16 +618,22 @@ class TestIsolationConfig:
         data = _base() | {"isolation": {"memory": memory}}
         assert _load(tmp_path, data).isolation.memory == memory
 
-    def test_sandbox_venv_dir_accepts_and_round_trips(self, tmp_path):
-        """022: `sandbox_venv_dir` is an optional relocation opt-in. It loads
-        verbatim here; the outside-workspace validation happens at startup
-        (where the workspace is known), not at config load."""
+    def test_sandbox_venv_dir_rejected(self, tmp_path):
+        """052: `sandbox_venv_dir` was removed - venvs are per-run, built by a
+        setup hook into the export. Loading it fails loud with a migration
+        message."""
         data = _base() | {"isolation": {"sandbox_venv_dir":
                                         "~/.agentic-dev-loop/venvs/engine"}}
-        iso = _load(tmp_path, data).isolation
-        assert iso.sandbox_venv_dir == "~/.agentic-dev-loop/venvs/engine"
-        roundtripped = type(iso).model_validate(iso.model_dump())
-        assert roundtripped.sandbox_venv_dir == iso.sandbox_venv_dir
+        with pytest.raises(ValidationError, match="sandbox_venv_dir was removed"):
+            _load(tmp_path, data)
+
+    def test_refresh_rejected(self, tmp_path):
+        """052: `isolation.refresh` was removed - setup now runs fresh at every
+        step entry with no stamping. Loading it fails loud with a migration
+        message."""
+        data = _base() | {"isolation": {"refresh": True}}
+        with pytest.raises(ValidationError, match="refresh was removed"):
+            _load(tmp_path, data)
 
     def test_seccomp_profile_round_trips(self, tmp_path):
         """023: `seccomp_profile` is an optional host path to a seccomp
@@ -658,7 +664,7 @@ class TestIsolationConfig:
             _load(tmp_path, data)
 
     def test_round_trip(self, tmp_path):
-        data = _base() | {"isolation": {"image": "img", "refresh": True,
+        data = _base() | {"isolation": {"image": "img",
                                         "memory": "4g", "cpus": 2.0}}
         cfg = _load(tmp_path, data)
         iso = cfg.isolation
@@ -695,7 +701,7 @@ class TestStepEnvAndSetup:
                           "on_pass": "success"}]
         with pytest.raises(
                 ValidationError,
-                match="'setup' is only allowed on 'command', 'agent', or 'brief_inputs' steps"):
+                match="'setup' is only allowed on 'command' or 'agent' steps"):
             _load(tmp_path, data)
 
     def test_env_round_trip(self, tmp_path):
@@ -707,33 +713,16 @@ class TestStepEnvAndSetup:
 
 
 class TestSetupProbe:
-    def test_defaults_none(self, tmp_path):
-        assert _load(tmp_path, _base()).steps[0].setup_probe is None
-
-    def test_parses_with_setup(self, tmp_path):
+    def test_setup_probe_rejected(self, tmp_path):
+        """052: `setup_probe` was removed - setup now runs fresh at every step
+        entry with no stamping. Loading it fails loud with a migration
+        message."""
         data = _base()
         data["steps"] = [{"name": "t", "command": "make",
                           "setup": "make warm-cache",
                           "setup_probe": "file node_modules/esbuild/bin/esbuild | grep -q ELF",
                           "on_pass": "success"}]
-        step = _load(tmp_path, data).steps[0]
-        assert step.setup_probe == (
-            "file node_modules/esbuild/bin/esbuild | grep -q ELF")
-
-    def test_requires_setup(self, tmp_path):
-        data = _base()
-        data["steps"] = [{"name": "t", "command": "make",
-                          "setup_probe": "file node_modules/esbuild/bin/esbuild | grep -q ELF",
-                          "on_pass": "success"}]
-        with pytest.raises(ValidationError,
-                           match="'setup_probe' requires 'setup'"):
-            _load(tmp_path, data)
-
-    def test_empty_rejected(self, tmp_path):
-        data = _base()
-        data["steps"] = [{"name": "t", "command": "make", "setup": "make warm-cache",
-                          "setup_probe": "  ", "on_pass": "success"}]
-        with pytest.raises(ValidationError, match="non-empty"):
+        with pytest.raises(ValidationError, match="setup_probe was removed"):
             _load(tmp_path, data)
 
 

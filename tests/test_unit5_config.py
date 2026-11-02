@@ -74,13 +74,6 @@ class TestMountPathRejected:
         with pytest.raises(ValidationError, match="traversal"):
             _load(tmp_path, data)
 
-    def test_host_only_dir_rejected(self, tmp_path):
-        data = _base()
-        data["steps"] = [{"name": "dev", "agent": "dev",
-                          "mounts": [{"path": ".venv"}]}]
-        with pytest.raises(ValidationError, match="host-only"):
-            _load(tmp_path, data)
-
     def test_state_dir_rejected(self, tmp_path):
         data = _base()
         data["state_dir"] = ".pr"

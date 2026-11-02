@@ -25,17 +25,17 @@ from agentic_dev_loop.engine.isolation import (
     PROXY_BIND_TIMEOUT,
     DEFAULT_DEV_IMAGE_REF, DockerBackend, EffectiveProfile, ProbeResult,
     SandboxError, SandboxExecutionRequest, SandboxExecutionResult,
-    append_audit_record, classify_infra_failure, clean_stamps,
+    append_audit_record, classify_infra_failure,
     container_profile_key, docker_create_payload, docker_provision_payload,
     docker_proxy_payload, egress_events_path, exec_container_name,
     is_git_mutation, merge_egress_events, mount_set_docker_flags,
     proxy_container_name, proxy_url, run_network_name,
-    probe_docker, process_start, read_stamp, reap_orphaned_containers,
-    remove_sandbox_venv, resolve_effective_profile, resolve_image_ref,
-    resolve_sandbox_env, resolve_sandbox_venv_dir, select_backend,
-    probe_argv, setup_stamp_key, translate_mount_path, venv_probe_argv,
-    venv_probe_command, venv_probe_state, write_stamp,
-)
+    probe_docker, process_start, reap_orphaned_containers,
+    resolve_effective_profile, resolve_ignored_paths,
+    resolve_image_ref,
+    resolve_sandbox_env, select_backend,
+    translate_mount_path,
+    )
 
 
 class FakeRunner:
@@ -45,7 +45,7 @@ class FakeRunner:
         self.calls: list[list[str]] = []
         self.script = list(script)
 
-    def run(self, argv, *, timeout=None, check=False):
+    def run(self, argv, *, timeout=None, check=False, input=None):
         self.calls.append(argv)
         if not self.script:
             return CmdResult(exit_code=0, stdout="", stderr="")
@@ -236,113 +236,6 @@ class TestTranslateMountPath:
 
     def test_relative_absolute_resolution(self):
         assert Path(translate_mount_path("ws")).is_absolute()
-
-
-class TestSetupStampKey:
-    def test_stable(self):
-        a = setup_stamp_key("npm i", {"package-lock.json": "h1"})
-        b = setup_stamp_key("npm i", {"package-lock.json": "h1"})
-        assert a == b
-
-    def test_diverges_on_cmd(self):
-        assert setup_stamp_key("a", {}) != setup_stamp_key("b", {})
-
-    def test_diverges_on_lockfile(self):
-        assert setup_stamp_key("a", {"x": "1"}) != setup_stamp_key("a", {"x": "2"})
-
-    def test_lockfile_order_insensitive(self):
-        a = setup_stamp_key("c", {"b": "2", "a": "1"})
-        b = setup_stamp_key("c", {"a": "1", "b": "2"})
-        assert a == b
-
-
-class TestVenvProbe:
-    def test_command_classifies_broken_symlink_first(self):
-        cmd = venv_probe_command()
-        # the dangling-symlink (host-darwin) case is caught before -e, which
-        # would otherwise report "missing"
-        assert "echo broken" in cmd and "echo missing" in cmd and "echo valid" in cmd
-        assert "-L .venv-sandbox/bin/python" in cmd
-        assert "import sys" in cmd
-
-    def test_argv_assembly(self):
-        argv = venv_probe_argv("c1", "/ws")
-        assert argv[:5] == ["docker", "exec", "-w", "/ws", "c1"]
-        assert argv[5:] == ["/bin/sh", "-c", venv_probe_command()]
-
-    @pytest.mark.parametrize("stdout,exit_code,expected", [
-        ("valid\n", 0, "valid"),
-        ("missing\n", 0, "missing"),
-        ("broken\n", 0, "broken"),
-        ("", 0, "unknown"),
-        ("garbage", 0, "unknown"),
-        ("valid", 1, "unknown"),
-    ])
-    def test_state_classification(self, stdout, exit_code, expected):
-        assert venv_probe_state(stdout, exit_code) == expected
-
-
-class TestProbeArgv:
-    def test_assembly(self):
-        argv = probe_argv("file .warmed | grep -q ELF", "c1", "/ws")
-        assert argv[1] == "exec"
-        assert argv[2] == "-w"
-        assert argv[3] == "/ws"
-        assert argv[4] == "c1"
-        assert argv[5:] == ["/bin/sh", "-c", "file .warmed | grep -q ELF"]
-
-
-class TestRemoveSandboxVenv:
-    def test_removes_broken_symlink_dir(self, tmp_path):
-        ws = tmp_path / "ws"
-        venv = ws / ".venv-sandbox"
-        (venv / "bin").mkdir(parents=True)
-        (venv / "bin" / "python").symlink_to("/opt/homebrew/opt/python/bin/python3.14")
-        remove_sandbox_venv(ws)
-        assert not venv.exists()
-
-    def test_removes_regular_dir(self, tmp_path):
-        ws = tmp_path / "ws"
-        venv = ws / ".venv-sandbox"
-        (venv / "lib").mkdir(parents=True)
-        (venv / "lib" / "x.txt").write_text("x")
-        remove_sandbox_venv(ws)
-        assert not venv.exists()
-
-    def test_missing_is_noop(self, tmp_path):
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        remove_sandbox_venv(ws)  # must not raise
-
-    def test_fails_loud_when_removal_impossible(self, tmp_path, monkeypatch):
-        ws = tmp_path / "ws"
-        (ws / ".venv-sandbox").mkdir(parents=True)
-
-        def boom(*args, **kwargs):
-            raise OSError("permission denied")
-
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.rmtree", boom)
-        with pytest.raises(SandboxError, match="AE-SBX-014"):
-            remove_sandbox_venv(ws)
-
-    def test_relocated_clears_contents_keeps_dir(self, tmp_path):
-        """022: a relocated venv is the bind-mount source for the still-running
-        exec container, so only its CONTENTS are removed - deleting the dir
-        would leave the container pointed at a stale inode."""
-        venv = tmp_path / "outside-venv"
-        (venv / "bin").mkdir(parents=True)
-        (venv / "bin" / "python").symlink_to("/opt/homebrew/opt/python/bin/python3.14")
-        (venv / "lib").mkdir(parents=True)
-        (venv / "lib" / "x.txt").write_text("x")
-        remove_sandbox_venv(tmp_path / "ws", sandbox_venv_dir=str(venv))
-        assert venv.is_dir()
-        assert not list(venv.iterdir())  # contents gone, mount source intact
-
-    def test_relocated_missing_is_noop(self, tmp_path):
-        remove_sandbox_venv(tmp_path / "ws",
-                            sandbox_venv_dir=str(tmp_path / "nope"))
-
-
 class TestPayloads:
     def _profile(self):
         return EffectiveProfile(True, True, True, True, True, "img", "4g", 2.0)
@@ -363,7 +256,7 @@ class TestPayloads:
 
     def test_provision_payload_invariants(self, tmp_path):
         ws = str(tmp_path)
-        p = docker_provision_payload(run_id="r1", image="img", workspace=ws,
+        p = docker_provision_payload(run_id="r1", image="img", export_root=ws,
                                      setup_cmd="make")
         assert "--network" in p and "bridge" in p
         assert "--read-only" not in p  # rw rootfs
@@ -391,7 +284,7 @@ class TestPayloads:
                         reason="POSIX-only: Windows hosts have no uid:gid to bind")
     def test_provision_payload_binds_host_user(self, tmp_path):
         ws = str(tmp_path)
-        p = docker_provision_payload(run_id="r1", image="img", workspace=ws,
+        p = docker_provision_payload(run_id="r1", image="img", export_root=ws,
                                      setup_cmd="make")
         assert "--user" in p
         assert p[p.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
@@ -407,7 +300,7 @@ class TestPayloads:
         create = docker_create_payload(run_id="r1", image="img",
                                        profile=self._profile(), workspace=ws)
         provision = docker_provision_payload(run_id="r1", image="img",
-                                             workspace=ws, setup_cmd="make")
+                                             export_root=ws, setup_cmd="make")
         assert "--user" not in create
         assert "--user" not in provision
 
@@ -427,129 +320,6 @@ class TestPayloads:
         assert "--cap-drop" in p and "ALL" in p
         mounts = [p[i + 1] for i, a in enumerate(p) if a == "-v"]
         assert mounts == [f"{ws}:{ws}"]
-
-    def test_create_payload_masks_host_only_venv(self, tmp_path):
-        """022: `.venv` is host-only. It cannot be excluded from the workspace
-        bind, so it is shadowed by a read-only empty tmpfs submount - any
-        container-side write fails loudly instead of mutating the host venv."""
-        ws = str(tmp_path)
-        p = docker_create_payload(run_id="r1", image="img",
-                                  profile=self._profile(), workspace=ws)
-        mask = f"{ws}/.venv:ro"
-        assert mask in p
-        assert p[p.index(mask) - 1] == "--tmpfs"
-        # the mask comes after the workspace bind (submount shadows the bind)
-        assert p.index(mask) > p.index(f"{ws}:{ws}")
-
-    def test_provision_payload_masks_host_only_venv(self, tmp_path):
-        ws = str(tmp_path)
-        p = docker_provision_payload(run_id="r1", image="img", workspace=ws,
-                                     setup_cmd="make")
-        mask = f"{ws}/.venv:ro"
-        assert mask in p
-        assert p[p.index(mask) - 1] == "--tmpfs"
-        assert p.index(mask) > p.index(f"{ws}:{ws}")
-
-    def test_relocated_venv_mount_present_in_both_payloads(self, tmp_path):
-        """022: when ``sandbox_venv_dir`` is set, the outside dir is mounted rw
-        at the unchanged container path ``{ws}/.venv-sandbox`` in BOTH the exec
-        and provision payloads (the provision container runs the setup hook that
-        creates the venv)."""
-        ws = str(tmp_path)
-        venv = str(tmp_path / "outside-venv")
-        target = f"{venv}:{ws}/.venv-sandbox"
-        create = docker_create_payload(run_id="r1", image="img",
-                                       profile=self._profile(), workspace=ws,
-                                       sandbox_venv_dir=venv)
-        provision = docker_provision_payload(run_id="r1", image="img",
-                                             workspace=ws, setup_cmd="make",
-                                             sandbox_venv_dir=venv)
-        for payload in (create, provision):
-            assert target in payload
-            assert payload[payload.index(target) - 1] == "-v"
-            # the venv mount is a submount: it must come after the workspace bind
-            assert payload.index(target) > payload.index(f"{ws}:{ws}")
-
-
-    def test_create_payload_emits_seccomp_profile(self, tmp_path):
-        """023: a configured seccomp profile is emitted as a security-opt so
-        Docker replaces its default profile (which blocks the userns syscalls
-        Chromium's namespace sandbox needs)."""
-        ws = str(tmp_path)
-        p = docker_create_payload(run_id="r1", image="img",
-                                  profile=self._profile(), workspace=ws,
-                                  seccomp_profile="/host/chromium-userns.json")
-        assert "--security-opt" in p
-        assert p[p.index("--security-opt") + 1] == "seccomp=/host/chromium-userns.json"
-        # 023 gate 2: chromium's zygote chroots /proc/self/fdinfo at startup;
-        # under --cap-drop ALL that dies without CAP_SYS_CHROOT. The profile
-        # gates chroot(2) on exactly that capability, so the payload adds it.
-        assert "--cap-add" in p
-        assert p[p.index("--cap-add") + 1] == "SYS_CHROOT"
-
-    def test_create_payload_omits_seccomp_by_default(self, tmp_path):
-        """023: without a profile, Docker's own default seccomp stays in force
-        (no --security-opt flag is emitted)."""
-        ws = str(tmp_path)
-        p = docker_create_payload(run_id="r1", image="img",
-                                  profile=self._profile(), workspace=ws)
-        assert "--security-opt" not in p
-        assert "--cap-add" not in p
-
-    def test_networked_create_payload_emits_seccomp_profile(self, tmp_path):
-        """023: the networked exec container (used by render_check, which
-        fetches live assets) gets the same profile as the network-none one."""
-        ws = str(tmp_path)
-        p = docker_create_payload(run_id="r1", image="img",
-                                  profile=self._profile(), workspace=ws,
-                                  network=True,
-                                  seccomp_profile="/host/chromium-userns.json")
-        assert "--security-opt" in p
-        assert p[p.index("--security-opt") + 1] == "seccomp=/host/chromium-userns.json"
-        assert "--cap-add" in p
-        assert p[p.index("--cap-add") + 1] == "SYS_CHROOT"
-
-
-class TestResolveSandboxVenvDir:
-    def test_none_returns_none(self, tmp_path):
-        assert resolve_sandbox_venv_dir(None, tmp_path) is None
-
-    def test_expanduser_and_absolute(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("HOME", str(tmp_path))
-        out = resolve_sandbox_venv_dir("~/venvs/engine", tmp_path / "ws")
-        assert out == str(tmp_path / "venvs" / "engine")
-        assert os.path.isabs(out)
-
-    def test_home_wins_over_userprofile(self, tmp_path, monkeypatch):
-        # The engine is driven from bash, where HOME is the authoritative home
-        # on every platform - CPython's Windows expanduser ignores HOME in
-        # favour of USERPROFILE, which would resolve `~` inconsistently.
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        monkeypatch.setenv("USERPROFILE", str(tmp_path / "prof"))
-        out = resolve_sandbox_venv_dir("~/venvs/engine", tmp_path / "ws")
-        assert out == str(tmp_path / "home" / "venvs" / "engine")
-
-    def test_userprofile_fallback_when_home_unset(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("HOME", raising=False)
-        monkeypatch.setenv("USERPROFILE", str(tmp_path / "prof"))
-        out = resolve_sandbox_venv_dir("~/venvs/engine", tmp_path / "ws")
-        assert out == str(tmp_path / "prof" / "venvs" / "engine")
-
-    def test_outside_workspace_accepted(self, tmp_path):
-        ws = tmp_path / "ws"
-        out = resolve_sandbox_venv_dir(str(tmp_path / "venvs"), ws)
-        assert out == str(tmp_path / "venvs")
-
-    def test_in_workspace_fails_loud(self, tmp_path):
-        ws = tmp_path / "ws"
-        with pytest.raises(SandboxError, match="AE-SBX-015"):
-            resolve_sandbox_venv_dir(str(ws / "nested" / "venv"), ws)
-
-    def test_equals_workspace_fails_loud(self, tmp_path):
-        ws = tmp_path / "ws"
-        with pytest.raises(SandboxError, match="AE-SBX-015"):
-            resolve_sandbox_venv_dir(str(ws), ws)
-
 
 class TestExecContainerName:
     def test_default_is_network_none(self):
@@ -622,7 +392,7 @@ class TestResolveImageRef:
 
 
 def _backend(tmp_path, runner, *, image="img@sha256:abc", git_blocked=True,
-              network=False, sandbox_venv_dir=None, seccomp_profile=None,
+              network=False, seccomp_profile=None,
               dial_rewrites=None):
     return DockerBackend(
         image=image, workspace=str(tmp_path / "ws"),
@@ -630,31 +400,8 @@ def _backend(tmp_path, runner, *, image="img@sha256:abc", git_blocked=True,
         profile=EffectiveProfile(True, True, True, True, git_blocked,
                                  image, "4g", 2.0),
         runner=runner, network=network,
-        sandbox_venv_dir=sandbox_venv_dir,
         seccomp_profile=seccomp_profile,
         dial_rewrites=dial_rewrites)
-
-class TestRelocatedVenvDirCreation:
-    """022: the relocated venv dir is the bind-mount source. It must be
-    pre-created host-side so Docker never auto-creates a missing source as
-    root on native Linux (the --user uid:gid EACCES class, AE-SBX-009)."""
-
-    def test_missing_dir_created_on_construction(self, tmp_path):
-        venv_dir = tmp_path / "outside-venv"
-        assert not venv_dir.exists()
-        _backend(tmp_path, FakeRunner(), sandbox_venv_dir=str(venv_dir))
-        assert venv_dir.is_dir()
-
-    def test_nested_missing_dir_created(self, tmp_path):
-        venv_dir = tmp_path / "a" / "b" / "venv"
-        _backend(tmp_path, FakeRunner(), sandbox_venv_dir=str(venv_dir))
-        assert venv_dir.is_dir()
-
-    def test_unset_creates_nothing(self, tmp_path):
-        _backend(tmp_path, FakeRunner())
-        assert not (tmp_path / ".venv-sandbox").exists()
-
-
 class TestEnsureImage:
     def test_present_skips_pull(self, tmp_path):
         runner = FakeRunner(ok("sha256:abc"))
@@ -901,122 +648,12 @@ class TestClose:
 
 
 # ---------------------------------------------------------------------------
-# Provision + stamps + audit (real temp dirs)
+# Startup + audit (real temp dirs)
 # ---------------------------------------------------------------------------
-
-
-class TestProvisionStampsAudit:
-    def test_provision_writes_stamp(self, tmp_path):
-        runner = FakeRunner(ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        backend.provision("make build", "key1", str(stamp_dir), force=False)
-        assert read_stamp(stamp_dir, "key1")
-        assert runner.calls
-
-    def test_provision_skips_on_stamp(self, tmp_path):
-        """A warm stamp still skips, but only after the in-container venv
-        probe reports ``valid`` (016 self-heal) - no blind skip."""
-        runner = FakeRunner(ok("valid"))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        backend.provision("make build", "key1", str(stamp_dir), force=False)
-        # the probe ran (docker exec); no provision container ran
-        assert [c for c in runner.calls if c[:2] == ["docker", "exec"]]
-        assert not [c for c in runner.calls if c[:2] == ["docker", "run"]]
-
-    def test_provision_self_heals_broken_venv_on_stamp(self, tmp_path):
-        """016 repro (unit): stamp hit + broken venv → probe reports broken →
-        the venv is removed and the setup re-runs instead of blind-skipping."""
-        runner = FakeRunner(ok("broken"), ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        ws = tmp_path / "ws"
-        venv_bin = ws / ".venv-sandbox" / "bin"
-        venv_bin.mkdir(parents=True)
-        # host-darwin venv: a python symlink whose target doesn't exist in the
-        # Linux container.
-        (venv_bin / "python").symlink_to("/opt/homebrew/opt/python/bin/python3.14")
-        backend.provision("python -m venv .venv-sandbox", "key1",
-                          str(stamp_dir), force=False)
-        # broken venv removed, then provision re-ran
-        assert not (ws / ".venv-sandbox").exists()
-        assert [c for c in runner.calls if c[:2] == ["docker", "run"]]
-        assert read_stamp(stamp_dir, "key1")
-
-    def test_provision_refresh_forces(self, tmp_path):
-        runner = FakeRunner(ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        backend.provision("make build", "key1", str(stamp_dir), force=True)
-        assert runner.calls
-
-    def test_provision_failure_no_stamp(self, tmp_path):
-        runner = FakeRunner(CmdResult(2, "make: *** Error", ""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        with pytest.raises(SandboxError, match="AE-SBX-009"):
-            backend.provision("make", "key1", str(stamp_dir), force=False)
-        assert not read_stamp(stamp_dir, "key1")
-
-    def test_clean_stamps(self, tmp_path):
-        state = tmp_path / "state"
-        for k in ("a", "b", "c"):
-            write_stamp(state / "stamps", k)
-        assert clean_stamps(state) == 3
-        assert clean_stamps(state) == 0
-
-    def test_audit_rotation(self, tmp_path, monkeypatch):
-        state = tmp_path / "state"
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.AUDIT_MAX_BYTES", 10)
-        append_audit_record(state, {"n": 1, "pad": "x" * 8})
-        append_audit_record(state, {"n": 2, "pad": "y" * 8})
-        assert (state / "sandbox-audit.jsonl").exists()
-        assert (state / "sandbox-audit.jsonl.1").exists()
-        # the rolled file holds the earlier record, the fresh one the later
-        rolled = (state / "sandbox-audit.jsonl.1").read_text()
-        assert "x" * 8 in rolled
-
-
-class TestSetupProbeProvision:
-    def test_probe_exit_zero_skips(self, tmp_path):
-        runner = FakeRunner(ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        backend.provision("make warm-cache", "key1", str(stamp_dir),
-                          force=False, setup_probe="file .warmed | grep -q ELF")
-        assert [c for c in runner.calls if c[1] == "exec"]
-        assert not [c for c in runner.calls if c[1] == "run"]
-
-    def test_probe_nonzero_reprovisions(self, tmp_path):
-        runner = FakeRunner(fail(1, "not ELF"), ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        backend.provision("make warm-cache", "key1", str(stamp_dir),
-                          force=False, setup_probe="file .warmed | grep -q ELF")
-        assert [c for c in runner.calls if c[1] == "run"]
-        assert read_stamp(stamp_dir, "key1")
-
-    def test_probe_run_failure_reprovisions(self, tmp_path):
-        # A probe that cannot run (exec failure) is treated as a broken artifact.
-        runner = FakeRunner(fail(125, "no such container"), ok(""))
-        backend = _backend(tmp_path, runner)
-        stamp_dir = tmp_path / "stamps"
-        write_stamp(stamp_dir, "key1")
-        backend.provision("make warm-cache", "key1", str(stamp_dir),
-                          force=False, setup_probe="file .warmed | grep -q ELF")
-        assert [c for c in runner.calls if c[1] == "run"]
-        assert read_stamp(stamp_dir, "key1")
-
-
 class TestStartupSandbox:
-    """Eager startup sequence (Q2): probe → image → create/start → provision
-    all declared setups - with zero infra operations left for the run phase."""
+    """Startup sequence: probe → image → create/start the exec container →
+    materialise the export + host-side caches. Setup runs at the step boundary
+    (052), never at startup."""
 
     def _cfg(self, tmp_path, with_setup=False):
         from agentic_dev_loop.core.config import PipelineConfig
@@ -1092,35 +729,7 @@ class TestStartupSandbox:
             startup_sandbox(cfg, workspace=ws, runner=runner)  # type: ignore[call-arg]
         assert runner.calls == []
 
-    def test_provision_failure_closes_backend(self, tmp_path, monkeypatch):
-        """042 D3: a setup-hook failure after the exec container was created
-        must still reach close() and prune the run's registry entry."""
-        from agentic_dev_loop.engine.isolation import (CONTAINER_REGISTRY,
-                                                       startup_sandbox)
-
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        cfg = self._cfg(tmp_path, with_setup=True)
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
-                            lambda *a: "/usr/bin/docker")
-        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
-        runner = FakeRunner(
-            ok("1.54"),       # probe version
-            ok("linux"),      # probe ostype
-            ok(""),           # image inspect
-            ok(""),           # exec container run
-            fail(1, "boom"),  # provision run fails
-            ok(""),           # close: stop
-            ok(""),           # close: rm -f
-            ok(""),           # close: verify container gone
-        )
-        with pytest.raises(SandboxError, match="AE-SBX-009"):
-            startup_sandbox(cfg, workspace=ws,
-                            state_dir=tmp_path / "run-state", runner=runner)
-        registry = tmp_path / "iso-state" / CONTAINER_REGISTRY
-        assert not registry.exists() or registry.read_text().strip() == ""
-
-    def test_sequence_and_provision(self, tmp_path, monkeypatch):
+    def test_sequence_no_provision_at_startup(self, tmp_path, monkeypatch):
         from agentic_dev_loop.engine import isolation
         from agentic_dev_loop.engine.isolation import startup_sandbox
 
@@ -1140,13 +749,10 @@ class TestStartupSandbox:
         sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         try:
             kinds = [c[1] for c in runner.calls]
-            assert kinds == ["version", "info", "image", "run", "run"]
-            # the provision payload carries the setup command
-            run_argv = runner.calls[-1]
-            assert "python -m venv .venv-sandbox" in run_argv
-            # stamp written host-side
-            stamps = tmp_path / "iso-state" / "stamps"
-            assert list(stamps.iterdir())
+            assert kinds == ["version", "info", "image", "run"]
+            # 052: setup runs at the step boundary, never at startup.
+            assert not [c for c in runner.calls
+                        if "python -m venv .venv-sandbox" in c]
         finally:
             sandbox.close()
 
@@ -1177,12 +783,10 @@ class TestStartupSandbox:
             assert f"{tag} probing docker daemon" in out
             assert f"{tag} materialising workspace export" in out
             assert f"{tag} export ready at" in out
-            assert f"{tag} checking venv shebangs" in out
             assert f"{tag} preparing sandbox image img:tag" in out
             assert f"{tag} sandbox image ready" in out
             assert f"{tag} starting execution container" in out
             assert f"{tag} execution container started" in out
-            assert f"{tag} provisioning setup" in out
             assert f"{tag} sandbox ready" in out
         finally:
             sandbox.close()
@@ -1220,73 +824,6 @@ class TestStartupSandbox:
             run_argv = [c for c in runner.calls if c[1] == "run"]
             assert len(run_argv) == 1
             assert "--network" in run_argv[0] and "none" in run_argv[0]
-        finally:
-            sandbox.close()
-
-    def test_refresh_forces_provision(self, tmp_path, monkeypatch):
-        from agentic_dev_loop.engine.isolation import (setup_stamp_key, startup_sandbox,
-                                                write_stamp)
-
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        cfg = self._cfg(tmp_path, with_setup=True)
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
-                            lambda *a: "/usr/bin/docker")
-        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
-
-        # Pre-write the stamp as if a prior run already provisioned.
-        stamps = tmp_path / "iso-state" / "stamps"
-        write_stamp(stamps, setup_stamp_key("python -m venv .venv-sandbox", {}))
-
-        # Without refresh the stamp is a hit: no provision container runs.
-        runner = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""))
-        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
-        sandbox.close()
-        assert not [c for c in runner.calls if "python -m venv .venv-sandbox" in c]
-
-        # With refresh the stamp is ignored: provision re-runs.
-        runner2 = FakeRunner(ok("1.54"), ok("linux"), ok(""), ok(""), ok(""))
-        sandbox2 = startup_sandbox(cfg, workspace=ws,
-                                   state_dir=tmp_path / "run-state",
-                                   runner=runner2, refresh=True)
-        sandbox2.close()
-        assert [c for c in runner2.calls if "python -m venv .venv-sandbox" in c]
-
-    def test_relocated_venv_dir_flows_into_payloads(self, tmp_path, monkeypatch):
-        """022: a set `sandbox_venv_dir` is resolved and threaded into BOTH the
-        exec and provision payloads. The exec (base export) container maps it
-        into the export at `.venv-sandbox`; the provision container maps it
-        into the real workspace path. The workspace stays free of
-        `.venv-sandbox` noise either way."""
-        from agentic_dev_loop.engine.isolation import startup_sandbox
-
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        venv_dir = tmp_path / "outside-venv"
-        cfg = self._cfg(tmp_path, with_setup=True)
-        cfg.isolation.sandbox_venv_dir = str(venv_dir)
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
-                            lambda *a: "/usr/bin/docker")
-        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
-        runner = FakeRunner(
-            ok("1.54"),           # probe version
-            ok("linux"),          # probe ostype
-            ok(""),               # image inspect
-            ok(""),               # docker run -d --rm (exec container)
-            ok(""),               # docker run provision
-        )
-        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
-        try:
-            root = sandbox.export_root
-            exec_argv = [c for c in runner.calls
-                         if c[:2] == ["docker", "run"] and "--detach" in c][0]
-            prov_argv = [c for c in runner.calls
-                         if c[:2] == ["docker", "run"] and "--detach" not in c][0]
-            exec_target = f"{venv_dir}:{root}/.venv-sandbox"
-            prov_target = f"{venv_dir}:{ws}/.venv-sandbox"
-            assert exec_argv[exec_argv.index(exec_target) - 1] == "-v"
-            assert prov_argv[prov_argv.index(prov_target) - 1] == "-v"
-            assert f"{ws}/.venv:ro" in prov_argv
         finally:
             sandbox.close()
 
@@ -1337,21 +874,6 @@ class TestStartupSandbox:
         with pytest.raises(ValueError, match="bundled:chromium-userns"):
             startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
         assert runner.calls == []
-
-    def test_in_workspace_sandbox_venv_dir_fails_loud(self, tmp_path, monkeypatch):
-        from agentic_dev_loop.engine.isolation import startup_sandbox
-
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        cfg = self._cfg(tmp_path, with_setup=False)
-        cfg.isolation.sandbox_venv_dir = str(ws / "nested")
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
-                            lambda *a: "/usr/bin/docker")
-        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
-        runner = FakeRunner(ok("1.54"), ok("linux"))
-        with pytest.raises(SandboxError, match="AE-SBX-015"):
-            startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
-
 
 class TestBundledSeccompProfile:
     """023: the bundled chromium-userns.json must be valid JSON, deny-by-
@@ -2077,22 +1599,27 @@ class TestDeclaredCachesAndSyncExcludes:
         return ws, runner, sandbox
 
     def test_declared_missing_cache_auto_created(self, tmp_path, monkeypatch):
+        """052: declared caches are host-side. The host cache dir is created
+        under {isolation.state_dir}/caches/<name>; the export gets only the
+        mount target; the workspace path is never auto-created."""
         from agentic_dev_loop.core.config import PipelineConfig
+        iso_state = tmp_path / "iso-state"
         cfg = PipelineConfig.model_validate({
             "name": "p", "llm": {"model": "m", "api_key_env": "K"},
             "agents_dir": "agents", "lockfiles": ["uv.lock"],
             "caches": ["node_modules"],
             "steps": [{"name": "dev", "agent": "dev", "on_pass": "success"}],
-            "isolation": {"state_dir": str(tmp_path / "iso-state")},
+            "isolation": {"state_dir": str(iso_state)},
         })
         ws, runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
         try:
-            assert (ws / "node_modules").is_dir()
+            assert not (ws / "node_modules").exists()
+            assert (iso_state / "caches" / "node_modules").is_dir()
             root = Path(sandbox.export_root)
             assert (root / "node_modules").is_dir()
             run_argv = [c for c in runner.calls
                         if c[:2] == ["docker", "run"] and "--detach" in c][0]
-            assert f"{ws / 'node_modules'}:{root}/node_modules" in run_argv
+            assert f"{iso_state / 'caches' / 'node_modules'}:{root}/node_modules" in run_argv
         finally:
             sandbox.close()
 
@@ -2109,26 +1636,6 @@ class TestDeclaredCachesAndSyncExcludes:
         import agentic_dev_loop.engine.presets as presets
         assert not hasattr(presets, "CACHE_DIRS")
         assert not hasattr(isolation, "discover_cache_paths")
-
-    def test_relocated_venv_shebang_repaired(self, tmp_path, monkeypatch):
-        """028: a venv built under an earlier export's path has its console
-        scripts repaired to point at this run's export python at startup."""
-        venv_dir = tmp_path / "outside-venv"
-        (venv_dir / "bin").mkdir(parents=True)
-        stale = (tmp_path / "run-state" / "exports" / "old-uuid"
-                 / ".venv-sandbox" / "bin" / "python")
-        (venv_dir / "bin" / "pip").write_text(
-            f"#!{stale}\nprint('ok')\n")
-        cfg = self._cfg(tmp_path)
-        cfg.isolation.sandbox_venv_dir = str(venv_dir)
-        ws, _runner, sandbox = self._startup(tmp_path, monkeypatch, cfg)
-        try:
-            target = f"#!{Path(sandbox.export_root) / '.venv-sandbox' / 'bin' / 'python'}"
-            first = (venv_dir / "bin" / "pip").read_text().splitlines()[0]
-            assert first == target
-        finally:
-            sandbox.close()
-
 
 # ---------------------------------------------------------------------------
 # 030: infra-failure classifier + orphan-container reaper
@@ -2387,41 +1894,11 @@ class TestReaper:
         assert self._read(tmp_path / "state") == [other]
 
 
-def test_declared_setups_includes_agent_steps(tmp_path):
-    import yaml
-
-    from agentic_dev_loop.core.config import load_config
-    from agentic_dev_loop.engine.isolation import _declared_setups
-
-    (tmp_path / "uv.lock").write_text("")
-    data = {
-        "name": "t",
-        "llm": {"model": "m", "api_key_env": "K"},
-        "agents_dir": "agents",
-        "lockfiles": ["uv.lock"],
-        "steps": [
-            {"name": "dev", "agent": "dev",
-             "setup": "cd frontend-editor && npm ci", "on_pass": "success"},
-            {"name": "t", "command": "make", "setup": "echo warm",
-             "setup_probe": "file .warmed | grep -q ELF",
-             "on_pass": "success"},
-        ],
-    }
-    p = tmp_path / "pipeline.yaml"
-    p.write_text(yaml.safe_dump(data))
-    cfg = load_config(p)
-    declared = list(_declared_setups(cfg, tmp_path))
-    assert {s for s, _k, _p in declared} == {
-        "cd frontend-editor && npm ci", "echo warm"}
-    assert {p for _s, _k, p in declared} == {
-        None, "file .warmed | grep -q ELF"}
-
-
 def test_provision_payload_mounts_declared_caches():
     payload = docker_provision_payload(
         run_id="run1",
         image="img",
-        workspace="/ws",
+        export_root="/ws",
         setup_cmd="cd frontend-editor && npm ci",
         cache_mounts=[
             ("/host/fe/node_modules", "/ws/frontend-editor/node_modules", "rw"),
@@ -2698,3 +2175,146 @@ class TestCloseVerification:
         calls_after_first = len(runner.calls)
         backend.close()
         assert len(runner.calls) == calls_after_first
+
+
+class TestResolveIgnoredPaths:
+    """052: git check-ignore drives the ignored-path set. The pure plan
+    functions receive it as input; the host resolves it once per
+    materialisation and once per sync-back (``walk_root`` = the export, so a
+    gitignored dir created mid-run is still caught)."""
+
+    @staticmethod
+    def _git(cwd, *argv):
+        return subprocess.run(["git", *argv], cwd=str(cwd), check=True,
+                              capture_output=True, text=True)
+
+    def _init_repo(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        self._git(repo, "init", "-q")
+        self._git(repo, "config", "user.email", "t@t")
+        self._git(repo, "config", "user.name", "t")
+        return repo
+
+    def test_reports_gitignored_paths(self, tmp_path):
+        repo = self._init_repo(tmp_path)
+        (repo / ".gitignore").write_text("__pycache__/\n.hypothesis/\n")
+        (repo / "src" / "__pycache__").mkdir(parents=True)
+        (repo / "src" / "__pycache__" / "mod.cpython-312.pyc").write_text("x")
+        (repo / "src" / "mod.py").write_text("x")
+        (repo / ".hypothesis").mkdir()
+        (repo / ".hypothesis" / "x.json").write_text("x")
+        ignored = resolve_ignored_paths(repo)
+        assert "src/__pycache__/mod.cpython-312.pyc" in ignored
+        assert ".hypothesis/x.json" in ignored
+        assert "src/mod.py" not in ignored
+
+    def test_walk_root_checks_export_not_repo(self, tmp_path):
+        repo = self._init_repo(tmp_path)
+        (repo / ".gitignore").write_text("__pycache__/\n")
+        (repo / "tracked.py").write_text("x")
+        self._git(repo, "add", "-A")
+        self._git(repo, "commit", "-qm", "init")
+        walk = tmp_path / "export"
+        (walk / "src" / "__pycache__").mkdir(parents=True)
+        (walk / "src" / "__pycache__" / "mod.cpython-312.pyc").write_text("x")
+        (walk / "src" / "mod.py").write_text("x")
+        ignored = resolve_ignored_paths(repo, walk_root=walk)
+        assert "src/__pycache__/mod.cpython-312.pyc" in ignored
+        assert "src/mod.py" not in ignored
+
+    def test_tracked_file_matching_pattern_not_ignored(self, tmp_path):
+        repo = self._init_repo(tmp_path)
+        (repo / ".gitignore").write_text("*.pyc\n")
+        (repo / "mod.pyc").write_text("x")
+        self._git(repo, "add", "-f", "mod.pyc")
+        self._git(repo, "commit", "-qm", "init")
+        ignored = resolve_ignored_paths(repo)
+        assert "mod.pyc" not in ignored
+
+    def test_non_repo_fails_loud(self, tmp_path):
+        repo = tmp_path / "not-a-repo"
+        repo.mkdir()
+        (repo / "f.py").write_text("x")
+        runner = FakeRunner(fail(128, "not a git repository"))
+        with pytest.raises(SandboxError, match="git check-ignore failed"):
+            resolve_ignored_paths(repo, runner=runner)
+
+    def test_single_batched_git_subprocess(self, tmp_path):
+        repo = self._init_repo(tmp_path)
+        (repo / ".gitignore").write_text("__pycache__/\n*.pyc\n")
+        (repo / "a.pyc").write_text("x")
+        (repo / "b").mkdir()
+        (repo / "b" / "c.pyc").write_text("x")
+        (repo / "mod.py").write_text("x")
+
+        class RecordingRunner:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, argv, *, timeout=None, check=False, input=None):
+                self.calls.append((argv, input))
+                return ok("a.pyc\0b/c.pyc\0")
+
+        runner = RecordingRunner()
+        resolve_ignored_paths(repo, runner=runner)
+        assert len(runner.calls) == 1
+        argv, payload = runner.calls[0]
+        assert argv == ["git", "-C", str(repo), "check-ignore", "--stdin", "-z"]
+        # one subprocess, all candidates batched over a single stdin payload
+        assert "a.pyc" in payload and "mod.py" in payload
+
+
+
+class TestRemovedApparatusGuards:
+    """052: the stamp/probe/venv apparatus is gone from src/. These guards pin
+    the removal so the engine cannot silently re-accumulate the special cases
+    the design deleted. The only allowed survivors are the migration-rejection
+    strings in ``core/config.py`` and the explanatory comments."""
+
+    SRC = Path(__file__).resolve().parents[1] / "src"
+
+    @classmethod
+    def _py_files(cls):
+        return [p for p in cls.SRC.rglob("*.py")
+                if "__pycache__" not in p.parts]
+
+    def test_stamp_functions_and_cli_flags_absent(self):
+        absent = ("read_stamp", "write_stamp", "clean_stamps",
+                  "setup_stamp_key", "--refresh", "--clean-stamps")
+        offenders = []
+        for py in self._py_files():
+            text = py.read_text(encoding="utf-8")
+            for token in absent:
+                if token in text:
+                    offenders.append(f"{py}: {token}")
+        assert offenders == []
+
+    def test_setup_probe_only_as_migration_message(self):
+        offenders = []
+        for py in self._py_files():
+            for i, line in enumerate(
+                    py.read_text(encoding="utf-8").splitlines(), 1):
+                if "setup_probe" not in line:
+                    continue
+                if py.name == "config.py" and (
+                        '"setup_probe" in data' in line or "removed" in line):
+                    continue
+                offenders.append(f"{py}:{i}: {line.strip()}")
+        assert offenders == []
+
+    def test_venv_only_in_comments_and_migration(self):
+        offenders = []
+        for py in self._py_files():
+            for i, line in enumerate(
+                    py.read_text(encoding="utf-8").splitlines(), 1):
+                if "venv" not in line:
+                    continue
+                stripped = line.strip()
+                if stripped.startswith("#"):
+                    continue
+                if ('"sandbox_venv_dir" in data' in line
+                        or "sandbox_venv_dir was removed" in line):
+                    continue
+                offenders.append(f"{py}:{i}: {stripped}")
+        assert offenders == []

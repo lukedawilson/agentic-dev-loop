@@ -18,7 +18,7 @@ from agentic_dev_loop.core.config import PipelineConfig
 from agentic_dev_loop.engine.isolation import SandboxError
 from agentic_dev_loop.engine.registry import Registry, default_registry
 from agentic_dev_loop.engine.stages import (
-    ARTIFACT_CONTEXT_CAP, Runtime, _run_command, build_context,
+    ARTIFACT_CONTEXT_CAP, Runtime, _provision_step, _run_command, build_context,
     make_action_node, make_agent_node, make_bump_node, make_command_node,
     make_router,
 )
@@ -928,3 +928,100 @@ class TestSandboxedCommandNode:
         node = make_action_node(rt, cfg.steps[0])
         node(make_state(commit_allowed=False))
         assert fake_sandbox.requests == []
+
+
+class TestProvisionStep:
+    """052: setup runs at the step boundary via ``_provision_step`` - fresh
+    every entry, only for agent/command steps with a setup hook, loud on
+    failure (AE-SBX-009)."""
+
+    @staticmethod
+    def _step(kind, setup=None, env=None):
+        return SimpleNamespace(kind=kind, setup=setup, env=env)
+
+    def test_provisions_setup_before_first_turn(self):
+        calls = []
+        sandbox = SimpleNamespace(
+            provision=lambda cmd, env=None: calls.append((cmd, env)))
+        _provision_step(SimpleNamespace(sandbox=sandbox),
+                        self._step("agent", "make warm", {"K": "v"}))
+        assert len(calls) == 1
+        assert calls[0][0] == "make warm"
+        assert calls[0][1]["K"] == "v"
+
+    def test_noop_without_setup(self):
+        calls = []
+        sandbox = SimpleNamespace(
+            provision=lambda cmd, env=None: calls.append((cmd, env)))
+        _provision_step(SimpleNamespace(sandbox=sandbox),
+                        self._step("agent", None))
+        assert calls == []
+
+    def test_noop_without_sandbox(self):
+        _provision_step(SimpleNamespace(sandbox=None),
+                        self._step("agent", "make warm"))
+
+    def test_noop_for_brief_and_action(self):
+        calls = []
+        sandbox = SimpleNamespace(
+            provision=lambda cmd, env=None: calls.append((cmd, env)))
+        for kind in ("brief", "action"):
+            _provision_step(SimpleNamespace(sandbox=sandbox),
+                            self._step(kind, "make warm"))
+        assert calls == []
+
+    def test_failure_propagates(self):
+        def boom(cmd, env=None):
+            raise SandboxError("AE-SBX-009: setup failed")
+
+        with pytest.raises(SandboxError, match="AE-SBX-009"):
+            _provision_step(
+                SimpleNamespace(sandbox=SimpleNamespace(provision=boom)),
+                self._step("command", "make warm"))
+
+
+class TestProvisionNodeIntegration:
+    """052: the agent/command nodes run ``_provision_step`` at every entry -
+    a goto-dev retry re-enters the node and re-provisions - and a setup
+    failure halts the run (``{"failed": True, "failed_step": ...}``) instead
+    of routing an on_fail verdict."""
+
+    @staticmethod
+    def _rt_with_setup(runtime, kind):
+        step = {"name": "dev", "setup": "make warm", "on_pass": "success"}
+        if kind == "agent":
+            step.update({"agent": "dev", "produces": ["summary.md"]})
+        else:
+            step.update({"command": "true"})
+        cfg = make_cfg([step])
+        return dataclasses.replace(runtime, cfg=cfg), cfg.steps[0]
+
+    def test_command_node_reprovisions_on_second_entry(self, runtime,
+                                                       fake_sandbox,
+                                                       monkeypatch):
+        calls = []
+        monkeypatch.setattr(fake_sandbox, "provision",
+                            lambda cmd, env=None: calls.append((cmd, env)))
+        rt, step = self._rt_with_setup(runtime, "command")
+        node = make_command_node(rt, step)
+        node(make_state())
+        node(make_state(attempt=2))
+        assert [c[0] for c in calls] == ["make warm", "make warm"]
+
+    def test_command_node_setup_failure_halts(self, runtime, fake_sandbox,
+                                              monkeypatch):
+        def boom(cmd, env=None):
+            raise SandboxError("AE-SBX-009: setup failed")
+        monkeypatch.setattr(fake_sandbox, "provision", boom)
+        rt, step = self._rt_with_setup(runtime, "command")
+        update = make_command_node(rt, step)(make_state())
+        assert update == {"failed": True, "failed_step": "dev"}
+
+    def test_agent_node_setup_failure_halts(self, runtime, fake_sandbox,
+                                            monkeypatch):
+        def boom(cmd, env=None):
+            raise SandboxError("AE-SBX-009: setup failed")
+        monkeypatch.setattr(fake_sandbox, "provision", boom)
+        rt, step = self._rt_with_setup(runtime, "agent")
+        update = make_agent_node(rt, step)(make_state())
+        assert update == {"failed": True, "failed_step": "dev"}

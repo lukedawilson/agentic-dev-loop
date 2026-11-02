@@ -18,3 +18,5 @@ uv.lock
 
 # editor swap files
 *.swp
+
+.hypothesis/

@@ -99,7 +99,7 @@ class TestDryRun:
     def test_composes_with_irrelevant_flags(self, repo):
         assert main(["pipeline.yaml", "--dry-run", "--plan", "plan.md",
                      "--no-viz", "--resume", "some-thread-id",
-                     "--refresh", "--max-attempts", "5"]) == 0
+                     "--max-attempts", "5"]) == 0
 
     def test_network_step_surfaced_in_summary(self, repo, capsys):
         (repo / "pipeline.yaml").write_text(

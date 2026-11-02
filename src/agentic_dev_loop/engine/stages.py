@@ -295,6 +295,18 @@ def _step_sandbox(runtime: Runtime, step: StepConfig):
     return cwd, mount_set, egress_policy
 
 
+def _provision_step(runtime: Runtime, step: StepConfig) -> None:
+    """Run the step's setup hook at the step boundary (052), fresh, in the
+    provision container, targeting the export. No-op when there is no sandbox
+    or no setup. A setup failure raises SandboxError (AE-SBX-009) - the caller
+    turns it into a loud halt, never an on_fail verdict."""
+    if runtime.sandbox is None or step.setup is None:
+        return
+    if step.kind not in ("agent", "command"):
+        return
+    runtime.sandbox.provision(step.setup, env=resolve_sandbox_env(step.env))
+
+
 @dataclass
 class AgentResult:
     """Outcome of a single agent stage run.
@@ -673,6 +685,17 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
         attempt = state["attempt"]
         subject = state["subject"]
         max_iterations = step.max_iterations or DEFAULT_MAX_ITERATIONS
+        try:
+            _provision_step(runtime, step)
+        except SandboxError:
+            err = redact_values(traceback.format_exc(),
+                                runtime.secrets.values())[-4000:]
+            print(err, file=sys.stderr, flush=True)
+            runtime.state_dir.mkdir(parents=True, exist_ok=True)
+            (runtime.state_dir / LAST_ERROR).write_text(
+                f"# Agent step failed\n\n```\n{err}\n```\n",
+                encoding="utf-8")
+            return {"failed": True, "failed_step": step.name}
         message = build_context(runtime, state["docs"], state["subject"],
                                 state["notes"],
                                 artifacts=state.get("artifacts", {}),
@@ -922,6 +945,7 @@ def make_command_node(runtime: Runtime, step: StepConfig):
         subject = state["subject"]
         print(f"[{subject}] Running command `{step.command}`...", flush=True)
         try:
+            _provision_step(runtime, step)
             exit_code, output, timed_out = _run_command(
                 step.command, runtime.workspace, timeout, env,
                 sandbox=sandbox, pipeline=runtime.cfg.name, step=step.name,

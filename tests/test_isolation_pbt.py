@@ -14,7 +14,7 @@ from agentic_dev_loop.engine.isolation import (
     EffectiveProfile, ProbeResult, SandboxExecutionRequest, SandboxExecutionResult,
     docker_create_payload, exec_container_name, is_git_mutation,
     resolve_effective_profile, resolve_sandbox_env, run_network_name,
-    select_backend, setup_stamp_key, translate_mount_path,
+    select_backend, translate_mount_path,
 )
 
 profiles = st.builds(
@@ -90,16 +90,6 @@ class TestNetworkModePayload:
         assert "--read-only" in p and "--cap-drop" in p and "ALL" in p
         mounts = [p[i + 1] for i, a in enumerate(p) if a == "-v"]
         assert mounts == [f"{workspace}:{workspace}"]
-
-
-class TestSetupStampKey:
-    @given(cmd=st.text(), lockfiles=st.dictionaries(st.text(min_size=1), st.text()))
-    def test_stable(self, cmd, lockfiles):
-        assert setup_stamp_key(cmd, lockfiles) == setup_stamp_key(cmd, lockfiles)
-
-    @given(cmd=st.text(min_size=1))
-    def test_diverges_on_cmd(self, cmd):
-        assert setup_stamp_key(cmd, {}) != setup_stamp_key(cmd + "x", {})
 
 
 class TestMountTranslation:

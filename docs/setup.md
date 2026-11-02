@@ -57,23 +57,23 @@ The `isolation:` section is optional (opinionated defaults apply when absent):
 ```yaml
 isolation:
   image: ghcr.io/org/custom-dev@sha256:...  # override (digest required)
-  refresh: false          # force re-provision of every setup: hook
   memory: 4g              # execution-container memory cap
   cpus: 2                 # execution-container cpu cap
   allow_git_mutations: false
-  state_dir: ~/.agentic-dev-loop/state   # host-only stamps + audit (never mounted)
-  sandbox_venv_dir: ~/.agentic-dev-loop/venvs/agent-engine   # optional relocation (022)
+  state_dir: ~/.agentic-dev-loop/state   # host-side caches + audit (never mounted)
 ```
 
 - **`env:` (per step)** - `VAR: value` sets it in the sandbox; `VAR: null`
   inherits the host value. The sandbox env is the fixed safe base
   (`PATH`/`HOME`/`LANG`/`LC_ALL`/`TERM`) **plus declared vars only** - the
   global `env_allowlist` never leaks in and the LLM key is never auto-added.
-- **`setup:` (command steps only)** - a trusted author command (e.g.
+- **`setup:` (command and agent steps)** - a trusted author command (e.g.
   `python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"`)
-  that runs in the **provision container with network ON** at startup, before
-  any step executes. Outputs land in the bind-mounted workspace. Agent and
-  action steps reject `setup:` at load.
+  that runs fresh at the step boundary in a **one-shot provision container
+  with network ON**, before the step's first turn, targeting the per-run
+  export (never the real workspace). Setup outputs land in the export and are
+  visible to the step's exec container immediately. Steps without `setup:`
+  trigger nothing; brief and action steps reject `setup:` at load.
 - **`network:` (command, agent, and sandbox-action steps)** - `network: true`
   runs the step in a bridge-network container whose traffic is forced through
   the engine-run per-policy egress proxy and reaches only the step's `egress:`
@@ -83,14 +83,6 @@ isolation:
 - **Git mutations** are blocked by default inside the sandbox (commit, push,
   branch/tag create/delete, rebase, …); reads (`status`/`log`/`diff`) always
   work. `allow_git_mutations: true` re-allows them per-pipeline.
-- **`sandbox_venv_dir` (optional, 022)** - relocates the container-built
-  `.venv-sandbox` out of the workspace. When set, it is `expanduser`ed,
-  made absolute, and must resolve **outside** the workspace (an in-workspace
-  value fails fast); the engine bind-mounts it rw at the unchanged container
-  path `{ws}/.venv-sandbox` in both the exec and provision containers, keeping
-  the repo free of container venv artifacts. Unset keeps the legacy
-  workspace-local `.venv-sandbox` unchanged. The host `.venv` is always masked
-  from the sandbox by a read-only empty tmpfs.
 - **`state_dir` (run state)** defaults to
   `~/.agentic-dev-loop/runs/<pipeline-hash>/` - the checkpoint DB and
   `last-error.md` live there, **outside** the workspace mount, unreachable by
@@ -155,7 +147,7 @@ steps:
 
 ### Caches and sync-excludes (028)
 
-Two top-level, run-wide lists declare which in-workspace dirs are toolchain
+Two top-level, run-wide lists declare which host-side stores are toolchain
 caches and which paths are scratch (never copied into the export, never synced
 back). Both default to `[]`.
 
@@ -164,17 +156,15 @@ caches: [.nuget-packages, qa/node_modules, qa/.browsers]
 sync_excludes: ["**/bin/**", "**/obj/**"]
 ```
 
-- **`caches:`** - repo-relative dirs bind-mounted rw from the real workspace
-  into the export at the same relative paths (the build/packaging caches that
-  should persist across runs but never sync back). A declared cache that is
-  missing at run start is auto-created host-side (empty, uid-owned) before
-  export planning, then bind-mounted - it is no longer a loud failure
-  (BR-3.2 amended). Validation rejects traversal, absolute paths, `.git`, the
-  host-only `.venv`, a path under a relative `state_dir`, and a step mount
-  under a cache (the rw cache submount would defeat a declared `ro` mount
-  there). A whole-tree `.` mount stays fine - the cache submount layers on
-  top. Declaring `.venv-sandbox` here while `isolation.sandbox_venv_dir` is
-  set is a contradiction (the venv is relocated outside the workspace).
+- **`caches:`** - repo-relative toolchain cache dirs resolved host-side to
+  `{state_dir}/caches/<name>` (content-addressed, shared across runs and
+  repos) and bind-mounted rw into the export at the same relative paths. The
+  host dir is created at startup (a missing workspace path is fine) and
+  becomes the mount source; caches are never synced back. Validation rejects
+  traversal, absolute paths, `.git`, and a step mount under a cache (the rw
+  cache submount would defeat a declared `ro` mount there). A whole-tree `.`
+  mount stays fine - the cache submount layers on top. Declaring a cache on a
+  gitignored path (e.g. `node_modules`) is the normal, correct case.
 - **`sync_excludes:`** - scratch paths. A literal entry (no wildcard) excludes
   the dir and everything under it (`qa/.artifacts`). A wildcard entry is
   `fnmatch` on the full posix relpath, and `*` spans path separators, so
@@ -227,39 +217,26 @@ edits.
 
 ## 4. Caching
 
-Every `setup:` hook is **stamp-cached** in
-`~/.agentic-dev-loop/state/stamps/`, keyed by the setup command plus the
-sha256 of the workspace's lockfiles (`package-lock.json`, `requirements.txt`,
-`*.csproj`). A matching stamp skips the hook - provisioning is paid once per
-dependency change, not per run.
+There is no stamp cache: every `setup:` hook re-runs fresh at the step
+boundary (first entry, `goto dev` retries, all of it). To keep per-run warm-up
+to minutes, declare toolchain stores in the top-level `caches:` list - the
+engine resolves each to a host-side dir under
+`~/.agentic-dev-loop/state/caches/<name>` and bind-mounts it rw into the
+export, so a fetch re-uses already-downloaded packages instead of re-fetching
+them.
 
-- `isolation.refresh: true` (or the CLI `--refresh` flag) forces re-provision
-  of every declared setup.
-- `agentic-dev-loop … --clean-stamps` deletes the cached stamps and exits.
+Declare a neutral store per toolchain (e.g. `.nuget-packages`, `qa/.browsers`,
+a node cache dir) and point the toolchain at it with its cache env var (e.g.
+`NUGET_PACKAGES`, `PIP_CACHE_DIR`, `npm_config_cache`) in the declaring step's
+`env:` block - the provision container runs with that step's env.
 
-**Self-healing venv check (016).** A warm stamp is no longer trusted blindly:
-before skipping a `setup:` hook, the engine probes `.venv-sandbox/bin/python`
-inside the execution container. If the entry exists but is not
-executable/importable - the classic case is a host-built (macOS) venv whose
-`bin/python` symlinks to a host interpreter that does not exist in the Linux
-container - the engine removes the invalid venv and re-provisions it. A
-missing venv is left to the (idempotent) setup hook and is not treated as a
-self-heal trigger. If the invalid venv cannot be removed, startup fails loudly
-with `AE-SBX-014`. When `sandbox_venv_dir` relocates the venv (022), only the
-outside dir's contents are removed - the mount-source dir itself is kept so the
-still-running container stays valid (§3).
+Stores are content-addressed by design, so sharing them across repos is correct
+and is the point. Cache pruning is manual for now: delete the dirs under
+`~/.agentic-dev-loop/state/caches/`.
 
-**Consumer-authored probe (045).** A `setup:` hook may declare a
-`setup_probe:` - a shell command the engine runs inside the execution
-container instead of the venv probe when a warm stamp is found. Exit 0 trusts
-the stamp (skip); any nonzero - a broken artifact or a probe that cannot run -
-falls through to re-provision with network on (fail toward freshness). The
-probe text is not part of the stamp key, so a probe-only change needs
-`--refresh` or `--clean-stamps` to take effect. For example, a hook that warms
-`frontend-editor/node_modules` can assert the warmed native binary is
-Linux-shaped:
-
-    setup_probe: file frontend-editor/node_modules/esbuild/bin/esbuild | grep -q ELF
+The removed `isolation.refresh`, `--refresh`, `--clean-stamps`, `setup_probe:`,
+and `sandbox_venv_dir` fail loudly with a migration message if a pipeline still
+sets them.
 
 ## 5. Troubleshooting
 
@@ -275,12 +252,10 @@ Every fail-fast error points here (`AE-SBX-<NNN>`):
 | AE-SBX-006 | image pull failed after retries | check connectivity/credentials (§2) |
 | AE-SBX-007 | post-pull digest mismatch | supply-chain check failed; re-pull |
 | AE-SBX-008 | git mutation blocked | set `isolation.allow_git_mutations: true` (§3) |
-| AE-SBX-009 | `setup:` command failed | inspect its output tail; stamp not written |
+| AE-SBX-009 | `setup:` command failed | inspect its output tail; the run halts (no stamp concept) |
 | AE-SBX-010 | container create/start/exec failure | inspect the docker error |
 | AE-SBX-012 | daemon lost mid-run | restart the engine; cleanup is best-effort |
 | AE-SBX-013 | networked container create/route failure | inspect the docker error; a step declared `network: true` but no bridge container started (§3) |
-| AE-SBX-014 | invalid sandbox venv could not be removed | remove the invalid venv at the path named in the error and re-run (§4) |
-| AE-SBX-015 | `sandbox_venv_dir` resolves inside the workspace | set it to a path outside the workspace (§3) |
 | AE-SBX-019 | sandbox infrastructure failure (daemon-side) | check `docker info` / `docker system df`; restart Docker Desktop if the VM reports I/O errors |
 | AE-SBX-020 | egress proxy start/attach failed | inspect the daemon stderr tail in the message (it now names the real cause, e.g. "Address already in use") (§3) |
 

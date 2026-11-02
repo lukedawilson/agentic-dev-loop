@@ -14,8 +14,7 @@ from pathlib import Path
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
 from .containers import containers_report
-from .isolation import (clean_stamps, isolation_state_dir,
-                        reap_orphaned_containers)
+from .isolation import isolation_state_dir, reap_orphaned_containers
 from .loaders import mark_plan_completed
 from .registry import Registry, default_registry, load_extensions
 
@@ -82,15 +81,10 @@ def _core_parser() -> argparse.ArgumentParser:
                         help="preferred port for the live graph view "
                              "(default: 8321; falls back to a free port when "
                              "busy)")
-    parser.add_argument("--refresh", action="store_true",
-                        help="force re-provision of every setup: hook "
-                             "(bypasses the stamp cache)")
     parser.add_argument("--dry-run", action="store_true",
                         help="validate the pipeline and print a summary plan "
                              "without executing anything (no LLM, no "
                              "sandbox, no state writes)")
-    parser.add_argument("--clean-stamps", action="store_true",
-                        help="delete cached provision stamps and exit")
     _add_version_flag(parser)
     return parser
 
@@ -185,18 +179,12 @@ def main(argv: list[str] | None = None) -> int:
     for loader in registry.document_loaders:
         loader.add_cli_args(parser)
     args = parser.parse_args(argv)
-    if args.clean_stamps:
-        state = isolation_state_dir(cfg)
-        removed = clean_stamps(state)
-        print(f"Removed {removed} cached provision stamp(s) from "
-              f"{state / 'stamps'}", flush=True)
-        return 0
     if args.dry_run:
         from .dryrun import dry_run
         return dry_run(args.pipeline, args, registry)
     # The run path alone needs the heavy graph/SDK imports, and --dry-run
     # needs the dryrun import chain in-branch; defer both so `containers`,
-    # --clean-stamps, --help, and --version stay side-effect free. 042 D4: a
+    # --help, and --version stay side-effect free. 042 D4: a
     # SIGTERM here raises SystemExit(143) so graph.run_pipeline's finally
     # still closes the sandbox; a second SIGTERM hard-exits.
     previous = _install_sigterm_handler()

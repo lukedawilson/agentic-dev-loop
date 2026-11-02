@@ -160,15 +160,14 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
     if not state_dir.is_absolute():
         state_dir = base / state_dir
 
-    # Eager startup (Q2): probe -> image -> create+start exec container ->
-    # pre-provision all declared setups, BEFORE the graph builds. Zero infra
-    # operations mid-run; the only sandbox call during steps is run(request).
+    # Startup (052): probe -> image -> create+start exec container. No setup
+    # runs here: each step entry provisions its own setup hook, fresh, into
+    # the export.
     # 042 D3: startup is close-protected - a post-create provision failure
     # must still reach close() and reap the container it created.
     sandbox = None
     try:
         sandbox = startup_sandbox(cfg, workspace=Path.cwd(),
-                                  refresh=getattr(args, "refresh", False),
                                   state_dir=state_dir)
         return _run_pipeline(cfg, base, registry, state_dir, max_attempts,
                              args, viz_bus, sandbox, resolved_secrets,

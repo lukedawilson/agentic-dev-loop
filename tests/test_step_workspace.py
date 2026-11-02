@@ -21,15 +21,23 @@ def _repo(tmp_path):
     return repo
 
 
-def test_materialise_copies_except_git_and_host_only(tmp_path):
+def test_materialise_skips_gitignored_paths(tmp_path):
     repo = _repo(tmp_path)
     export = tmp_path / "state" / "exports" / "run1"
-    ws = StepWorkspace.materialise(repo, [], "linux", export)
+    ws = StepWorkspace.materialise(repo, [], "linux", export,
+                                   ignored=frozenset({".venv"}))
     assert (export / "src" / "a.py").read_text() == "print('a')"
     assert (export / "docs" / "d.md").exists()
     assert (export / "dirty.txt").read_text() == "dirty working tree"
     assert not (export / ".git").exists()
     assert not (export / ".venv").exists()
+
+def test_materialise_copies_venv_when_not_gitignored(tmp_path):
+    """052: a toolchain dir is engine-invisible - only gitignore excludes it."""
+    repo = _repo(tmp_path)
+    export = tmp_path / "state" / "exports" / "run1"
+    ws = StepWorkspace.materialise(repo, [], "linux", export)
+    assert (export / ".venv" / "x").read_text() == "venv"
 
 
 def test_materialise_preserves_symlinks_without_resolving(tmp_path):
@@ -50,14 +58,6 @@ def test_materialise_preserves_symlinks_without_resolving(tmp_path):
     assert not dangling.exists()
     assert valid.is_symlink()
     assert os.readlink(valid) == "../src/a.py"
-
-
-def test_missing_cache_is_loud(tmp_path):
-    repo = _repo(tmp_path)
-    export = tmp_path / "state" / "exports" / "run1"
-    import pytest
-    with pytest.raises(ValueError, match="does not exist"):
-        StepWorkspace.materialise(repo, ["missing-cache"], "linux", export)
 
 
 def test_cache_mount_targets_pre_created(tmp_path):
@@ -148,12 +148,3 @@ class TestSyncExcludesScratchSemantics:
         ws = StepWorkspace.materialise(repo, [], "linux", export,
                                        excludes=["qa/.artifacts"])
         assert not (export / "qa" / ".artifacts" / "big").exists()
-
-    def test_missing_cache_still_loud_in_planner(self, tmp_path):
-        """The planner keeps its missing-cache guard as a race guard only
-        (startup pre-creates declared caches before it runs)."""
-        repo = self._repo(tmp_path)
-        export = tmp_path / "state" / "exports" / "run1"
-        import pytest as _pytest
-        with _pytest.raises(ValueError, match="does not exist"):
-            StepWorkspace.materialise(repo, ["missing-cache"], "linux", export)

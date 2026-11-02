@@ -63,12 +63,6 @@ class TestRejected:
         with pytest.raises(ValidationError, match=r"\.git"):
             _load(tmp_path, data)
 
-    def test_host_only(self, tmp_path):
-        data = _base()
-        data["merge_on_conflict"] = [".venv"]
-        with pytest.raises(ValidationError, match="host-only"):
-            _load(tmp_path, data)
-
     def test_under_sync_excludes_redundant(self, tmp_path):
         data = _base()
         data["sync_excludes"] = ["scratch"]

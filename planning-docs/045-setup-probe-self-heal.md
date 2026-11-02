@@ -1,4 +1,5 @@
 # Plan 045: Setup-probe self-heal for non-venv cache warmers
+> **Status: SUPERSEDED by 052** (2026-11-02) - the stamp/probe/venv apparatus this plan describes is deleted; setup now runs fresh at the step boundary into the export.
 
 > **Status: COMPLETED**
 

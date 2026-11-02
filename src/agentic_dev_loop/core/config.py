@@ -16,9 +16,6 @@ from agentic_dev_loop.core.paths import _has_wildcards, path_excluded, relative_
 TERMINALS = frozenset({"success", "failure"})
 KNOWN_SECRET_PROVIDERS = frozenset({"env"})
 MOUNT_MODES = frozenset({"rw", "ro"})
-# Host-only dirs a mount path may never name (022): they are masked in
-# the sandbox with a read-only tmpfs, so declaring them would be a decoy.
-HOST_ONLY_MOUNT_DIRS = frozenset({".venv"})
 # The egress preset names the engine ships (BR-9). Config validates the
 # name here; the target data lives in engine/presets.py (preset data,
 # never mechanism - D-2).
@@ -52,8 +49,8 @@ def _validate_mount_path(path: str) -> str:
     """Validate one repo-relative mount path (BR-1.3).
 
     Rejects (loudly) an empty path, an absolute path, ``..`` traversal,
-    any ``.git`` component, and any host-only dir (``.venv``). The path
-    is normalised to forward-slash form and returned.
+    and any ``.git`` component. The path is normalised to forward-slash
+    form and returned.
     """
     if not isinstance(path, str) or not path.strip():
         raise ValueError("mount path must be a non-empty string")
@@ -70,9 +67,6 @@ def _validate_mount_path(path: str) -> str:
         if seg == ".git":
             raise ValueError(
                 f"mount path {path!r} must never name '.git'")
-        if seg in HOST_ONLY_MOUNT_DIRS:
-            raise ValueError(
-                f"mount path {path!r} names the host-only dir {seg!r}")
     return "/".join(parts) if parts else "."
 
 
@@ -80,7 +74,7 @@ def _validate_declared_path(path: str, *, allow_wildcards: bool) -> str:
     """Validate one declared ``caches:``/``sync_excludes:`` entry (028).
 
     Same repo-relative contract as mount paths: non-empty, no absolute paths,
-    no ``..`` traversal, no ``.git`` component, no host-only dir. Wildcard
+    no ``..`` traversal, no ``.git`` component. Wildcard
     entries (``sync_excludes:`` only) skip wildcard segments in the literal
     checks; the literal segments still obey the same rules. The normalised
     forward-slash form is returned.
@@ -102,9 +96,6 @@ def _validate_declared_path(path: str, *, allow_wildcards: bool) -> str:
         if seg == ".git":
             raise ValueError(
                 f"declared path {path!r} must never name '.git'")
-        if seg in HOST_ONLY_MOUNT_DIRS:
-            raise ValueError(
-                f"declared path {path!r} names the host-only dir {seg!r}")
     return "/".join(parts) if parts else "."
 
 
@@ -220,24 +211,32 @@ class SecretSpec(BaseModel):
 class IsolationConfig(BaseModel):
     """Optional `isolation:` section - configures the always-on sandbox (BR-2).
     Absence means opinionated defaults, never unsandboxed behaviour. Unknown
-    keys fail at load (BR-5). `state_dir` is HOST-ONLY (stamps + audit) and is
-    never mounted into the sandbox (Q1)."""
+    keys fail at load (BR-5). `state_dir` is HOST-ONLY (host-side caches +
+    audit) and is never mounted into the sandbox (Q1)."""
 
     model_config = ConfigDict(extra="forbid")
 
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_keys(cls, data: Any) -> Any:
+        """052: removed isolation keys fail loud with a migration message."""
+        if isinstance(data, dict):
+            if "sandbox_venv_dir" in data:
+                raise ValueError(
+                    "isolation.sandbox_venv_dir was removed: venvs are "
+                    "per-run, built by a setup hook into the export; remove "
+                    "this key")
+            if "refresh" in data:
+                raise ValueError(
+                    "isolation.refresh was removed: setup now runs fresh at "
+                    "every step entry with no stamping; remove this key")
+        return data
+
     image: str | None = None            # per-pipeline override (KD-2 ref rules)
-    refresh: bool = False               # force re-provision (NFR-5)
     memory: str | None = None           # override exec container memory
     cpus: float | None = None           # override exec container cpus
     allow_git_mutations: bool = False   # BR-6 knob
-    state_dir: str = "~/.agentic-dev-loop/state"  # stamps + audit (host-only)
-    # 022 relocation opt-in: an out-of-workspace host dir that is bind-mounted
-    # at ``{ws}/.venv-sandbox`` (rw) in both the exec and provision containers,
-    # keeping the workspace free of container venv artifacts. Unset keeps the
-    # legacy workspace-local ``.venv-sandbox`` unchanged. Must resolve outside
-    # the workspace - validated at startup, not load (the workspace is unknown
-    # here).
-    sandbox_venv_dir: str | None = None
+    state_dir: str = "~/.agentic-dev-loop/state"  # host-side caches + audit
     # 023/025: optional host path to a Docker seccomp profile JSON, or a
     # ``bundled:<name>`` sentinel resolved at load to a packaged profile
     # (e.g. ``bundled:chromium-userns``). When set, the exec container runs
@@ -402,8 +401,7 @@ class StepConfig(BaseModel):
     reasoning_effort: ReasoningEffort | None = None
     custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
-    setup: str | None = None  # BR-13: command steps only
-    setup_probe: str | None = None  # 045: consumer probe replacing the venv probe on a warm stamp; requires `setup`; probe text is NOT part of the stamp key (a probe-only change needs --refresh/--clean-stamps)
+    setup: str | None = None  # command or agent steps; runs fresh at each step entry (052)
     forbidden_commands: list[str] = []  # banned-command regex deny-list (036 D1)
     network: bool = False  # per-stage egress (command/agent + sandbox actions; host-side actions reject at registry time)
     # unit-5: per-step mount granularity + egress policy. Empty mounts =
@@ -431,6 +429,16 @@ class StepConfig(BaseModel):
         if self.command is not None:
             return "command"
         return "action"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_removed_keys(cls, data: Any) -> Any:
+        """052: removed step keys fail loud with a migration message."""
+        if isinstance(data, dict) and "setup_probe" in data:
+            raise ValueError(
+                "step setup_probe was removed: setup now runs fresh at every "
+                "step entry with no stamping; remove this key")
+        return data
 
     @field_validator("produces", mode="before")
     @classmethod
@@ -462,13 +470,6 @@ class StepConfig(BaseModel):
     def _nonempty_custom_prompt(cls, v: str | None) -> str | None:
         if v is not None and not v.strip():
             raise ValueError("custom_prompt must be a non-empty string")
-        return v
-
-    @field_validator("setup_probe")
-    @classmethod
-    def _nonempty_setup_probe(cls, v: str | None) -> str | None:
-        if v is not None and not v.strip():
-            raise ValueError("setup_probe must be a non-empty string")
         return v
 
     @model_validator(mode="after")
@@ -566,15 +567,10 @@ class StepConfig(BaseModel):
             raise ValueError(
                 f"step {self.name!r}: 'custom_prompt' requires 'agent'"
             )
-        if (self.setup is not None and self.command is None
-                and self.agent is None and self.brief_inputs is None):
+        if self.setup is not None and self.command is None and self.agent is None:
             raise ValueError(
-                f"step {self.name!r}: 'setup' is only allowed on 'command', "
-                "'agent', or 'brief_inputs' steps"
-            )
-        if self.setup_probe is not None and self.setup is None:
-            raise ValueError(
-                f"step {self.name!r}: 'setup_probe' requires 'setup'"
+                f"step {self.name!r}: 'setup' is only allowed on 'command' or "
+                "'agent' steps (052)"
             )
         if self.secrets and self.action is not None:
             raise ValueError(
@@ -624,11 +620,10 @@ class PipelineConfig(BaseModel):
     # missing-dependency fail-fast.
     deps_policy: str = "locked"
     lockfiles: list[str] = []
-    # 028: pipeline-declared toolchain caches (rw bind-mounts from the real
-    # workspace) and run-wide sync-back excludes (scratch semantics: skipped
-    # from both the export copy and sync-back). Both default to [] - absent
-    # means "no toolchain caches beyond the engine's own sandbox venv" and
-    # "no sync-back excludes".
+    # 028/052: pipeline-declared toolchain caches (rw bind-mounts from the
+    # host-side cache dir ``{isolation.state_dir}/caches/<name>``) and
+    # run-wide sync-back excludes (scratch semantics: skipped from both the
+    # export copy and sync-back). Both default to [].
     caches: list[str] = []
     sync_excludes: list[str] = []
     # 029: append-style logs that sync-back union-merges on a concurrent
@@ -716,25 +711,6 @@ class PipelineConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
-    def _caches_avoid_state_dir(self) -> "PipelineConfig":
-        """028: a declared cache may never name (or sit under) the host-only
-        run-state dir - it would bind-mount the engine's own state into the
-        sandbox as a rw cache."""
-        sd = self.state_dir.strip().rstrip("/\\")
-        if not sd or sd in ("/", "."):
-            return self
-        sd_parts = relative_parts(sd)
-        if not sd_parts:
-            return self
-        for cache in self.caches:
-            cp = relative_parts(cache)
-            if cp[:len(sd_parts)] == sd_parts:
-                raise ValueError(
-                    f"cache path {cache!r} names the host-only state_dir "
-                    f"{self.state_dir!r}")
-        return self
-
-    @model_validator(mode="after")
     def _mounts_avoid_caches(self) -> "PipelineConfig":
         """028/BR-1.3: a step mount equal to or under a declared cache is
         rejected - the rw cache submount would silently defeat a declared
@@ -797,21 +773,6 @@ class PipelineConfig(BaseModel):
                         f"merge_on_conflict entry {merge!r} is redundant: it is "
                         f"already excluded by sync_excludes entry "
                         f"{('/'.join(ep))!r}")
-        return self
-
-    @model_validator(mode="after")
-    def _sandbox_venv_not_declared_cache(self) -> "PipelineConfig":
-        """028: the sandbox venv is engine infrastructure, never author data.
-        Declaring ``.venv-sandbox`` in ``caches:`` while the 022 relocation
-        (``isolation.sandbox_venv_dir``) is set is a contradiction."""
-        if self.isolation is None or self.isolation.sandbox_venv_dir is None:
-            return self
-        for cache in self.caches:
-            if relative_parts(cache) == (".venv-sandbox",):
-                raise ValueError(
-                    "declaring '.venv-sandbox' in 'caches:' contradicts "
-                    "'isolation.sandbox_venv_dir' - the sandbox venv is "
-                    "relocated outside the workspace (022)")
         return self
 
     @model_validator(mode="after")

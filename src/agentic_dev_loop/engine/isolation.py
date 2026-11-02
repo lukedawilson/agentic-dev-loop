@@ -4,16 +4,13 @@ The two agent-influence channels - the ``terminal`` tool and command steps -
 run inside a Docker-based, kernel-level sandbox that is always on (FD-4).
 ``Sandbox`` is the retained extension seam; ``DockerBackend`` is the single
 concrete implementation (user directive 2026-10-19). Everything else here is
-either pure translation logic (the PBT-03 targets) or host-side audit/stamp
-helpers.
+either pure translation logic (the PBT-03 targets) or host-side helpers.
 
-Host-only vs sandboxed: the sandbox mount set is {workspace} plus the
-host-only mask mounts (022): a read-only empty tmpfs at ``{ws}/.venv`` so the
-host's throwaway venv can never be written from inside the sandbox. When
-``isolation.sandbox_venv_dir`` relocates the sandbox venv, one extra rw bind
-mount at ``{ws}/.venv-sandbox`` is added (opt-in). The isolation state dir
-(stamps + audit JSONL) and the pipeline run-state dir (checkpoint DB +
-last-error.md) are never mounted - sandboxed code cannot reach them.
+The sandbox mounts the per-run export (a .git-free copy of the repo's product
+files) plus host-side cache bind-mounts (052); the real repo is never mounted.
+The isolation state dir (host-side caches + audit JSONL) and the pipeline
+run-state dir (checkpoint DB + last-error.md) are never mounted - sandboxed
+code cannot reach them. Setup hooks run fresh, per step entry, into the export.
 """
 
 from __future__ import annotations
@@ -78,18 +75,6 @@ AUDIT_MAX_BYTES = 5 * 1024 * 1024
 # Provision is a trusted install/build - give it a generous hard bound so a
 # hung `setup:` hook can never wedge startup (BR-8 fail fast, not a hang).
 PROVISION_TIMEOUT_SECONDS = 3600
-
-# The sandbox venv the shipped pipeline relies on (016 sandbox-venv
-# hardening). The engine probes this path INSIDE the exec container
-# before trusting a warm provision stamp - a host-built (darwin) venv
-# symlinks to a host interpreter that does not exist in the Linux
-# container, so it must be detected and re-provisioned there.
-SANDBOX_VENV_DIR = ".venv-sandbox"
-SANDBOX_VENV_PYTHON = ".venv-sandbox/bin/python"
-# Host-only dirs masked inside the sandbox (022): each gets a read-only empty
-# tmpfs submount at ``{ws}/<dir>`` so agents fail loudly on any write instead
-# of silently mutating a host-owned throwaway venv.
-HOST_ONLY_DIRS = (".venv",)
 
 # 030 infra-failure classifier + orphan-container reaper (D1/D4).
 _EIO_PATTERN = re.compile(r"input/output error|I/O error", re.IGNORECASE)
@@ -485,178 +470,6 @@ def translate_mount_path(path: str) -> str:
     return str(p)
 
 
-def resolve_sandbox_venv_dir(sandbox_venv_dir: str | None,
-                             workspace: str | Path) -> str | None:
-    """Resolve the opt-in relocated sandbox venv (022).
-
-    ``None`` keeps the legacy workspace-local ``.venv-sandbox`` (bit-compatible
-    default - payloads are unchanged). A set value is expanduser + absolute and
-    must resolve OUTSIDE the workspace: an in-workspace value defeats the whole
-    relocation and fails loud (AE-SBX-015).
-    """
-    if sandbox_venv_dir is None:
-        return None
-    resolved = Path(translate_mount_path(sandbox_venv_dir))
-    ws = Path(translate_mount_path(os.fspath(workspace)))
-    if resolved == ws or ws in resolved.parents:
-        raise SandboxError(
-            f"AE-SBX-015: isolation.sandbox_venv_dir {resolved!r} must resolve "
-            "outside the workspace - an in-workspace value defeats the 022 "
-            "relocation (docs/setup.md §3)")
-    return str(resolved)
-
-
-def setup_stamp_key(setup_cmd: str, lockfile_hashes: dict[str, str]) -> str:
-    """sha256 hex of canonical JSON {setup_cmd, lockfiles: sorted hashes}."""
-    canonical = {
-        "setup_cmd": setup_cmd,
-        "lockfiles": {k: lockfile_hashes[k] for k in sorted(lockfile_hashes)},
-    }
-    return hashlib.sha256(
-        json.dumps(canonical, sort_keys=True).encode("utf-8")).hexdigest()
-
-
-def venv_probe_command() -> str:
-    """In-container probe classifying the sandbox venv (016 self-heal).
-
-    Returns a shell command that prints exactly one of ``valid`` /
-    ``missing`` / ``broken`` and exits 0. ``broken`` is the host-tampered
-    class: the python entry exists as a path (including a dangling symlink -
-    the host-darwin venv case) but is not executable/importable in the
-    container. ``missing`` means no such entry at all (the setup hook may
-    legitimately not create a venv), so it is treated as a stamp hit, never a
-    self-heal trigger.
-    """
-    py = shlex.quote(SANDBOX_VENV_PYTHON)
-    return (
-        f"if [ -L {py} ] && [ ! -x {py} ]; then echo broken; "
-        f"elif [ ! -e {py} ]; then echo missing; "
-        f"elif {py} -c 'import sys' >/dev/null 2>&1; then echo valid; "
-        f"else echo broken; fi"
-    )
-
-
-def probe_argv(probe_cmd: str, container: str, workspace: str) -> list[str]:
-    """``docker exec`` argv that runs an arbitrary in-container probe command
-    (045) inside the already-running execution container against the
-    bind-mounted workspace. ``probe_cmd`` is a consumer-authored shell command
-    string passed verbatim to ``/bin/sh -c``."""
-    return ["docker", "exec", "-w", workspace, container,
-            "/bin/sh", "-c", probe_cmd]
-
-
-def venv_probe_argv(container: str, workspace: str) -> list[str]:
-    """``docker exec`` argv that runs the venv probe inside the (already
-    running) execution container against the bind-mounted workspace."""
-    return probe_argv(venv_probe_command(), container, workspace)
-
-
-def venv_probe_state(stdout: str, exit_code: int | None) -> str:
-    """Classify a probe result. A nonzero exit (docker exec failed) is
-    ``unknown`` - the caller leaves the stamp alone rather than guessing."""
-    if exit_code != 0:
-        return "unknown"
-    line = stdout.strip().splitlines()[-1] if stdout.strip() else ""
-    return line if line in ("valid", "missing", "broken") else "unknown"
-
-
-def _clear_dir_contents(path: Path) -> None:
-    """Delete every entry under ``path``, keeping ``path`` itself. The 022
-    relocated venv is the bind-mount source for the still-running execution
-    container, so the source dir must survive removal (deleting it would leave
-    the container pointed at a stale inode)."""
-    if not path.exists():
-        return
-    for child in path.iterdir():
-        if child.is_symlink() or child.is_file():
-            child.unlink()
-        elif child.is_dir():
-            shutil.rmtree(child)
-
-
-def remove_sandbox_venv(workspace: str | Path, *,
-                        sandbox_venv_dir: str | None = None) -> None:
-    """Remove the sandbox venv before re-provision (016 self-heal). Fails loud
-    when the venv exists but cannot be removed - a silent skip would re-create
-    the ENOENT failure the next run.
-
-    With the 022 relocation opt-in (``sandbox_venv_dir``), the venv lives at
-    that host path and is the source of a live bind mount in the execution
-    container - so only its CONTENTS are removed (the mount source dir stays),
-    leaving the container's ``{ws}/.venv-sandbox`` mount valid for re-provision.
-    The default (unset) path removes the whole workspace-local dir as before.
-    """
-    if sandbox_venv_dir is not None:
-        venv = Path(sandbox_venv_dir)
-        try:
-            if venv.is_symlink() or venv.is_file():
-                venv.unlink()
-            elif venv.is_dir():
-                _clear_dir_contents(venv)
-        except OSError as e:
-            raise SandboxError(
-                f"AE-SBX-014: cannot remove invalid sandbox venv at {venv}: {e} "
-                f"- remove it manually and re-run (docs/setup.md §5)") from e
-        return
-    venv = Path(workspace) / SANDBOX_VENV_DIR
-    try:
-        if venv.is_symlink() or venv.is_file():
-            venv.unlink()
-        elif venv.is_dir():
-            shutil.rmtree(venv)
-    except OSError as e:
-        raise SandboxError(
-            f"AE-SBX-014: cannot remove invalid sandbox venv at {venv}: {e} "
-            f"- remove it manually and re-run (docs/setup.md §5)") from e
-
-
-def repair_venv_shebangs(venv_dir: str | Path, *,
-                           state_dir: str | Path,
-                           export_root: str | Path) -> None:
-    """Repair stale export-path shebangs in a sandbox venv (028).
-
-    Each run materialises a fresh export under ``state_dir/exports/<uuid>/``,
-    so a venv built by an earlier run carries console-script shebangs that bake
-    that (now dead) export path. Rewrite every regular file under
-    ``<venv_dir>/bin/`` whose first line starts with ``#!`` and points at a
-    dead ``state_dir/exports/`` path to the current run's venv python
-    (``{export_root}/.venv-sandbox/bin/python``). Symlinks and files without a
-    shebang are left alone; idempotent; host-side, before any exec.
-    """
-    bin_dir = Path(venv_dir) / "bin"
-    if not bin_dir.is_dir():
-        return
-    target = str(Path(export_root) / SANDBOX_VENV_DIR / "bin" / "python")
-    stale_prefix = (Path(state_dir) / "exports").as_posix() + "/"
-    for entry in sorted(bin_dir.iterdir()):
-        if entry.is_symlink() or not entry.is_file():
-            continue
-        try:
-            with entry.open("rb") as fh:
-                first = fh.readline(256)
-        except OSError:
-            continue
-        if not first.startswith(b"#!"):
-            continue
-        line = first.decode("utf-8", errors="replace").rstrip("\n").rstrip("\r")
-        interpreter = line[2:].strip()
-        if not interpreter or interpreter == target:
-            continue
-        if not interpreter.replace("\\", "/").startswith(stale_prefix):
-            continue
-        _rewrite_shebang(entry, target)
-
-
-def _rewrite_shebang(path: Path, target: str) -> None:
-    """Replace only the first line of a regular file, preserving the rest."""
-    data = path.read_bytes()
-    nl = data.find(b"\n")
-    if nl == -1:
-        return
-    body = data[nl + 1:]
-    path.write_bytes(f"#!{target}\n".encode("utf-8") + body)
-
-
 def host_user_flag() -> str | None:
     """The ``docker --user`` value binding the sandbox to the host user.
 
@@ -678,28 +491,9 @@ def exec_container_name(run_id: str, network: bool = False) -> str:
     return f"{run_id}-exec-net" if network else f"{run_id}-exec"
 
 
-def _sandbox_mounts(workspace: str, sandbox_venv_dir: str | None) -> list[str]:
-    """The mount segment shared by the exec and provision payloads (022).
-
-    ``{workspace}`` rw is always first; each host-only dir is then shadowed by
-    a read-only empty tmpfs submount (Docker cannot exclude a subdirectory of a
-    bind - a submount is the only way to hide it, and ``ro`` makes any write
-    attempt fail loudly instead of silently succeeding against a decoy). When
-    ``sandbox_venv_dir`` relocates the sandbox venv, one rw bind mount maps it
-    to the unchanged container path ``{ws}/.venv-sandbox``.
-    """
-    mounts = ["-v", f"{workspace}:{workspace}"]
-    for host_only in HOST_ONLY_DIRS:
-        mounts += ["--tmpfs", f"{workspace}/{host_only}:ro"]
-    if sandbox_venv_dir is not None:
-        mounts += ["-v", f"{sandbox_venv_dir}:{workspace}/{SANDBOX_VENV_DIR}"]
-    return mounts
-
-
 def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           workspace: str, network: bool = False,
                           network_name: str | None = None,
-                          sandbox_venv_dir: str | None = None,
                           seccomp_profile: str | None = None,
                           mount_set: MountSet | None = None,
                           export_root: str | None = None,
@@ -707,17 +501,18 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
                           egress_proxy: str | None = None,
                           name: str | None = None) -> list[str]:
     """Exact ``docker run -d --rm`` argv for the execution container (§3.3, KD-8).
-    Mount set {workspace} + host-only masks (022); ``--network none`` (the
-    per-run internal network when ``network`` is true - 038), --read-only,
-    --cap-drop ALL; --user host uid:gid (host-owned bind mounts, AE-SBX-009
-    root cause) with HOME=/tmp (the rootfs is read-only; /tmp is a 1777 tmpfs).
-    ``--rm`` lets the daemon auto-remove the container the instant it exits,
-    however it exits (D1) - a SIGKILLed CLI never reaches close().
+    Mount set {export root} + declared caches (or {workspace} in the legacy
+    model); ``--network none`` (the per-run internal network when ``network``
+    is true - 038), --read-only, --cap-drop ALL; --user host uid:gid
+    (host-owned bind mounts, AE-SBX-009 root cause) with HOME=/tmp (the rootfs
+    is read-only; /tmp is a 1777 tmpfs). ``--rm`` lets the daemon auto-remove
+    the container the instant it exits, however it exits (D1) - a SIGKILLed
+    CLI never reaches close().
 
     ``seccomp_profile`` (023) is a host path to a seccomp profile JSON; when
-    set it replaces Docker's default profile (which blocks the userns syscalls
-    Chromium's namespace sandbox needs under --cap-drop ALL). Chromium's
-    zygote also chroots /proc/self/fdinfo at startup, which needs
+    set it replaces docker's default profile (which blocks the userns
+    syscalls Chromium's namespace sandbox needs under --cap-drop ALL).
+    Chromium's zygote also chroots /proc/self/fdinfo at startup, which needs
     CAP_SYS_CHROOT; the profile gates chroot(2) on exactly that capability,
     so the payload adds it back (the bounding set is otherwise empty under
     --cap-drop ALL). Without the cap the zygote dies even with the profile
@@ -754,17 +549,14 @@ def docker_create_payload(*, run_id: str, image: str, profile: EffectiveProfile,
     if export_root is not None:
         root = export_root
         payload.extend(mount_set_docker_flags(root, mount_set or MountSet()))
-        # Declared cache paths bind-mount rw from the real workspace at the
-        # same relative paths inside the export (BR-3/F2); the relocated
-        # sandbox venv (022) maps into the export's `.venv-sandbox`.
+        # Declared cache paths bind-mount rw from the host-side cache dir at
+        # the same relative paths inside the export (BR-3/F2/052).
         for source, target, _mode in (cache_mounts or []):
             payload += ["-v", f"{source}:{target}"]
-        if sandbox_venv_dir is not None:
-            payload += ["-v", f"{sandbox_venv_dir}:{root}/{SANDBOX_VENV_DIR}"]
         workdir = root
     else:
         root = workspace
-        payload.extend(_sandbox_mounts(workspace, sandbox_venv_dir))
+        payload += ["-v", f"{workspace}:{workspace}"]
         workdir = workspace
     payload.extend([
         "--workdir", workdir,
@@ -818,16 +610,16 @@ def docker_proxy_payload(*, run_id: str, image: str, name: str,
     return payload
 
 
-def docker_provision_payload(*, run_id: str, image: str, workspace: str,
+def docker_provision_payload(*, run_id: str, image: str, export_root: str,
                              setup_cmd: str,
-                             sandbox_venv_dir: str | None = None,
                              cache_mounts: list[tuple[str, str, str]]
-                             | None = None) -> list[str]:
-    """Exact ``docker run --rm`` argv for the provision container (§3.4).
-    Network ON (default bridge), rw rootfs, --cap-drop ALL, mount set
-    {workspace} + host-only masks (022) + the declared cache paths (028, rw
-    bind mounts so a ``setup:`` hook can warm them); --user host uid:gid
-    (AE-SBX-009) with HOME=/tmp."""
+                             | None = None,
+                             env: dict[str, str] | None = None) -> list[str]:
+    """Exact ``docker run --rm`` argv for the one-shot provision container
+    (052). Network ON (default bridge), rw rootfs, --cap-drop ALL, mount the
+    export root rw + the host-side cache bind-mounts; workdir = export root;
+    the declaring step's env block is injected so cache/registry env vars
+    resolve during setup; --user host uid:gid (AE-SBX-009) with HOME=/tmp."""
     payload = [
         "docker", "run", "--rm", "--name", f"{run_id}-provision",
         "--network", "bridge", "--cap-drop", "ALL",
@@ -836,11 +628,13 @@ def docker_provision_payload(*, run_id: str, image: str, workspace: str,
     user = host_user_flag()
     if user is not None:
         payload.extend(["--user", user, "--env", "HOME=/tmp"])
-    payload.extend(_sandbox_mounts(workspace, sandbox_venv_dir))
+    for key, value in (env or {}).items():
+        payload += ["--env", f"{key}={value}"]
+    payload += ["-v", f"{export_root}:{export_root}"]
     for source, target, _mode in (cache_mounts or []):
         payload += ["-v", f"{source}:{target}"]
     payload.extend([
-        "--workdir", workspace,
+        "--workdir", export_root,
         image, "sh", "-c", setup_cmd,
     ])
     return payload
@@ -875,14 +669,14 @@ class CmdResult:
 
 class CommandRunner(Protocol):
     def run(self, argv: list[str], *, timeout: float | None,
-            check: bool = False) -> CmdResult: ...
+            check: bool = False, input: str | None = None) -> CmdResult: ...
 
 
 def _run_subprocess(argv: list[str], *, timeout: float | None = None,
-                    check: bool = False) -> CmdResult:
+                    check: bool = False, input: str | None = None) -> CmdResult:
     try:
         proc = subprocess.run(argv, capture_output=True, text=True,
-                              timeout=timeout, check=check)
+                              timeout=timeout, check=check, input=input)
         return CmdResult(exit_code=proc.returncode, stdout=proc.stdout,
                          stderr=proc.stderr)
     except subprocess.TimeoutExpired as e:
@@ -895,8 +689,8 @@ class SubprocessRunner:
     """The real subprocess-based docker CLI runner (the default)."""
 
     def run(self, argv: list[str], *, timeout: float | None = None,
-            check: bool = False) -> CmdResult:
-        return _run_subprocess(argv, timeout=timeout, check=check)
+            check: bool = False, input: str | None = None) -> CmdResult:
+        return _run_subprocess(argv, timeout=timeout, check=check, input=input)
 
 
 _default_runner = SubprocessRunner()
@@ -913,6 +707,12 @@ class Sandbox(ABC):
 
     @abstractmethod
     def close(self) -> None: ...
+
+    def provision(self, setup_cmd: str, *,
+                  env: dict[str, str] | None = None) -> None:
+        """Run a setup hook at the step boundary (052). The default is a no-op
+        so fakes and legacy backends without setup stay compatible."""
+        return None
 
     @property
     def infra_error(self) -> SandboxError | None:
@@ -946,12 +746,13 @@ class DockerBackend(Sandbox):
 
     def __init__(self, *, image: str, workspace: str, iso_state_dir: str,
                  profile: EffectiveProfile, runner: CommandRunner | None = None,
-                 network: bool = False, sandbox_venv_dir: str | None = None,
+                 network: bool = False,
                  seccomp_profile: str | None = None,
                  export_root: str | None = None,
                  cache_mounts: list[tuple[str, str, str]] | None = None,
                  sync_excludes: list[str] | None = None,
                  merge_on_conflict: list[str] | None = None,
+                 ignored: frozenset[str] | set[str] = frozenset(),
                  dial_rewrites: dict[str, str] | None = None):
         self._image = image
         self._workspace = workspace
@@ -969,7 +770,6 @@ class DockerBackend(Sandbox):
         self._proxy_ips: dict[str, str] = {}
         self._egress_events_path = egress_events_path(self._iso_state_dir,
                                                       self._run_id)
-        self._sandbox_venv_dir = sandbox_venv_dir  # 022 relocated venv (opt-in)
         self._seccomp_profile = seccomp_profile  # 023 userns allowlist (opt-in)
         # unit-5: the .git-free export + its cache bind-mounts (BR-2/BR-3).
         # None keeps the legacy workspace-mount model (integration tests).
@@ -993,12 +793,7 @@ class DockerBackend(Sandbox):
         self._baseline: dict[str, str] = {}
         # The profile-keyed pool (D-1/BR-10): profile key -> running container.
         self._pool: dict[tuple[str, bool], _ProfileContainer] = {}
-        if sandbox_venv_dir is not None:
-            # 022: the relocated venv dir is a bind-mount source. On native
-            # Linux, Docker auto-creates a missing source as root, which the
-            # --user uid:gid containers then cannot write (the AE-SBX-009
-            # ownership class). Pre-create it host-side so it is uid-owned.
-            Path(sandbox_venv_dir).mkdir(parents=True, exist_ok=True)
+        self._ignored = frozenset(ignored)  # gitignored paths (052)
         self._started = False
         self._network_started = False
         # 030: the first classified infra failure, sticky for the rest of the
@@ -1050,10 +845,9 @@ class DockerBackend(Sandbox):
         separate ``docker start``.
 
         With an export (unit-5) this creates only the base network-none
-        container (the .git-free export, whole-tree rw) that serves the venv
-        probe (016) and the legacy default path; step execution then uses the
-        profile-keyed pool (D-1). Without an export the legacy two-container
-        model is retained (integration tests, no enforcement)."""
+        container (the .git-free export, whole-tree rw); step execution then
+        uses the profile-keyed pool (D-1). Without an export the legacy
+        two-container model is retained (integration tests, no enforcement)."""
         if self._network_enabled:
             self._ensure_run_network()
         if self._export_root is not None:
@@ -1062,8 +856,7 @@ class DockerBackend(Sandbox):
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=False,
-            sandbox_venv_dir=self._sandbox_venv_dir,
-            seccomp_profile=self._seccomp_profile)
+                        seccomp_profile=self._seccomp_profile)
         self._register_container(self._container)
         res = self._runner.run(payload, timeout=60)
         if res.exit_code != 0:
@@ -1077,8 +870,7 @@ class DockerBackend(Sandbox):
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=True,
             network_name=self._run_net,
-            sandbox_venv_dir=self._sandbox_venv_dir,
-            seccomp_profile=self._seccomp_profile)
+                        seccomp_profile=self._seccomp_profile)
         self._register_container(self._network_container)
         net_res = self._runner.run(net_payload, timeout=60)
         if net_res.exit_code != 0:
@@ -1127,8 +919,7 @@ class DockerBackend(Sandbox):
         payload = docker_create_payload(
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=False,
-            sandbox_venv_dir=self._sandbox_venv_dir,
-            seccomp_profile=self._seccomp_profile,
+                        seccomp_profile=self._seccomp_profile,
             mount_set=base, export_root=self._export_root,
             cache_mounts=self._cache_mounts)
         self._register_container(self._container)
@@ -1143,57 +934,26 @@ class DockerBackend(Sandbox):
                                        self._cache_paths,
                                        self._sync_excludes)
 
-    def provision(self, setup_cmd: str, stamp_key: str, stamp_dir: str,
-                  force: bool, setup_probe: str | None = None) -> None:
-        """Run one ``setup:`` hook in the provision container (network ON),
-        stamp-cached. Nonzero exit → AE-SBX-009, no stamp written.
-
-        016 self-heal: a warm stamp no longer blind-skips. Before trusting it,
-        probe the sandbox venv inside the exec container - a host-built venv
-        (darwin symlinks to a host interpreter) looks valid on the host but is
-        broken in the Linux container. A ``broken`` probe removes the venv
-        (fail loud if removal is impossible) and falls through to re-provision;
-        ``valid``/``missing``/``unknown`` keep the stamp skip.
-
-        045: when ``setup_probe`` is set it replaces the venv probe for this
-        hook. Exit 0 trusts the stamp (skip); any nonzero - a broken artifact
-        or a failed probe run - falls through to re-provision (fail toward
-        freshness).
-        """
-        if not force and read_stamp(Path(stamp_dir), stamp_key):
-            if setup_probe is not None:
-                if self._probe(setup_probe).exit_code == 0:
-                    return
-            else:
-                if self._probe_venv() != "broken":
-                    return
-                remove_sandbox_venv(self._workspace,
-                                    sandbox_venv_dir=self._sandbox_venv_dir)
+    def provision(self, setup_cmd: str, *,
+                  env: dict[str, str] | None = None) -> None:
+        """Run one ``setup:`` hook in the one-shot provision container (052),
+        targeting the export root. Fresh every time - no stamping, no probes.
+        Nonzero exit -> AE-SBX-009 (loud halt)."""
+        if self._export_root is None:
+            raise SandboxError(
+                "AE-SBX-017: provision needs the .git-free export, which was "
+                "not materialised - the runtime must materialise an export "
+                "before setup (BR-2)")
         payload = docker_provision_payload(
-            run_id=self._run_id, image=self._image, workspace=self._workspace,
-            setup_cmd=setup_cmd, sandbox_venv_dir=self._sandbox_venv_dir,
-            cache_mounts=self._cache_mounts)
+            run_id=self._run_id, image=self._image, export_root=self._export_root,
+            setup_cmd=setup_cmd, cache_mounts=self._cache_mounts, env=env)
         res = self._runner.run(payload, timeout=PROVISION_TIMEOUT_SECONDS)
         if res.exit_code != 0:
             tail = (res.stdout or res.stderr or "")[-4000:]
             raise SandboxError(
                 f"AE-SBX-009: setup command failed (exit {res.exit_code}): {tail} "
-                f"- stamp not written (docs/setup.md §5)")
-        write_stamp(Path(stamp_dir), stamp_key)
+                f"(docs/setup.md §5)")
 
-    def _probe(self, probe_cmd: str) -> CmdResult:
-        """Run an arbitrary in-container probe command (045). The workdir
-        follows the export root when one is materialised, else the workspace."""
-        workdir = self._export_root or self._workspace
-        return self._runner.run(
-            probe_argv(probe_cmd, self._container, workdir), timeout=30)
-
-    def _probe_venv(self) -> str:
-        """Run the in-container venv probe and classify it (016 self-heal).
-        With an export the venv is mounted at ``{export}/.venv-sandbox``, so
-        the probe workdir follows the export root."""
-        res = self._probe(venv_probe_command())
-        return venv_probe_state(res.stdout, res.exit_code)
 
     # -- execution ----------------------------------------------------------
 
@@ -1319,8 +1079,7 @@ class DockerBackend(Sandbox):
             run_id=self._run_id, image=self._image, profile=self._profile,
             workspace=self._workspace, network=network,
             network_name=self._run_net if network else None,
-            sandbox_venv_dir=self._sandbox_venv_dir,
-            seccomp_profile=self._seccomp_profile,
+                        seccomp_profile=self._seccomp_profile,
             mount_set=mount_set, export_root=self._export_root,
             cache_mounts=self._cache_mounts, egress_proxy=proxy_url_value,
             name=name)
@@ -1488,11 +1247,14 @@ class DockerBackend(Sandbox):
         export is reset to it), and then still raises AE-SBX-016 scoped to
         those hard paths, so the next sync-back runs clean. Merge paths are
         union-merged first, before any hard-conflict raise."""
+        ignored = resolve_ignored_paths(self._workspace, runner=self._runner,
+                                        walk_root=self._export_root)
         report: SyncBackReport = sync_back(
             self._export_root, self._workspace, list(mount_set.rw_paths()),
             baseline=self._baseline, step_id=None,
             cache_paths=self._cache_paths, excludes=self._sync_excludes,
-            merge_on_conflict=self._merge_on_conflict, allowlist=allowlist)
+            merge_on_conflict=self._merge_on_conflict, allowlist=allowlist,
+            ignored=ignored)
 
         # 036 lane boundary (v1): fail the step before any copy/delete/merge
         # so an out-of-lane write is never promoted into the real repo.
@@ -1724,7 +1486,7 @@ def _is_transient_pull_error(res: CmdResult) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Audit + stamps (host-side only)
+# Audit (host-side only)
 # ---------------------------------------------------------------------------
 
 
@@ -1764,26 +1526,6 @@ def merge_egress_events(state_dir: Path, events_path: Path) -> int:
     except OSError:
         pass
     return count
-
-
-def read_stamp(stamp_dir: Path, stamp_key: str) -> bool:
-    return (Path(stamp_dir) / stamp_key).exists()
-
-
-def write_stamp(stamp_dir: Path, stamp_key: str) -> None:
-    d = Path(stamp_dir)
-    d.mkdir(parents=True, exist_ok=True)
-    (d / stamp_key).touch()
-
-
-def clean_stamps(state_dir: Path) -> int:
-    stamps = Path(state_dir) / "stamps"
-    if not stamps.is_dir():
-        return 0
-    files = list(stamps.iterdir())
-    for f in files:
-        f.unlink()
-    return len(files)
 
 
 # ---------------------------------------------------------------------------
@@ -1954,46 +1696,53 @@ def reap_orphaned_containers(state_dir: str | Path,
 # Eager startup (Q2) - probe → image → run -d --rm → provision all setups
 # ---------------------------------------------------------------------------
 
-_LOCKFILE_NAMES = ("package-lock.json", "requirements.txt")
-_SKIP_DIRS = {".git", ".venv", ".venv-sandbox", "node_modules", "__pycache__",
-              ".pytest_cache", ".hypothesis"}
-
-
-def _lockfile_hashes(workspace: Path) -> dict[str, str]:
-    result: dict[str, str] = {}
-    root = Path(workspace)
-    for name in _LOCKFILE_NAMES:
-        for p in root.rglob(name):
-            if _skip_scan_path(p, root):
-                continue
-            result[str(p.relative_to(root))] = _file_digest(p)
-    for p in root.rglob("*.csproj"):
-        if _skip_scan_path(p, root):
-            continue
-        result[str(p.relative_to(root))] = _file_digest(p)
-    return result
-
-
-def _skip_scan_path(p: Path, root: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in p.relative_to(root).parts)
-
-
-def _file_digest(p: Path) -> str:
-    return hashlib.sha256(p.read_bytes()).hexdigest()
-
-
-def _declared_setups(cfg: PipelineConfig, workspace: Path):
-    hashes = _lockfile_hashes(workspace)
-    for step in cfg.steps:
-        if step.setup is not None and (
-            step.command is not None or step.agent is not None
-        ):
-            yield (step.setup, setup_stamp_key(step.setup, hashes),
-                   step.setup_probe)
+def resolve_ignored_paths(repo: str | Path,
+                         runner: CommandRunner | None = None,
+                         walk_root: str | Path | None = None) -> frozenset[str]:
+    """Resolve the repo's ignored-path set host-side (052) via
+    ``git check-ignore --stdin -z`` - covers ``.gitignore``,
+    ``.git/info/exclude``, and global excludes, with default index-aware
+    semantics (a tracked file is never ignored even if a pattern matches).
+    One git subprocess, all candidate paths batched over stdin. ``walk_root``
+    is the tree whose paths are checked (the export at sync-back time, so
+    gitignored dirs created mid-run are caught); ``repo`` is always the git
+    repository the ignore rules come from. A missing git or a non-repo
+    workspace is a loud failure (never silently degraded)."""
+    repo = Path(repo)
+    walk = Path(walk_root) if walk_root is not None else repo
+    runner = runner or _default_runner
+    candidates: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(walk):
+        dirnames[:] = [x for x in dirnames if x != ".git"]
+        rel_dir = Path(dirpath).relative_to(walk)
+        prefix = rel_dir.as_posix()
+        if prefix == ".":
+            prefix = ""
+        for x in dirnames:
+            candidates.append(f"{prefix}/{x}" if prefix else x)
+        for x in filenames:
+            candidates.append(f"{prefix}/{x}" if prefix else x)
+    if not candidates:
+        return frozenset()
+    payload = "\0".join(candidates) + "\0"
+    res = runner.run(
+        ["git", "-C", str(repo), "check-ignore", "--stdin", "-z"],
+        input=payload, timeout=60)
+    if res.exit_code not in (0, 1):
+        raise SandboxError(
+            "git check-ignore failed - the workspace must be a git repository "
+            "with git on PATH (git said: "
+            f"{res.stderr.strip() or res.stdout.strip()})")
+    ignored: set[str] = set()
+    for token in res.stdout.split("\0"):
+        token = token.replace("\\", "/").rstrip("/")
+        if token:
+            ignored.add(token)
+    return frozenset(ignored)
 
 
 def isolation_state_dir(cfg: PipelineConfig) -> Path:
-    """The resolved host-only isolation state dir (stamps + audit)."""
+    """The resolved host-only isolation state dir (host-side caches + audit)."""
     iso = cfg.isolation or IsolationConfig()
     return Path(iso.state_dir).expanduser()
 
@@ -2034,19 +1783,18 @@ def _announce(msg: str) -> None:
 def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
                     state_dir: str | Path,
                     runner: CommandRunner | None = None,
-                    refresh: bool | None = None,
                     dial_rewrites: dict[str, str] | None = None) -> Sandbox:
-    """Eager startup sequence (Q2): probe → image → materialise export →
-    backend → ensure_image → create+start → pre-provision every declared setup
-    (stamp-cached).
+    """Startup sequence (052): probe -> image -> reap -> resolve gitignored
+    paths -> materialise export -> create host-side caches -> backend ->
+    ensure_image -> create+start exec container. No setup runs here: each step
+    entry provisions its own setup hook, fresh, into the export (052).
 
     ``state_dir`` (the run state dir) hosts the .git-free export under
-    ``exports/<run-id>/``, materialised here (BR-2/BR-3). It is required:
-    the runtime always resolves a mount set for steps, and enforcement needs
-    the export (AE-SBX-017), so there is no legacy fallback through this
-    entry point. The legacy workspace model is reachable only through the
-    direct Sandbox API (DockerBackend without an export + requests carrying
-    ``mount_set=None``), which is integration-tests-only."""
+    ``exports/<run-id>/``, materialised here (BR-2/BR-3). Host-side caches live
+    under ``{isolation.state_dir}/caches/<name>``. The legacy workspace model is
+    reachable only through the direct Sandbox API (DockerBackend without an
+    export + requests carrying ``mount_set=None``), which is
+    integration-tests-only."""
     seccomp_profile = resolved_seccomp_profile(cfg)
     _announce("probing docker daemon...")
     probe_docker(runner)
@@ -2057,42 +1805,35 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
     # creating anything new (exact registry + pid liveness, never heuristics).
     reap_orphaned_containers(iso_state_dir, runner)
     needs_network = any(step.network for step in cfg.steps)
-    sandbox_venv_dir = resolve_sandbox_venv_dir(
-        cfg.isolation.sandbox_venv_dir if cfg.isolation else None, workspace)
+
+    # 052: gitignored paths are the scratch definition - resolved host-side,
+    # once, batched over stdin, and passed into the pure planners.
+    ignored = resolve_ignored_paths(workspace, runner)
+
+    # 052: host-side caches. Each declared cache resolves to
+    # {isolation.state_dir}/caches/<name>, mkdir -p'd host-side (idempotent).
+    cache_host_root = iso_state_dir / "caches"
+    for cache in cfg.caches:
+        (cache_host_root / cache).mkdir(parents=True, exist_ok=True)
 
     export_root = str(Path(state_dir) / "exports" / uuid.uuid4().hex)
-    # 028: cache paths are pipeline-author data (``caches:``), plus the engine's
-    # own sandbox venv when it is not relocated (016/022 behaviour - the venv
-    # is a cache only once it exists). Declared-but-missing caches are
-    # auto-created host-side (uid-owned, empty) before export planning, so the
-    # missing-cache guard in plan_step_workspace stays a race guard only.
-    cache_paths = list(cfg.caches)
-    if sandbox_venv_dir is None and (workspace / SANDBOX_VENV_DIR).is_dir():
-        if SANDBOX_VENV_DIR not in cache_paths:
-            cache_paths.append(SANDBOX_VENV_DIR)
-    for cache in cfg.caches:
-        (workspace / cache).mkdir(parents=True, exist_ok=True)
     _announce("materialising workspace export...")
     ws = StepWorkspace.materialise(
-        workspace, cache_paths, sys.platform, export_root,
-        state_dir=str(state_dir), excludes=list(cfg.sync_excludes))
+        workspace, list(cfg.caches), sys.platform, export_root,
+        state_dir=str(state_dir), excludes=list(cfg.sync_excludes),
+        ignored=ignored, cache_host_root=str(cache_host_root))
     export_root = str(ws.export_root)
     cache_mounts = ws.mount_points()[1:]  # skip the export root itself
     _announce(f"export ready at {export_root}")
-    # Repair console-script shebangs that bake a previous run's dead export
-    # path (028): a venv built by export A must execute its ``bin/*`` scripts
-    # when mounted into export B.
-    venv_dir = Path(sandbox_venv_dir) if sandbox_venv_dir else workspace / SANDBOX_VENV_DIR
-    _announce("checking venv shebangs")
-    repair_venv_shebangs(venv_dir, state_dir=state_dir, export_root=export_root)
 
     backend = DockerBackend(
         image=image, workspace=str(workspace), iso_state_dir=str(iso_state_dir),
         profile=profile, runner=runner, network=needs_network,
-        sandbox_venv_dir=sandbox_venv_dir, seccomp_profile=seccomp_profile,
+        seccomp_profile=seccomp_profile,
         export_root=export_root, cache_mounts=cache_mounts,
         sync_excludes=list(cfg.sync_excludes),
         merge_on_conflict=list(cfg.merge_on_conflict),
+        ignored=ignored,
         dial_rewrites=dial_rewrites)
     try:
         _announce(f"preparing sandbox image {image} (first pull can take a while)")
@@ -2101,17 +1842,10 @@ def startup_sandbox(cfg: PipelineConfig, *, workspace: Path,
         _announce("starting execution container...")
         backend.create_execution_container()
         _announce("execution container started")
-        if refresh is None:
-            refresh = bool(cfg.isolation and cfg.isolation.refresh)
-        for setup_cmd, stamp_key, setup_probe in _declared_setups(cfg, workspace):
-            _announce(f"provisioning setup (stamp {stamp_key[:8]})")
-            backend.provision(setup_cmd, stamp_key,
-                              str(iso_state_dir / "stamps"), force=refresh,
-                              setup_probe=setup_probe)
         _announce("sandbox ready")
         return backend
     except BaseException:
-        # 042 D3: a post-create startup failure (e.g. a setup hook) must still
-        # reap the exec container it created, never leak it to the reaper.
+        # 042 D3: a post-create startup failure must still reap the exec
+        # container it created, never leak it to the reaper.
         backend.close()
         raise
