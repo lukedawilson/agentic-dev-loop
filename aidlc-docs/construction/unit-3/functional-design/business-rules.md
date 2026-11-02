@@ -1,6 +1,6 @@
 # Business Rules - unit-3 (always-on sandbox isolation)
 
-> **NFR-stage amendments (2026-10-19)**: native Linux backend dropped (user directive - Docker everywhere, `Sandbox` surface retained as extension seam); per-step `env:` mapping (NFR-1); persistent-per-run lifecycle (NFR-2); `docker` CLI transport (NFR-3); per-step `setup:` hook with stamp caching (NFR-5); Windows CI (NFR-6). Amended rules carry inline notes.
+> **NFR-stage amendments (2026-10-19)**: native Linux backend dropped (user directive - Docker everywhere, `Sandbox` surface retained as extension seam); per-step `env:` mapping (NFR-1); persistent-per-run lifecycle (NFR-2); `docker` CLI transport (NFR-3); per-step `setup:` hook run fresh at the step boundary (NFR-5); Windows CI (NFR-6). Amended rules carry inline notes.
 
 ## BR-1: Isolation boundary (FR-2.1)
 
@@ -100,7 +100,7 @@
 | Rule | Detail |
 | --- | --- |
 | BR-12.1 | The fake speaks the extracted `Sandbox` surface (FD-5) - unit tests need no container |
-| BR-12.2 | Pure translation logic (profile → payload, mount translation, selection, classifier, sandbox-env resolution, stamp key) is unit-tested on every platform |
+| BR-12.2 | Pure translation logic (profile → payload, mount translation, selection, classifier, sandbox-env resolution) is unit-tested on every platform |
 | BR-12.3 | Real-backend integration tests are marked + opt-in (any machine with a daemon) and are NEVER silently skipped - absence of the runtime is a loud failure, not a skip |
 | BR-12.4 | The CI workflows ship as part of unit-3: Docker-backend integration tests on GitHub Actions ubuntu-latest AND windows-latest runners (NFR-6) |
 
@@ -108,11 +108,11 @@
 
 | Rule | Detail |
 | --- | --- |
-| BR-13.1 | A command step may declare `setup:` - a trusted author command that prepares the working environment (stack-agnostic: `npm i && npm run build`, `dotnet build`, …). Agent and action steps reject `setup:` at load |
-| BR-13.2 | Setup runs INSIDE the backend environment, never on the host (ABI correctness - host-built artifacts must never run in the Linux sandbox) |
-| BR-13.3 | Two container roles: the provision phase runs in a short-lived provision container with network ON (destroyed afterwards); the execution container is created `--network none`. Docker networking is container-level, so the phases cannot share a container (NFR-5, agreed) |
-| BR-13.4 | Setup outputs land in the bind-mounted workspace and are visible to the step's sandboxed execution; the execution phase stays frozen (BR-5.1) |
-| BR-13.5 | Setup is stamp-cached: a stamp in `state_dir` keyed by (setup command + lockfile hashes: package-lock.json / requirements.txt / *.csproj); a matching stamp skips setup. `isolation.refresh` (or CLI `--refresh`) forces re-provision |
+| BR-13.1 | Agent and command steps may declare `setup:` - a trusted author command that prepares the working environment (stack-agnostic: `cd frontend && npm ci`, `python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"`). Brief and action steps reject `setup:` at load |
+| BR-13.2 | Setup runs INSIDE the backend environment (the provision container), never on the host (ABI correctness - host-built artifacts must never run in the Linux sandbox) |
+| BR-13.3 | Two container roles: the setup phase runs in a one-shot `--rm` provision container with network ON (destroyed afterwards); the execution container is created `--network none`. Container networking is per-container, so the phases cannot share a container (NFR-5, agreed) |
+| BR-13.4 | Setup targets the per-run export (a .git-free copy of the repo's product files), never the real workspace. Setup outputs land in the export and are visible to the step's sandboxed execution |
+| BR-13.5 | Setup runs fresh at every step entry (first entry, `goto dev` retries, all of it). No stamping, no keys, no probes, no cross-run reuse. Steps without `setup:` trigger nothing (zero overhead) |
 | BR-13.6 | Setup failure is a loud step failure (BR-8). The agent terminal never runs setup and never gets network - frozen, full stop |
 | BR-13.7 | Accepted risk (recorded): the workspace is writable inside the sandbox (BR-5.1), so the agent can mutate setup outputs (e.g. poison `node_modules` before a later `npm test` step). Host containment still holds; the git-mutation guard (BR-6) and the commit dirty-at-start policy limit persistence |
 
@@ -140,7 +140,7 @@
 
 - **BR-5**: mount set narrowed to EXACTLY {workspace}; isolation state_dir is host-only and NEVER mounted (Q1). Sandboxed writes are restricted to the workspace mount.
 - **BR-11**: reinforced - audit records are written host-side only, and the sandbox has no path to the audit log (not mounted); forging is impossible, not just discouraged by convention.
-- **BR-13**: provision runs at STARTUP for every declared setup (eager, Q2) - stamp-cached, `--refresh` respected; never at the step boundary. Mount set {workspace}.
+- **BR-13**: setup runs fresh at every step entry (agent/command steps) in a one-shot provision container that targets the per-run export; no stamping, no `--refresh`. Steps without `setup:` trigger nothing.
 - **BR-7**: git-hook residual RECLASSIFIED accepted → mitigated: the trusted commit action runs git with `-c core.hooksPath=<trusted dir>` (Q3); agent-influenced `.git/hooks` never execute host-side.
 - **BR-1.3/BR-2**: execution container created + started at startup (eager lifecycle, Q2); mid-run failure = command result or daemon death (AE-SBX-012).
 - **NEW**: PipelineConfig.state_dir default relocates to `~/.agentic-dev-loop/runs/<pipeline-hash>/` - checkpoint DB + last-error.md out of the sandbox; explicit configs keep working (author accepts exposure if they point it inside the workspace).

@@ -28,7 +28,7 @@ test first, watch it fail, implement, watch it pass.
 ## 2. `isolation.py` - exact API surface
 
 Single module, ordered sections: VOs → pure functions → Sandbox ABC → DockerBackend → probe
-→ audit/stamp helpers. Public names below; private helpers free.
+→ audit helpers. Public names below; private helpers free.
 
 ### 2.1 Value objects (dataclasses, frozen where noted)
 
@@ -92,10 +92,6 @@ def translate_mount_path(path: str) -> str
     # WSL2-with-Docker-Desktop (verbatim passthrough - Docker Desktop translates).
     # Idempotent: translate(translate(p)) == translate(p). WSL2 edge cases deferred.
 
-def setup_stamp_key(setup_cmd: str, lockfile_hashes: dict[str, str]) -> str
-    # sha256 hex of canonical JSON {setup_cmd, lockfiles: sorted hashes}. lockfile_hashes =
-    # {relative path: sha256 file digest} for package-lock.json, requirements.txt, *.csproj.
-
 def docker_create_payload(*, run_id, image, profile, workspace) -> list[str]
     # Exact list for `docker create` (template §3.3) - execution container.
     # Invariants (PBT-03): contains --network none; contains --cap-drop ALL; the mount
@@ -130,7 +126,7 @@ class DockerBackend(Sandbox):
     # CmdResult = dataclass(exit_code, stdout, stderr).
 
     def ensure_image(self) -> None        # template §3.2, bounded retry + digest verify
-    def provision(self, setup_cmd: str, stamp_key: str, stamp_dir: str, force: bool) -> None
+    def provision(self, setup_cmd: str, *, env: dict[str, str] | None = None) -> None
     def run(self, request) -> SandboxExecutionResult   # git guard → lazy create → exec
     def close(self) -> None               # stop -t 5 then rm -f, best-effort both
 
@@ -142,7 +138,7 @@ def probe_docker(runner: CommandRunner | None = None) -> ProbeResult
     # ProbeResult = dataclass(api_version, ostype).
 ```
 
-### 2.4 Audit + stamps
+### 2.4 Audit
 
 ```python
 def append_audit_record(state_dir: Path, record: dict) -> None
@@ -152,11 +148,10 @@ def append_audit_record(state_dir: Path, record: dict) -> None
     # container_id, exit_code, timed_out, duration_seconds.
     # Rotation: if size > 5 MB → os.replace to sandbox-audit.jsonl.1 (overwrite), start fresh.
     # Host-side only; never called from inside the sandbox.
-
-def read_stamp(stamp_dir: Path, stamp_key: str) -> bool      # stamp file exists
-def write_stamp(stamp_dir: Path, stamp_key: str) -> None     # touch file named <stamp_key>
-def clean_stamps(state_dir: Path) -> int                     # delete stamps/*, return count
 ```
+
+052: the stamp helpers (`read_stamp`/`write_stamp`/`clean_stamps`) and `setup_stamp_key`
+were deleted - setup runs fresh at the step boundary with no stamping.
 
 ### 2.5 Constants
 
@@ -205,7 +200,7 @@ docker create --name <run_id>-exec \
 ```
 EAGER (Q2): created AND started at pipeline startup (`Runtime.__init__`), before the
 graph builds - never lazily. `run_id` = uuid4 hex. Mount set is exactly `{workspace}`:
-stamps, audit JSONL, and the runs/checkpoint state dir are host-only, unreachable from
+audit JSONL, and the runs/checkpoint state dir are host-only, unreachable from
 inside (Q1).
 
 ### 3.4 Exec (per request)
@@ -226,10 +221,10 @@ docker run --rm --name <run_id>-provision --network bridge --cap-drop ALL \
   <image_ref> sh -c "<setup_cmd>"
 ```
 Network is the container default bridge (no `--network none`). Rootfs rw. `--rm` = destroy.
-Single mount `{workspace}` (Q1). Setup output echoed via host logger; nonzero exit →
-AE-SBX-009, no stamp written.
-EAGER (Q2): every declared `setup:` across the pipeline runs at STARTUP (stamp-cached,
-`--refresh` respected) - never at the step boundary.
+Mount set = export root rw + host-side cache mounts (052); workdir = export root; env = the
+declaring step's `env:` block. Setup output echoed via host logger; nonzero exit → AE-SBX-009.
+STEP BOUNDARY (052): a step's `setup:` runs fresh, once per step entry, in this one-shot
+container - never at startup, no stamping.
 
 ### 3.6 Destroy (close / error paths)
 ```
@@ -243,13 +238,14 @@ docker rm -f <container>       # best-effort
 class IsolationConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")     # unknown keys FAIL load (BR-5)
     image: str | None = None                      # per-pipeline override (KD-2 ref rules)
-    refresh: bool = False                         # force re-provision (NFR-5)
     memory: str | None = None                     # override exec container memory
     cpus: float | None = None                     # override exec container cpus
     allow_git_mutations: bool = False             # BR-6 knob
-    state_dir: str = "~/.agentic-dev-loop/state"      # stamps + audit. HOST-ONLY: this dir is
-    # NEVER mounted into the sandbox (Q1). Not run state.
+    state_dir: str = "~/.agentic-dev-loop/state"      # host-side caches + audit. HOST-ONLY:
+    # this dir is NEVER mounted into the sandbox (Q1). Not run state.
     # validators: memory matches ^\d+[kmg]$; cpus > 0; state_dir expanduser at use.
+    # 052: `refresh` was removed (setup runs fresh at the step boundary) - loading it fails
+    # loud with a migration message.
 
 class PipelineConfig(BaseModel):                  # line 117 - ADD:
     isolation: IsolationConfig | None = None      # None ⇒ defaults (always-on regardless)
@@ -265,11 +261,11 @@ class PipelineConfig(BaseModel):                  # line 117 - ADD:
 class StepConfig(BaseModel):                      # line 35 - ADD:
     env: dict[str, str | None] | None = None      # NFR-1; null = inherit host value
     setup: str | None = None                      # BR-13; model_validator: allowed ONLY on
-                                                  # command steps (agent/action ⇒ ValueError
-                                                  # at load). Also reject on command steps
-                                                  # combined with on_pass/on_fail verdicts? NO -
+                                                  # command and agent steps (brief/action ⇒
+                                                  # ValueError at load). Also reject on command
+                                                  # steps combined with on_pass/on_fail verdicts? NO -
                                                   # verdicts allowed; setup failure = loud step
-                                                  # failure (no stamp), retries per existing loop.
+                                                  # failure (AE-SBX-009), retries per existing loop.
 ```
 Serialisation round-trip (NFR-6): `IsolationConfig` + `StepConfig` must survive
 `model_dump()` → `model_validate()` (PBT-02 target).
@@ -289,7 +285,7 @@ Every message is `AE-SBX-<NNN>: <what happened>. <action>` - action always point
 | AE-SBX-006 | pull failed after retries | last pull error + docs/setup.md §5 |
 | AE-SBX-007 | post-pull digest mismatch | supply-chain check failed; refuse to continue |
 | AE-SBX-008 | git mutation blocked | named command + `isolation.allow_git_mutations: true` - docs/setup.md §3 |
-| AE-SBX-009 | setup command failed | exit code + output tail; stamp not written |
+| AE-SBX-009 | setup command failed | exit code + output tail; run halts (no stamp concept) |
 | AE-SBX-010 | container create/start/exec failure | docker error verbatim |
 | AE-SBX-012 | daemon lost mid-run | loud failure; best-effort cleanup |
 
@@ -339,19 +335,17 @@ def _terminal_factory_for(sandbox) -> Callable:
 
 ## 7. Runtime wiring (`stages.py`, `graph.py`, `cli.py`, `actions.py`)
 
-- `Runtime.__init__` (graph.py line ~129): **EAGER STARTUP SEQUENCE (Q2)** - in order,
-  before the graph builds:
+- `Runtime.__init__` (graph.py line ~129): **STARTUP SEQUENCE** - in order, before the
+  graph builds:
   1. `probe_docker()` - fail fast AE-SBX-00x, pointing at docs/setup.md
   2. resolve image ref (KD-2 / AE-SBX-005)
   3. `DockerBackend` → `self.sandbox`; `ensure_image()` (pull at startup, retried §3.2)
   4. create + start the execution container (never lazy)
-  5. pre-provision EVERY declared `setup:` in the pipeline (collect command steps'
-     `setup:` values, stamp-cached, `--refresh` respected; failure = AE-SBX-009 loud,
-     run aborts before any step executes)
+  5. materialise the export + create host-side cache dirs
   6. only then build the graph and run steps.
-  After startup: ZERO infrastructure operations mid-run - the only sandbox call during
-  steps is `run(request)` (a `docker exec`). Mid-run failure is either a step result or
-  daemon death (AE-SBX-012, loud).
+  052: setup no longer runs at startup. A step's `setup:` runs fresh, once per step entry,
+  in a one-shot provision container (the one sanctioned mid-run infra call - §3.5); mid-run
+  failure is either a step result, a setup halt (AE-SBX-009), or daemon death (AE-SBX-012).
 - Destroy: `try/finally` around the pipeline run entry - `runtime.sandbox.close()` on
   completion AND every error path (BR-8).
 - `stages.py _run_command(command, workspace, timeout, env=None)` (line 137): signature
@@ -360,7 +354,7 @@ def _terminal_factory_for(sandbox) -> Callable:
   `SandboxExecutionRequest(argv=split_command(command), cwd=workspace, env=env,
   timeout=timeout)` → `runtime.sandbox.run(...)` → `(exit_code, output, timed_out)`.
 - `make_command_node(runtime, step)` (line 308): env = `resolve_sandbox_env(step.env)`;
-  NO provision logic here (provision happened at startup, Q2). Retry loop unchanged.
+  provision runs here at the step boundary via `_provision_step` (052). Retry loop unchanged.
 - `make_action_node` (line 347): routing UNCHANGED - actions (incl. commit) run
   in-process, host-side, never routed through the sandbox (guard test required).
 - `actions.py` commit action - THE ONLY actions.py CHANGE (Q3): run
@@ -368,9 +362,9 @@ def _terminal_factory_for(sandbox) -> Callable:
   an agentic-dev-loop-managed dir (`~/.agentic-dev-loop/state/hooks` created empty, or
   `<state>/hooks`) - repo hooks in `.git/hooks` never execute. `git_worktree_clean`
   and `kill_listeners_on_port` untouched.
-- `cli.py`: `_core_parser()` gains `--refresh` (sets `isolation.refresh=True`) and
-  `--clean-stamps` (runs `clean_stamps` on the resolved isolation state dir and exits 0);
-  `main(argv)` probe-then-build pattern extended with the eager startup sequence before
+- `cli.py`: `_core_parser()` gains no setup-related flags (052 removed `--refresh` and
+  `--clean-stamps` - setup runs fresh at the step boundary with no stamping);
+  `main(argv)` probe-then-build pattern extended with the startup sequence before
   graph build.
 
 ### 7.1 This repo's own pipeline.yaml migration (user requirement, 2026-10-19)
@@ -381,7 +375,7 @@ def _terminal_factory_for(sandbox) -> Callable:
 | --- | --- | --- |
 | `state_dir: .pr` (line 16) | explicit, INSIDE workspace | drop the line → new default `~/.agentic-dev-loop/runs/<hash>/` (out of mount) |
 | test step command | `.venv/bin/python -m pytest tests/ -q` (HOST venv - unexecutable in the Linux container) | `.venv-sandbox/bin/python -m pytest tests/ -q -m "not docker"` (docker-marked tests run in CI, and the sandbox has no docker CLI) |
-| test step `setup:` | none | `python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"` (provision container: network ON, stamp-cached; venv persists via the workspace bind mount; dev/review/qa agents can also use `.venv-sandbox/bin/python` because provision completes at startup, Q2) |
+| test step `setup:` | none | `python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"` (provision container: network ON, runs fresh at the step boundary targeting the export; dev/review/qa agents can also use `.venv-sandbox/bin/python` because the venv is a gitignored dir in the export) |
 | `.gitignore` | has `.pr/` | keep `.pr/` (belt-and-braces if someone re-declares it) + add `.venv-sandbox/` |
 | agent steps (dev/review/qa) | host terminal | sandboxed terminal automatically; git reads (status/log/diff) allowed, mutations blocked - they never commit (commit is the action) |
 
@@ -416,8 +410,8 @@ CMD ["sleep", "infinity"]
 
 1. **Prerequisites** - engine install per OS (Docker Desktop macOS/Windows; Docker Engine/OrbStack/Colima/podman Linux); Windows: Linux-containers mode.
 2. **First run** - digest-verified pull on first use; `AGENTIC_DEV_LOOP_DEV_IMAGE` override for pre-publish dev loop; what the pinned digest means.
-3. **pipeline.yaml** - walkthrough: `isolation:` (image, refresh, memory/cpus, allow_git_mutations, state_dir = host-only stamps/audit), per-step `env:` (null = inherit), per-step `setup:` (command steps only), git-mutation default block and the knob, the new `state_dir` default (`~/.agentic-dev-loop/runs/<pipeline-hash>/` - checkpoint DB + last-error.md live there, out of the sandbox; explicit `state_dir` inside a workspace is author's accepted risk).
-4. **Caching** - stamp caching (skip-on-match, all setups run at startup), `--refresh` / `isolation.refresh`, `--clean-stamps`, where stamps live (`~/.agentic-dev-loop/state/stamps/`).
+3. **pipeline.yaml** - walkthrough: `isolation:` (image, memory/cpus, allow_git_mutations, state_dir = host-side caches + audit), per-step `env:` (null = inherit), per-step `setup:` (command and agent steps), git-mutation default block and the knob, the new `state_dir` default (`~/.agentic-dev-loop/runs/<pipeline-hash>/` - checkpoint DB + last-error.md live there, out of the sandbox; explicit `state_dir` inside a workspace is author's accepted risk).
+4. **Caching** - host-side caches (each declared `caches:` name resolves to `~/.agentic-dev-loop/state/caches/<name>`); no stamping; removed `--refresh` / `isolation.refresh` / `--clean-stamps`.
 5. **Troubleshooting** - every AE-SBX message with cause + fix; audit log location (`~/.agentic-dev-loop/state/sandbox-audit.jsonl`); run-state location (`~/.agentic-dev-loop/runs/`); Linux-host note: bind-mounted writes land root-owned (KD-7), `sudo chown -R $USER` recovery.
 6. **Security notes** - kernel-level sandboxing terminology (ID-8), threat model summary, residual risks (setup-output mutation inside sandbox; explicit in-workspace state_dir choice). Git hooks during commit are MITIGATED (trusted hooksPath, Q3) - not a residual.
 
@@ -428,15 +422,15 @@ README: add a short "Sandboxed execution" section linking `docs/setup.md`.
 | File | Scope |
 | --- | --- |
 | `tests/test_config.py` | IsolationConfig/StepConfig schema: accept/reject/validators; serialisation round-trip |
-| `tests/test_isolation.py` | Pure functions (steps 2-3): table-driven + temp-dir fixtures; VOs (step 4); DockerBackend with fake runner (step 5): ensure_image retry/verify, EAGER create at init, exec argv assembly, exit-124 timeout, close idempotence; provision/stamps/audit incl. rotation (step 6) - real temp dirs, NO file mocking |
-| `tests/test_isolation_pbt.py` | Hypothesis properties (step 10, PBT-03): `--network none` always present; the mount set is EXACTLY {workspace} (single-mount invariant, Q1); `--cap-drop ALL`; resolve_sandbox_env ⊆ base∪declared; stamp-key stable/divergent; request/result round-trip; mount idempotence; git deny-by-default (random subcommands); select_backend totality |
-| `tests/test_isolation_integration.py` | `@pytest.mark.docker`: probe passes; echo round-trip; no-network (e.g. `curl`/socket fails); read-only rootfs + writable mounts; git mutation block e2e; provision + stamp skip + refresh re-provision. Skip with explicit reason when daemon absent; NEVER silently skipped in CI |
-| `tests/test_stages.py` | Fake Sandbox: `_run_command` routing, git-guard refusal, setup already-provisioned at startup (no step-boundary provision), destroy on success/error paths, commit NEVER routed; commit action uses trusted hooksPath (`git -c core.hooksPath`) |
+| `tests/test_isolation.py` | Pure functions (steps 2-3): table-driven + temp-dir fixtures; VOs (step 4); DockerBackend with fake runner (step 5): ensure_image retry/verify, EAGER create at init, exec argv assembly, exit-124 timeout, close idempotence; provision/audit incl. rotation (step 6) - real temp dirs, NO file mocking |
+| `tests/test_isolation_pbt.py` | Hypothesis properties (step 10, PBT-03): `--network none` always present; the mount set is EXACTLY {workspace} (single-mount invariant, Q1); `--cap-drop ALL`; resolve_sandbox_env ⊆ base∪declared; request/result round-trip; mount idempotence; git deny-by-default (random subcommands); select_backend totality |
+| `tests/test_isolation_integration.py` | `@pytest.mark.docker`: probe passes; echo round-trip; no-network (e.g. `curl`/socket fails); read-only rootfs + writable mounts; git mutation block e2e; provision at the step boundary (fresh per entry). Skip with explicit reason when daemon absent; NEVER silently skipped in CI |
+| `tests/test_stages.py` | Fake Sandbox: `_run_command` routing, git-guard refusal, setup provisioned at the step boundary (fresh per entry), destroy on success/error paths, commit NEVER routed; commit action uses trusted hooksPath (`git -c core.hooksPath`) |
 | `tests/test_agents.py` | SandboxTerminalExecutor against fake Sandbox; per-run re-registration; is_input degradation |
-| `tests/test_cli.py` | `--refresh`/`--clean-stamps`; fail-fast probe messages (faked runner) |
+| `tests/test_cli.py` | removed `--refresh`/`--clean-stamps` flags rejected; fail-fast probe messages (faked runner) |
 | `tests/test_e2e_fixtures.py` + `conftest.py` | Fake-Sandbox fixture by default; marked docker variant for real backend; fixture pipelines declare explicit `state_dir:` under tmp_path (never real home) |
 | `tests/test_sdk_compat.py` | TerminalTool.create(executor=) canary + version-range pinning |
-| Guard tests (Q1/Q2/Q3) | (1) recorded-runner sequence test: startup performs exactly [probe, pull/inspect, create, start, provision*…] and the run phase performs ONLY exec calls - zero infra calls mid-run (Q2); (2) Runtime passes ONLY workspace to DockerBackend (state_dir/stamps/audit paths never in any docker argv - Q1); (3) stamp/audit writes happen host-side (audit record exists even when exec fails; sandbox has no path to state dir - Q1); (4) pipeline default state_dir resolves outside the workspace (Q1); (5) commit argv contains `core.hooksPath` (Q3) |
+| Guard tests (Q1/Q2/Q3) | (1) recorded-runner sequence test: startup performs exactly [probe, pull/inspect, create, start] and each step entry performs at most one provision call - the one sanctioned mid-run infra call (052); (2) Runtime passes ONLY the export + cache mounts to DockerBackend (state_dir/audit paths never in any docker argv - Q1); (3) audit writes happen host-side (audit record exists even when exec fails; sandbox has no path to state dir - Q1); (4) pipeline default state_dir resolves outside the workspace (Q1); (5) commit argv contains `core.hooksPath` (Q3) |
 
 Markers: register `docker` in pyproject (`[tool.pytest.ini_options] markers`).
 

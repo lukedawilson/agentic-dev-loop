@@ -23,8 +23,8 @@
 
 | Rule | Detail |
 | --- | --- |
-| BR-3.1 | Cache paths are author-declared in `pipeline.yaml` (`caches:`, repo-relative, rw); the engine ships no toolchain cache dirs. The sandbox venv (`.venv-sandbox`) remains engine infrastructure. |
-| BR-3.2 (amended 2026-10-25) | A missing declared cache dir is auto-created host-side (empty, uid-owned, `mkdir -p`) and bind-mounted; it is no longer a loud failure. |
+| BR-3.1 | Cache paths are author-declared in `pipeline.yaml` (`caches:`, repo-relative, rw); each resolves host-side to `{state_dir}/caches/<name>`, named globally by the declared relative path. The engine ships no toolchain cache dirs and no engine-level venv (a venv is just a gitignored dir built by a setup hook, exactly like `node_modules`) |
+| BR-3.2 (amended 2026-11-02) | A missing declared cache dir is auto-created host-side (empty, uid-owned, `mkdir -p`) and bind-mounted; a missing workspace path is fine. Caches are never copied into the export and never synced back |
 | BR-3.3 | The rw window into the real workspace is exactly the declared cache paths - nothing else. |
 
 ## BR-4: Sync-back (F1)
