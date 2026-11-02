@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking
+
+- 052: setup hooks now run fresh at every step boundary (agent and command
+  steps), targeting the per-run export, with the stamp/probe apparatus deleted
+  (`--refresh`, `--clean-stamps`, `setup_probe`, `isolation.refresh`,
+  `isolation.sandbox_venv_dir` all removed). Declared caches move host-side
+  (`{state_dir}/caches/<name>`); the repo `.gitignore` is now the source of
+  truth for export copy and sync-back, replacing the hardcoded `.venv` and
+  toolchain special cases.
+
 ## [0.9.0] - 2026-11-02
 
 0.9.0 consolidates the 1.0.0a1 through 1.0.0a51 pre-releases (plus
