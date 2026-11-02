@@ -456,6 +456,10 @@ PAGE = """<!doctype html>
                 border-radius: 6px; margin-top: 10px; display: none; }
   .banner-success { background: #e8f5e9; color: #2e7d32; }
   .banner-failure { background: #ffebee; color: #c62828; }
+  #stream-banner { display: none; position: fixed; top: 0; left: 0; right: 0;
+                   z-index: 9999; background: #b26a00; color: #ffffff;
+                   text-align: center; padding: 8px 12px; font-size: 14px;
+                   font-weight: 700; }
   #divider { flex: 0 0 6px; cursor: col-resize; background: #e0e0e0; }
   #divider:hover, #divider.dragging { background: #9e9e9e; }
   #sidebar { flex: 0 0 320px; border-left: 1px solid #e0e0e0; padding: 16px;
@@ -525,6 +529,7 @@ PAGE = """<!doctype html>
         onerror="window.__mermaidFailed=true"></script>
 </head>
 <body>
+  <div id="stream-banner">connection lost, reconnecting...</div>
   <div id="graph-panel">
     <div id="mermaid-container"><p>Loading graph…</p></div>
     <div id="run-banner"></div>
@@ -561,6 +566,9 @@ PAGE = """<!doctype html>
   var liveElapsed = {};
   var runStartWall = null;
   var totalTimer = null;
+  var lastEventAt = 0;
+  var reconnectAttempts = 0;
+  var runActive = false;
   var topologyReady = false;
   var pendingEvents = [];
   var MAX_CONSOLE = 500;
@@ -614,11 +622,12 @@ PAGE = """<!doctype html>
     if (runStartWall === null) {
       line.textContent = "";
       line.style.display = "none";
-      return;
+    } else {
+      line.textContent = "total " + mmss(Math.max(0,
+        Math.round(Date.now() / 1000 - runStartWall)));
+      line.style.display = "block";
     }
-    line.textContent = "total " + mmss(Math.max(0,
-      Math.round(Date.now() / 1000 - runStartWall)));
-    line.style.display = "block";
+    if (runActive && Date.now() - lastEventAt > 10000) { recover(); }
   }
 
   function statusOf(n) {
@@ -1055,10 +1064,11 @@ PAGE = """<!doctype html>
         flushPending();
         stepTimes = {};
         liveElapsed = {};
+        runActive = true;
         if (totalTimer !== null) { clearInterval(totalTimer); totalTimer = null; }
         runStartWall = (typeof ev.started_at === "number")
           ? ev.started_at : null;
-        if (runStartWall !== null) { totalTimer = setInterval(renderTotal, 1000); }
+        totalTimer = setInterval(renderTotal, 1000);
         renderTotal();
         clearConsoles();
         resetVerdicts();
@@ -1137,6 +1147,7 @@ PAGE = """<!doctype html>
         updateAttempt();
         break;
       case "run_finished":
+        runActive = false;
         if (totalTimer !== null) { clearInterval(totalTimer); totalTimer = null; }
         if (ev.elapsed_seconds !== undefined) {
           runStartWall = null;
@@ -1194,16 +1205,42 @@ PAGE = """<!doctype html>
     }
   }, 5000);
 
-  var es = new EventSource("/events");
-  es.onmessage = function (e) {
-    var ev;
-    try { ev = JSON.parse(e.data); }
-    catch (err) { logLine("bad event: " + e.data); return; }
-    if (!topologyReady) { pendingEvents.push(ev); return; }
-    try { handle(ev); }
-    catch (err) { logLine("bad event: " + e.data); }
-  };
-  es.onerror = function () { logLine("event stream interrupted"); };
+  var es = null;
+
+  function connectStream() {
+    var stream = new EventSource("/events");
+    stream.onmessage = function (e) {
+      lastEventAt = Date.now();
+      reconnectAttempts = 0;
+      el("stream-banner").style.display = "none";
+      var ev;
+      try { ev = JSON.parse(e.data); }
+      catch (err) { logLine("bad event: " + e.data); return; }
+      if (!topologyReady) { pendingEvents.push(ev); return; }
+      try { handle(ev); }
+      catch (err) { logLine("bad event: " + e.data); }
+    };
+    stream.onerror = function () { logLine("event stream interrupted"); };
+    return stream;
+  }
+
+  es = connectStream();
+
+  function recover() {
+    el("stream-banner").style.display = "block";
+    reconnectAttempts++;
+    if (reconnectAttempts > 3) {
+      location.reload();
+      return;
+    }
+    es.close();
+    es = connectStream();
+    lastEventAt = Date.now();
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (runActive && Date.now() - lastEventAt > 10000) { recover(); }
+  });
 
   // Grab-handle between the graph and the sidebar: drag to resize the
   // sidebar (and with it the console panels, which stretch with its width).

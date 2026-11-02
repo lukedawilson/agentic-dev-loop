@@ -854,6 +854,16 @@ class TestServer:
         assert "ev.attempt !== verdictAttempt" not in PAGE
         assert "currentVerdicts[k] = v" in PAGE
 
+    def test_page_constant_has_stream_watchdog(self):
+        assert "stream-banner" in PAGE
+        assert "connection lost" in PAGE
+        assert "visibilitychange" in PAGE
+        assert "location.reload" in PAGE
+        assert "lastEventAt" in PAGE
+        assert "connectStream" in PAGE
+        assert "recover" in PAGE
+        assert PAGE.count("new EventSource") == 1
+
 
 # The page script is real browser JS embedded in the PAGE constant. Run it
 # under node (skipped when node is absent) against a minimal DOM shim and feed
@@ -948,10 +958,12 @@ El.prototype.scrollIntoView = function () {};
 
 var STATIC_IDS = ["subject", "attempt", "thread-id", "total", "verdicts",
                   "stages", "run-log", "mermaid-container", "run-banner",
-                  "divider", "sidebar"];
+                  "stream-banner", "divider", "sidebar"];
 STATIC_IDS.forEach(function (id) { registry[id] = new El(id); });
 var elCounter = 0;
 var document = {
+  _listeners: {},
+  addEventListener: function (t, fn) { document._listeners[t] = fn; },
   getElementById: function (id) {
     if (registry[id]) { return registry[id]; }
     for (var k in registry) {
@@ -966,13 +978,18 @@ var document = {
   },
   body: new El("body")
 };
-var window = { __mermaidFailed: false, addEventListener: function () {},
-               innerWidth: 1000 };
+var closeCalls = 0;
+var reloadCalls = 0;
+var esInstances = [];
+var window = { __mermaidFailed: false, innerWidth: 1000, _listeners: {} };
+window.addEventListener = function (t, fn) { window._listeners[t] = fn; };
+window.location = { reload: function () { reloadCalls++; } };
 var mermaidCalls = [];
 var esInstance = null;
 
 globalThis.document = document;
 globalThis.window = window;
+globalThis.location = window.location;
 var copiedText = null;
 var intervalFn = null;
 // node 21+ ships a read-only `navigator` global, so defineProperty is needed
@@ -1012,6 +1029,8 @@ globalThis.EventSource = function (url) {
   this.url = url;
   this.onmessage = null;
   this.onerror = null;
+  this.close = function () { closeCalls++; };
+  esInstances.push(this);
   esInstance = this;
 };
 
@@ -1045,6 +1064,16 @@ function totalText() {
   return { text: total.textContent, display: total.style.display };
 }
 
+function watchdogState() {
+  var banner = document.getElementById("stream-banner");
+  return {
+    instances: esInstances.length,
+    closeCalls: closeCalls,
+    reloadCalls: reloadCalls,
+    bannerDisplay: banner ? banner.style.display : null
+  };
+}
+
 var snapshots = [];
 async function main() {
   // let the topology fetch microtask chain resolve so events are handled
@@ -1054,6 +1083,16 @@ async function main() {
     if (ev.type === "__tick") {
       fakeNow = ev.now;
       if (intervalFn) { intervalFn(); }
+      return;
+    }
+    if (ev.type === "__snapshot") {
+      snapshots.push({ watchdog: watchdogState() });
+      return;
+    }
+    if (ev.type === "__visibility") {
+      fakeNow = ev.now;
+      var visFn = document._listeners["visibilitychange"];
+      if (visFn) { visFn(); }
       return;
     }
     fire(ev);
@@ -1268,10 +1307,105 @@ main();
         ]
         snaps = self._run_page(node, events, tmp_path)
 
-        assert snaps[0]["timer"] is False
+        assert snaps[0]["timer"] is True
         assert snaps[0]["total"] == {"text": "", "display": "none"}
         assert snaps[-1]["total"]["text"] == "total 1:35"
         assert snaps[-1]["total"]["display"] == "block"
+
+    def test_silence_while_run_active_recreates_stream(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "heartbeat", "node": "dev", "elapsed_seconds": 5},
+            {"type": "__tick", "now": 15000},
+            {"type": "__snapshot"},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        wd = snaps[0]["watchdog"]
+        assert wd["instances"] >= 2
+        assert wd["closeCalls"] == 1
+        assert wd["bannerDisplay"] == "block"
+        assert wd["reloadCalls"] == 0
+
+    def test_silence_when_idle_does_not_recreate(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t"},
+            {"type": "run_finished", "success": True, "attempts": 1,
+             "elapsed_seconds": 60},
+            {"type": "__tick", "now": 120000},
+            {"type": "__snapshot"},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        wd = snaps[0]["watchdog"]
+        assert wd["instances"] == 1
+        assert wd["bannerDisplay"] == "none"
+        assert wd["reloadCalls"] == 0
+
+    def test_recovery_rearms_after_replay(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "heartbeat", "node": "dev", "elapsed_seconds": 5},
+            {"type": "__tick", "now": 15000},
+            {"type": "__snapshot"},
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "__tick", "now": 24000},
+            {"type": "__snapshot"},
+            {"type": "__tick", "now": 26000},
+            {"type": "__snapshot"},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["watchdog"]["instances"] >= 2
+        assert snaps[1]["watchdog"]["instances"] == 2
+        assert snaps[1]["watchdog"]["bannerDisplay"] == "none"
+        assert snaps[2]["watchdog"]["instances"] >= 3
+        assert snaps[2]["watchdog"]["closeCalls"] >= 2
+
+    def test_repeated_failures_reload(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "__tick", "now": 11000},
+            {"type": "__tick", "now": 22000},
+            {"type": "__tick", "now": 33000},
+            {"type": "__tick", "now": 44000},
+            {"type": "__snapshot"},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        wd = snaps[0]["watchdog"]
+        assert wd["reloadCalls"] == 1
+        assert wd["instances"] == 4
+        assert wd["closeCalls"] == 3
+
+    def test_visibility_return_triggers_recovery(self, node, tmp_path):
+        events = [
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t", "started_at": 1000},
+            {"type": "node_started", "node": "dev"},
+            {"type": "heartbeat", "node": "dev", "elapsed_seconds": 5},
+            {"type": "__visibility", "now": 15000},
+            {"type": "__snapshot"},
+            {"type": "heartbeat", "node": "dev", "elapsed_seconds": 16},
+            {"type": "__visibility", "now": 15000},
+            {"type": "__snapshot"},
+        ]
+        snaps = self._run_page(node, events, tmp_path)
+
+        assert snaps[0]["watchdog"]["instances"] >= 2
+        assert snaps[0]["watchdog"]["closeCalls"] == 1
+        assert snaps[0]["watchdog"]["reloadCalls"] == 0
+        assert snaps[1]["watchdog"]["instances"] == 2
+        assert snaps[1]["watchdog"]["bannerDisplay"] == "none"
 
 
 class TestDemo:
