@@ -7,589 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0a51] - 2026-11-01
+## [0.9.0] - 2026-11-02
+
+0.9.0 consolidates the 1.0.0a1 through 1.0.0a51 pre-releases (plus
+1.0.0rc1 and 1.0.1), a snapshot cadence cut on every commit from
+2026-10-20 to 2026-11-01, into a single release. It contains every change
+made since 0.3.0, re-released under a sane pre-1.0 version number. Nothing
+is dropped: the full history lives in git and planning-docs/.
+
+### Added
+
+- Containerised execution: every step runs in an engine-managed Docker
+  sandbox (multi-arch dev images, seccomp, host-user containers) with
+  per-step `mounts:` and per-policy egress allowlists through an
+  engine-managed proxy (plans 014-025).
+- Isolation hardening: secrets store and environment ban (019),
+  infra-failure classification with sticky errors and a startup reaper for
+  leaked exec containers (030, 042, 050), per-proxy egress IPs (047, 048).
+- Workspace sync: pipeline-declared `caches:` and `sync_excludes:` (028),
+  `merge_on_conflict:` union-merge for append-style logs (029), git-aware
+  sync-back with absorbed conflicts.
+- New step knobs: native `brief` step type with engine-owned prompt and
+  capture (033, 046, 049), stop-when-green (032, 044), custom step prompts
+  (040), `reasoning_effort` per-step override (047), `--resume
+  <thread-id>` (046).
+- Verdict vocabulary: `unverifiable: UNVERIFIABLE` (024) and `env: ENV`
+  for environmental failures (031); banned-command deny-lists for agent
+  steps (036).
+- Tooling: the release workflow skips already-published versions (026),
+  the publish tool with Consumer adoption enforcement, and the
+  core/engine/viz package split with extras inversion (a6).
 
 ### Changed
 
-- feat: construct plan 051-step-runtime-display.md (agent dev loop)
-- Uncommitted changes: planning-docs/051-step-runtime-display.md
-
-## [1.0.0a50] - 2026-10-31
-
-### Changed
-
-- fix(isolation): the startup reaper now prunes a registry entry only after
-  the daemon confirms the object is gone (050). A failed removal keeps the
-  entry so the next startup reaper retries it instead of dropping the record
-  and stranding an invisible orphan.
-
-## [1.0.0a49] - 2026-10-31
+- Dropped native Windows support: the engine targets Linux and WSL2 (027).
+- The package split into `core`, `engine`, and `viz`; the OpenHands-SDK
+  engine moved to the `[engine]` extra (a6).
 
 ### Breaking
 
-- `brief` is now a native step type (049): `brief_inputs:` is the step-type
-  discriminator with no `agent:`, `produces:`, or `max_iterations:`. The
-  prompt, capture file (`attempt-brief.md`), and iteration cap (12) are
-  engine-owned. The old `agent: brief` + `brief_inputs` + `produces` shape
-  fails validation naming the fix.
-
-### Consumer adoption
-
-- 049: rewrite the brief step to the new shape (drop `agent:`, `produces:`,
-  and `max_iterations:`; keep `brief_inputs:` with its declared `sections:`),
-  and delete the vendored
-  `agentic-dev-loop/sdk_agents/brief.agent.md` (046 D5).
-
-## [1.0.0a48] - 2026-10-31
-
-### Changed
-
-- fix(isolation): skip network addresses already held by containers when
-  allocating per-proxy egress IPs. Profile containers auto-join the run
-  network with a daemon-assigned IP, and the allocator previously re-pinned
-  one of those addresses for a second proxy, so the attach failed with
-  AE-SBX-020 "Address already in use". The network inspect now also reports
-  in-use container addresses and the allocator avoids them.
-
-## [1.0.0a47] - 2026-10-31
-
-### Changed
-
-- fix(isolation): assign a distinct internal IP per egress proxy so a run
-  with multiple egress policies no longer collides on one address; a failed
-  proxy attach now carries the daemon stderr tail in the AE-SBX-020 message
-
-## [1.0.0a46] - 2026-10-31
-
-### Changed
-
-- Planning docs fixes
-- Planning docs
-- Se cpus
-- docs(planning): approve plan 047 decisions D1-D6
-- docs(planning): amend plan 047 with per-step reasoning_effort override and lane defaults
-- docs(planning): add plan 048 egress-proxy ip-collision fix
-- feat(trigger): add --resume <thread-id> mode with exclusivity enforcement
-- feat(publish): mandate Consumer adoption notes for consumer-facing plans
-- Uncommitted changes: README.md, planning-docs/047-reasoning-effort-config.md
-
-## [1.0.0a45] - 2026-10-31
-
-### Changed
-
-- feat: construct plan 046-embed-brief-prompt.md (agent dev loop)
-- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/046-embed-brief-prompt.md
-
-## [1.0.0a44] - 2026-10-31
-
-### Changed
-
-- feat: construct plan 045-setup-probe-self-heal.md (agent dev loop)
-- docs(planning): add plan 047 reasoning_effort config field
-- fix(dev): prior-attempt residue check and batched reads in dev prompt
-- docs: plan 046 decisions D1-D7 approved
-- chore: remove committed vim swap file, ignore *.swp
-- Uncommitted changes: README.md, planning-docs/045-setup-probe-self-heal.md
-
-## [1.0.0a43] - 2026-10-31
-
-### Changed
-
-- feat: construct plan 044-remove-stop-when-green.md (agent dev loop)
-- docs: plan 046 embed brief prompt, config-driven sections
-- docs: plan 045 setup-probe self-heal for non-venv cache warmers
-- fix(dev): report-shaped goal, failure classification, verification matrix in engine dev prompt
-- docs: plan 044 remove dormant stop-when-green
-- chore(pipeline): refresh additional_files, harden dev step
-- Uncommitted changes: README.md, planning-docs/044-remove-stop-when-green.md
-
-## [1.0.0a42] - 2026-10-31
-
-### Changed
-
-- docs: add unit-8 intent (parallel fan-out driver)
-- release: v1.0.0a41
-- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
-- Uncommitted changes: CHANGELOG.md, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/043-brief-coverage-flap-fix.md, pyproject.toml, src/agentic_dev_loop/engine/stages.py, tests/test_041_brief_coverage.py
-
-## [1.0.0a42] - 2026-10-31
-
-### Changed
-
-- docs: add unit-8 intent (parallel fan-out driver)
-- release: v1.0.0a41
-- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
-- Uncommitted changes: agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/043-brief-coverage-flap-fix.md, src/agentic_dev_loop/engine/stages.py, tests/test_041_brief_coverage.py
-
-## [1.0.0a41] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 042-container-reaping-and-inspection.md (agent dev loop)
-- Uncommitted changes: README.md, docs/known-issues.md
-
-## [1.0.0a40] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 031-qa-environmental-verdict.md (agent dev loop)
-- docs(plan): slim 031 to a failure-taxonomy fix (D1/D2-first)
-- Uncommitted changes: agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/qa.agent.md, planning-docs/031-qa-environmental-verdict.md, planning-docs/042-container-reaping-and-inspection.md
-
-### Consumer adoption
-
-- 031: qa verdict steps must add `env: ENV` to their `verdicts` map
-  (`on_env` unset halts the run with a report instead of a dev retry), and
-  consumer qa prompt copies must gain the ENV rules and anti-livelock rule
-  (plan 031, sections 3 and 5). Without this, an environmental failure at
-  the qa step, for example a sandbox that cannot start its egress proxy,
-  reports FAIL and routes to a dev retry that cannot repair it.
-
-## [1.0.0a39] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 041-brief-coverage-check.md (agent dev loop)
-- Uncommitted changes: README.md, agentic-dev-loop/sdk_agents/brief.agent.md, planning-docs/041-brief-coverage-check.md
-
-## [1.0.0a38] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 040-step-custom-prompt.md (agent dev loop)
-- Uncommitted changes: planning-docs/040-step-custom-prompt.md
-
-## [1.0.0a37] - 2026-10-29
-
-### Changed
-
-- fix(tests): derive e2e fixture doc stubs from the pipeline config
-- docs(plan): mark 039 egress-proxy-runtime-hardening COMPLETED
-- feat: construct plan 039-egress-proxy-runtime-hardening.md (agent dev loop)
-- docs(pipeline): add 038 plan, CHANGELOG, known-issues to additional_files
-- docs(plan): 040 qa prompt scoping rewording at landing
-- docs(engine): README sandbox topology paragraph (038 C6)
-- docs(engine): qa prompt persona scope (038 C4) and plan-mandated execution carve-out (039 C7)
-- docs: replace the a36 changelog sweep line with concrete entries
-- docs(plan): fix stale refs after the 039-041 renumber
-
-### Consumer adoption
-
-- 038 C4 + 039 C7: consumer qa prompt copies must gain the persona-scope
-  section (038) and the plan-mandated execution carve-out (039); until they
-  do, consumer runs keep the old prompt (plan 039, open risks).
-
-## [1.0.0a36] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 038-network-level-egress-enforcement.md (agent dev loop)
-- docs(engine): fix stale 040 plan refs to 037
-- docs(plan): add 039-egress-proxy-runtime-hardening.md
-- docs(plan): renumber 039-step-custom-prompt.md and 040-brief-coverage-check.md to 040 and 041
-- docs(plan): mark 038-network-level-egress-enforcement.md completed
-- docs(engine): point the README custom_prompt row at planning-docs/040
-
-## [1.0.0a35] - 2026-10-29
-
-### Changed
-
-- docs(plan): renumber 039-041 down to close the 038 gap, fix stale refs
-- feat: construct plan 037-sync-back-deleted-branch-baseline-guard.md (agent dev loop)
-- docs(plan): swap 037 and 041 planning-doc numbers
-- feat(pipeline): banned-command deny-lists for agent steps
-
-## [1.0.0a34] - 2026-10-29
-
-### Changed
-
-- fix(tests): materialize domain-model-erd.md in the consumer_repo fixture
-
-## [1.0.0a33] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 036-banned-commands-and-lane-boundary.md (agent dev loop)
-- pipeline.yml fix
-- feat: brief agent structural repo rules digest coverage
-- docs: recreate 039, drop priority-ordering text, README planned notes
-- Uncommitted changes: planning-docs/036-banned-commands-and-lane-boundary.md, planning-docs/037-brief-coverage-check.md, planning-docs/037-proxy-dial-rewrite-for-host-services.md, planning-docs/038-network-level-egress-enforcement.md, planning-docs/038-proxy-dial-rewrite-for-host-services.md, planning-docs/039-network-level-egress-enforcement.md, planning-docs/040-step-custom-prompt.md, planning-docs/041-sync-back-deleted-branch-baseline-guard.md
-
-### Consumer adoption
-
-- 036: agent steps should carry `forbidden_commands` deny-lists (engine
-  defaults plus repo-specific additions), and the active unit should get its
-  lane-boundary allowlist file (plan 036, sections 1 and 2).
-
-## [1.0.0a32] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 035-finalize-nudge-and-verdict-cap.md (agent dev loop)
-- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, planning-docs/035-finalize-nudge-and-verdict-cap.md
-
-### Consumer adoption
-
-- 035: verdict steps should set `max_iterations: 100` and
-  `finalize_nudge_turns: 10` (consumer pipeline change; plan 035, D2).
-
-## [1.0.0a31] - 2026-10-29
-
-### Changed
-
-- feat: construct plan 034-agent-facing-error-guide.md (agent dev loop)
-- Uncommitted changes: README.md, planning-docs/032-stop-when-green.md, planning-docs/034-agent-facing-error-guide.md, planning-docs/035-finalize-nudge-and-verdict-cap.md, planning-docs/036-banned-commands-and-lane-boundary.md, planning-docs/037-proxy-dial-rewrite-for-host-services.md, planning-docs/038-network-level-egress-enforcement.md
-
-## [1.0.0a30] - 2026-10-29
-
-### Changed
-
-- Add brief agent
-- feat: construct plan 033-brief-step.md (agent dev loop)
-
-## [1.0.0a29] - 2026-10-28
-
-### Changed
-
-- docs: mark 032 completed and document stop-when-green fields
-- feat: construct plan 032-stop-when-green.md (agent dev loop)
-- docs(dev): mandate test-first workflow in the dev prompt
-- docs(plan): brief created once per run, hash-gated regeneration
-- feat(dev): stop-when-green and long-running-command rules
-
-## [1.0.0a28] - 2026-10-28
-
-### Changed
-
-- Fix broken prose and add planning docs
-- Uncommitted changes: README.md, docs/run-time-analysis-containerised-loop.md, src/agentic_dev_loop/core/config.py, src/agentic_dev_loop/engine/isolation.py, tests/test_config.py, tests/test_isolation.py
-
-## [1.0.0a27] - 2026-10-27
-
-### Changed
-
-- Dropped native Windows support. The engine now targets Linux and WSL2
-  (Windows users run under WSL2, which is plain Linux). The windows-latest
-  CI job and every Windows-specific code path and test were removed.
-
-## [1.0.0a26] - 2026-10-27
-
-### Added
-
-- release.yml: tag pushes skip the PyPI publish and GitHub Release steps
-  when the version already exists on PyPI.
-
-### Changed
-
-- Consumer name ban added to AGENTS.md; three docs scrubbed of
-  consumer-name mentions (026 hardening).
-
-## [1.0.0a25] - 2026-10-27
-
-### Added
-
-- infra-failure classification (030): daemon-side exec failures (docker exit
-  125, exit 126 with an I/O error, daemon error responses) now raise
-  AE-SBX-019 and are sticky for the run, failing it without an agent retry
-  loop; a startup reaper removes exec containers leaked by a crashed run via a
-  host-side registry + pid liveness check, and engine containers carry
-  `agentic-dev-loop` labels.
-
-### Changed
-
-- AE-SBX-012 (daemon lost mid-run) is now sticky like AE-SBX-019: one daemon
-  loss proves the exec path is dead, so every subsequent exec fails instantly.
-
-## [1.0.0a24] - 2026-10-27
-
-### Added
-
-- top-level `merge_on_conflict:` config list (029): concurrent host edits to a
-  declared append-style log are union-merged (host wins, export-only lines
-  appended in order) instead of raising; both sides converge and the run
-  continues.
-
-### Changed
-
-- sync-back conflicts are now announced on the console and absorbed: the
-  host's version wins, the baseline is re-snapshotted before the
-  `AE-SBX-016` raise, so the next sync-back runs clean instead of wedging.
-- BR-4.4 amended and BR-4.6 added (029 merge semantics).
-
-### Breaking
-
-- `AE-SBX-016` wording now says the conflicted edits will not sync (and the
-  conflict is absorbed), instead of asking the operator to resolve before
-  retrying.
-
-## [1.0.0a23] - 2026-10-27
-
-### Changed
-
-- test: remove flaky graph timeout e2e (Windows CI)
-- Uncommitted changes: .opencode/commands/migrate-pipeline.md, src/agentic_dev_loop/engine/isolation.py, tests/test_isolation.py
-
-## [1.0.0a22] - 2026-10-26
-
-### Changed
-
-- fix: make venv shebang repair separator-agnostic (Windows CI)
-
-## [1.0.0a21] - 2026-10-26
-
-### Added
-
-- pipeline-declared `caches:` and `sync_excludes:` (028). `caches:` names
-  repo-relative toolchain cache dirs bind-mounted rw from the real workspace
-  (auto-created host-side if missing); `sync_excludes:` names scratch paths
-  skipped from both the export copy and sync-back (literal component-prefix or
-  `fnmatch` wildcards). Console-script shebangs baking a previous run's export
-  path are repaired at startup.
-
-### Changed
-
-- BR-3.2 amended: a missing declared cache is auto-created (empty, uid-owned)
-  and bind-mounted instead of failing loud.
-
-### Breaking
-
-- removed the engine's hardcoded toolchain cache whitelist (`CACHE_DIRS`);
-  pipelines relying on it must declare those dirs in `caches:`. The dogfood
-  pipeline already relocates its sandbox venv and declares nothing.
-
-## [1.0.0a20] - 2026-10-26
-
-### Changed
-
-- fix: drain CONNECT headers before opening the egress tunnel
-
-## [1.0.0a19] - 2026-10-25
-
-### Changed
-
-- fix: repair hostboundary tests for the unit-5 export model
-- docs: add plan 028 pipeline-declared caches and sync excludes
-- docs: apply deferred unit-3 always-on amendments; add unit-5 story-map pillar rows
-- Uncommitted changes: src/agentic_dev_loop/engine/step_workspace.py, src/agentic_dev_loop/engine/sync_back.py, tests/test_step_workspace.py, tests/test_sync_back.py
-
-## [1.0.0a18] - 2026-10-25
-
-### Added
-
-- unit-5 workspace egress isolation: per-step mount granularity (strict-by-default
-  `mounts:` with `rw`/`ro`), per-policy egress allowlists via an engine-managed
-  asyncio proxy, `.git`-free copy-based StepWorkspace, git-aware sync-back, and
-  the `package-registries` preset (pypi/npm/NuGet/cargo + VCS)
-
-### Changed
-
-- `StepConfig` gains `mounts` + `egress` (validated at load); `network: true` now
-  routes through a per-policy egress proxy (host-gateway + `HTTP(S)_PROXY` env)
-- `run_agent` moved onto `Runtime` as a method (no module-level shim)
-- dogfood `pipeline.yaml` declares `mounts`/`egress` per step; restore references
-  the `package-registries` preset
-
-### Breaking
-
-- strict-by-default mounts (NFR-5.3): a step with no `mounts:` mounts nothing.
-  Add explicit `mounts:` to each step - old default `{workspace}` rw +
-  unrestricted `network: true` maps to `mounts: [{path: ".", mode: rw}]` plus an
-  `egress:` declaration. The shipped dogfood pipeline is updated as the
-  migration example.
-
-## [1.0.0a17] - 2026-10-25
-
-### Changed
-
-- docs(planning): add 027 artifact-injection plan; QA probe-plan rules
-- Audit: record combined scrub+docs commit 3479d71
-- chore: scrub commercial name; add unit-5 ERD, step-execution flowchart, and fold-in docs
-- Audit: record planning-docs commit 47777fd
-- Unit-5 FD+NFR+ID docs, code-gen plan, unit-6/7 intents, name scrub
-- docs(planning): add planning conventions (tooling-path deliverables)
-- Uncommitted changes: docs/vps-dev-feasibility.md, planning-docs/027-inject-stage-artifacts-into-agent-contexts.md, src/agentic_dev_loop/engine/graph.py, src/agentic_dev_loop/engine/stages.py, tests/test_graph.py, tests/test_qa_prompt.py, tests/test_stages.py
-
-## [1.0.0a16] - 2026-10-24
-
-### Changed
-
-- feat: construct plan 025-browser-ready-sandbox-config.md (agent dev loop)
-- release: v1.0.0a15
-- feat(024): ship tooling changes for UNVERIFIABLE verdict
-- docs(aidlc): add construction-phase block for /unit-status, flip plan 024 to in progress
-- feat: construct plan 024-qa-unverifiable-verdict.md (agent dev loop)
-- docs: add plan 025, unit 5 post-intent findings, plan 023 follow-up pointers
-- Uncommitted changes: README.md, planning-docs/025-browser-ready-sandbox-config.md
+- Steps with no `mounts:` mount nothing (strict by default). The old
+  workspace-rw plus unrestricted network maps to
+  `mounts: [{path: ".", mode: rw}]` plus an `egress:` declaration (a18).
+- The engine's hardcoded toolchain cache whitelist is gone: pipelines must
+  declare those directories in `caches:` (a21).
+- `brief` is a native step type: the old `agent: brief` shape fails
+  validation naming the fix (049).
+- Pipelines written for 0.2.x/0.3.x need rework against the containerised
+  config; the shipped dogfood pipeline is the migration example.
 
 ### Consumer adoption
 
 - 024: qa verdict steps must add `unverifiable: UNVERIFIABLE` to their
   `verdicts` map, and consumer qa prompt copies must gain the UNVERIFIABLE
   verdict rules (see planning-docs/024).
-
-## [1.0.0a15] - 2026-10-24
-
-### Changed
-
-- feat(024): ship tooling changes for UNVERIFIABLE verdict
-- docs(aidlc): add construction-phase block for /unit-status, flip plan 024 to in progress
-- feat: construct plan 024-qa-unverifiable-verdict.md (agent dev loop)
-- docs: add plan 025, unit 5 post-intent findings, plan 023 follow-up pointers
-
-## [1.0.0a14] - 2026-10-24
-
-### Changed
-
-- feat: construct plan 023-sandbox-browser-render-hardening.md (agent dev loop)
-- docs(planning): add plan 023 sandbox browser render hardening
-- fix(dev-dotnet): add fontconfig and fonts
-- feat: enforce the em dash ban at test time and commit time
-- chore: scrub em dash characters from all tracked files
-- fix: pin explicit UTF-8 I/O for Windows CI and ban em dashes
-- Uncommitted changes: planning-docs/024-qa-unverifiable-verdict.md
-
-## [1.0.0a13] - 2026-10-23
-
-### Changed
-
-- Mark plans as completed
-- fix(trigger): require exactly one loader flag, safe under set -u
-- Uncommitted changes: src/agentic_dev_loop/engine/cli.py, src/agentic_dev_loop/engine/isolation.py, src/agentic_dev_loop/engine/loaders.py, tests/test_cli.py, tests/test_isolation.py, tests/test_isolation_integration.py, tests/test_loaders.py
-
-## [1.0.0a12] - 2026-10-23
-
-### Changed
-
-- feat: construct plan 022-sandbox-venv-boundary-enforcement.md (agent dev loop)
-- fix(tests): run trigger-script tests through bash for Windows
-- chore: drop tracked .review-venv junk and ignore it
-- chore: ignore .tmp-exec pytest tmpdir
-- docs: record 022 bootstrap pip-hygiene findings
-- fix(pipeline): upgrade pip before restore to keep pip-audit project-scoped
-- fix(trigger): converge on latest prerelease reliably
-- fix(trigger): upgrade pipx-managed engine install on every run
-- Uncommitted changes: agentic-dev-loop/pipeline.yaml, aidlc-docs/construction/plans/unit-2-code-generation-plan.md
-
-## [1.0.0a11] - 2026-10-23
-
-### Changed
-
-- feat: construct plan 021-supply-chain-dependency-dial.md (agent dev loop)
-- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, agentic-dev-loop/sdk_agents/dev.agent.md, planning-docs/022-sandbox-venv-boundary-enforcement.md, trigger-agentic-dev-loop.sh
-
-## [1.0.0a10] - 2026-10-23
-
-### Changed
-
-- feat: construct plan 020-host-code-execution-isolation.md (agent dev loop)
-- docs: pin README install to 1.0.0a9 + uv --refresh note
-
-## [1.0.0a9] - 2026-10-23
-
-### Changed
-
-- feat: construct plan 019-secrets-store-and-env-ban.md (agent dev loop)
-- docs: mark planning docs 001-018 completed
-- docs: add security plans 019-021 + unit-5 intent
-- fix(pipeline): break dependency-cache deadlock with restore step
-- fix: install the engine non-editable in setup-venv bootstrap
-- Uncommitted changes: planning-docs/019-secrets-store-and-env-ban.md
-
-## [1.0.0a8] - 2026-10-22
-
-### Changed
-
-- docs: pin README install to 1.0.0a8
-- feat: construct plan 017-remove-unit-4-adapter.md (agent dev loop)
-
-## [1.0.0a7] - 2026-10-22
-
-### Changed
-
-- feat: construct plan 016-sandbox-venv-hardening.md (agent dev loop)
-- docs: split sandbox-venv hardening plan from unit-4 removal (016/017) + revert agent edits
-- docs: wontship unit-4 Claude adapter - removal plan 016 + bookkeeping
-
-## [1.0.0a6] - 2026-10-22
-
-### Changed
-
-- feat: unit-4 Claude Dynamic Workflows driver - hard module break: the flat
-  `agentic_dev_loop` package splits into `core` (pipeline model + parse +
-  workflow projection), `engine` (graph/stages/sandbox/CLI), and `viz`
-  (live-graph server + workflow ingest). No re-export shims.
-- feat: build-time workflow projection - `project_workflow`, prompt-reference
-  validation, deterministic `render_workflow_js`, and the docker-free commit
-  shim; skill payload (`/agentic-dev-loop`) ships in the wheel.
-- feat: extras inversion - base install is `core` + `viz` (pydantic + PyYAML
-  only); the heavy OpenHands-SDK engine moves to the `[engine]` extra
-  (`[workflow]` is the base). The generated workflow JS is a real wheel-shipped
-  template implementing the deterministic loop (routing, attempt counter,
-  retry-note injection, clean-at-start, viz launch, gated commit), pinned by
-  golden-render tests; `viz` is now stdlib-only (no LangChain renderer).
-
-### Migration (breaking)
-
-- `agentic_dev_loop.config` → `agentic_dev_loop.core.config`
-- `agentic_dev_loop.results` → `agentic_dev_loop.core.results`
-- `agentic_dev_loop.outputs` → `agentic_dev_loop.engine.outputs`
-  (`Verdict`/`VerdictError` → `agentic_dev_loop.core.verdict`)
-- `agentic_dev_loop.viz` → `agentic_dev_loop.viz` (now a package; the
-  `viz.py` module moved to `viz.server`)
-- `agentic_dev_loop.{graph,stages,isolation,cli,llm,actions,agents,registry,loaders,proc,dryrun}` → `agentic_dev_loop.engine.*`
-- `agentic_dev_loop.extensions.aidlc` → `agentic_dev_loop.engine.extensions.aidlc`
-  (update the `extensions:` string in your pipeline.yaml)
-
-## [1.0.0a5] - 2026-10-20
-
-### Changed
-
-- fix: load extensions once across parse, dry-run, and run
-- Add dev-dotnet sandbox image: dotnet 10.0.402 + jq/unzip/lsof for dotnet pipelines
-
-## [1.0.0a4] - 2026-10-20
-
-### Changed
-
-- fix: harden sandbox request VO and kernel-proof network-none test
-- feat: construct plan 014-per-stage-networking.md (agent dev loop)
-
-## [1.0.0a3] - 2026-10-20
-
-### Changed
-
-- docs: plan per-stage networking (014)
-- fix: cap agent-client-protocol below 1.0.0 - its rc drops acp.helpers
-- Fix opencode publish command double-cutting
-
-## [1.0.0rc1] - 2026-10-20
-
-### Changed
-
-- Update tagline
-
-## [1.0.0a2] - 2026-10-20
-
-### Changed
-
-- feat: construct plan 015-container-lifecycle-rm-fix.md (agent dev loop)
-- docs: plan 015 - container lifecycle --rm cleanup fix
-
-## [1.0.0a1] - 2026-10-20
-
-### Changed
-
-- feat: construct plan 014-dry-run-flag-plan.md (agent dev loop)
-- fix: sandbox HOME=/tmp for host-user containers (root's home is unwritable)
-- ci: run docker integration tests on Linux only (Windows runners have no Docker daemon)
-- test: skip POSIX-only killpg test on Windows
-- fix: close the six Windows-CI failures from the unit-3 dogfood run
-- fix: make product and suite Windows-CI green; run sandbox as host user
-- fix: re-pin dev image digest after multi-arch rebuild (amd64+arm64)
-- ci: build the dev image for linux/amd64 and linux/arm64
-- docs: plan --dry-run validation flag (unit-3 dogfood)
-- fix: pin published dev-image digest (KD-2)
-- feat: construct unit unit-3 (agent dev loop)
+- 031: qa verdict steps must add `env: ENV` to their `verdicts` map
+  (`on_env` unset halts the run with a report instead of a dev retry), and
+  consumer qa prompt copies must gain the ENV rules and anti-livelock rule
+  (plan 031, sections 3 and 5).
+- 035: verdict steps should set `max_iterations: 100` and
+  `finalize_nudge_turns: 10` (plan 035, D2).
+- 036: agent steps should carry `forbidden_commands` deny-lists (engine
+  defaults plus repo-specific additions), and the active unit should get
+  its lane-boundary allowlist file (plan 036, sections 1 and 2).
+- 038 C4 + 039 C7: consumer qa prompt copies must gain the persona-scope
+  section (038) and the plan-mandated execution carve-out (039).
+- 046 D5 + 049: delete the vendored
+  `agentic-dev-loop/sdk_agents/brief.agent.md` and rewrite the brief step
+  to the native shape (drop `agent:`, `produces:`, and `max_iterations:`;
+  keep `brief_inputs:` with its declared `sections:`).
 
 ## [0.3.0] - 2026-10-19
 
@@ -623,4 +109,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implicit shell, explicit `shell=False`) and a whitelisted child environment.
 - Extension tool registration validates a non-empty identifier and rejects
   collisions with SDK-registered tools.
-
