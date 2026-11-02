@@ -134,7 +134,7 @@ steps:
     reasoning_effort: medium
     artifact: qa-report.md
     verdicts: { pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE, env: ENV }
-    max_iterations: 100
+    max_iterations: 150
     finalize_nudge_turns: 10           # Provisional: one final-response nudge
     mounts: [{path: ".", mode: ro}]
     # Banned-command deny-list: custom entries append after the engine
