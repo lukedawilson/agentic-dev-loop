@@ -25,8 +25,8 @@ Safety:
 - --dry-run fetches the release list and prints the plan, deleting nothing.
 - The live run demands the project name typed at the prompt before the
   first delete.
-- The keep versions are validated against the release list before anything
-  is touched, so a typo'd --keep cannot nuke the whole project.
+- Keep versions absent from the release list are noted in the plan and
+  skipped; the run proceeds. Nothing left to protect is not an error.
 - Credentials are read from the terminal (getpass) and never stored.
 - Deleted versions can never be re-uploaded to PyPI: this script cannot
   undo that, so it refuses to act until you confirm.
@@ -57,7 +57,7 @@ from packaging.version import Version
 
 PYPI = "https://pypi.org"
 DEFAULT_PROJECT = "agentic-dev-loop"
-DEFAULT_KEEP = "0.2.0,0.3.0"
+DEFAULT_KEEP = "0.3.0"
 USER_AGENT = "agentic-dev-loop pypi-purge (maintainer script)"
 VERIFY_TRIES = 3
 VERIFY_WAIT = 2.0
@@ -100,20 +100,23 @@ def body_excerpt(page: str, limit: int = 600) -> str:
     return " ".join(page.split())[:limit]
 
 
+def split_keeps(keep) -> list[str]:
+    """One keep version or a comma-separated list of keeps, stripped."""
+    return [k.strip() for k in keep.split(",")] if isinstance(keep, str) else list(keep)
+
+
+def missing_keeps(releases: dict, keep) -> list[str]:
+    """Keep versions that are not on PyPI (already gone, or never were)."""
+    return [k for k in split_keeps(keep) if k not in releases]
+
+
 def versions_to_delete(releases: dict, keep) -> list[str]:
     """Every version with at least one file except the keeps, oldest first.
 
-    `keep` is one version or a comma-separated list of versions. Raises
-    PurgeError when any keep is not present in the release list, so a
-    typo'd keep refuses to run instead of deleting everything.
+    Keep versions absent from the release list are simply nothing to
+    protect: they are noted in the plan and deletion proceeds.
     """
-    keeps = [k.strip() for k in keep.split(",")] if isinstance(keep, str) else list(keep)
-    missing = [k for k in keeps if k not in releases]
-    if missing:
-        raise PurgeError(
-            f"keep version(s) {', '.join(map(repr, missing))} not on PyPI; "
-            "refusing to run"
-        )
+    keeps = split_keeps(keep)
     versions = [v for v in releases if releases[v] and v not in keeps]
     return sorted(versions, key=Version)
 
@@ -126,6 +129,8 @@ def plan_text(releases: dict, keep: str, project: str) -> str:
         f"keep: {keep}",
         f"delete: {len(versions)} releases ({total_files} files):",
     ]
+    for version in missing_keeps(releases, keep):
+        lines.append(f"note: keep {version!r} is not on PyPI; nothing to protect")
     lines += [f"  - {v} ({len(releases[v])} files)" for v in versions]
     return "\n".join(lines)
 

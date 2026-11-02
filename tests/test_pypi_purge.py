@@ -139,13 +139,18 @@ class TestVersionSelection:
         assert "0.3.0" not in plan
         assert plan == ["1.0.0a1", "1.0.0a2", "1.0.0a16", "1.0.0a51"]
 
-    def test_partially_missing_keep_list_refuses(self):
-        with pytest.raises(purge.PurgeError, match="'0.1.0'"):
-            purge.versions_to_delete(REAL_RELEASES, "0.3.0,0.1.0")
+    def test_absent_keep_is_noted_and_ignored(self):
+        plan = purge.versions_to_delete(REAL_RELEASES, "0.1.0")
+        assert plan == ["0.2.0", "0.3.0", "1.0.0a1", "1.0.0a2",
+                        "1.0.0a16", "1.0.0a51"]
+        assert purge.missing_keeps(REAL_RELEASES, "0.1.0") == ["0.1.0"]
 
-    def test_missing_keep_refuses_loudly(self):
-        with pytest.raises(purge.PurgeError, match="not on PyPI"):
-            purge.versions_to_delete(REAL_RELEASES, "0.1.0")
+    def test_partially_missing_keep_list_keeps_the_rest(self):
+        plan = purge.versions_to_delete(REAL_RELEASES, "0.3.0,0.1.0")
+        assert "0.3.0" not in plan
+        assert "0.2.0" in plan
+        assert "1.0.0a51" in plan
+        assert purge.missing_keeps(REAL_RELEASES, "0.3.0,0.1.0") == ["0.1.0"]
 
     def test_empty_release_lists_are_skipped(self):
         releases = {**REAL_RELEASES, "1.0.0a99": []}
@@ -250,6 +255,12 @@ class TestPlanText:
         for version in ("0.2.0", "1.0.0a1", "1.0.0a2", "1.0.0a16", "1.0.0a51"):
             assert version in text
 
+    def test_plan_notes_absent_keeps(self):
+        text = purge.plan_text(REAL_RELEASES, "0.2.0,0.3.0", "agentic-dev-loop")
+        assert "not on PyPI" not in text
+        text = purge.plan_text(REAL_RELEASES, "0.9.9", "agentic-dev-loop")
+        assert "note: keep '0.9.9' is not on PyPI" in text
+
 
 class TestDryRunCLI:
     def test_dry_run_from_saved_dump_changes_nothing(self, tmp_path):
@@ -270,7 +281,7 @@ class TestDryRunCLI:
         assert "0.3.0" in proc.stdout
         assert "0.2.0" in proc.stdout
 
-    def test_dry_run_with_wrong_keep_fails_loud(self, tmp_path):
+    def test_dry_run_with_absent_keep_still_plans(self, tmp_path):
         import json
         import subprocess
         import sys
@@ -282,5 +293,6 @@ class TestDryRunCLI:
              "--from-json", str(dump), "--keep", "0.1.0"],
             capture_output=True, text=True,
         )
-        assert proc.returncode != 0
-        assert "not on PyPI" in proc.stderr
+        assert proc.returncode == 0, proc.stderr
+        assert "not on PyPI" in proc.stdout
+        assert "1.0.0a51" in proc.stdout
