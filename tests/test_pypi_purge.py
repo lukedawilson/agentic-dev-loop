@@ -164,6 +164,19 @@ class TestFormParsing:
         assert form["inputs"]["csrf_token"] == '"q"'
 
 
+class TestPostHeaders:
+    def test_posts_carry_the_origin_header(self):
+        # Load-bearing: warehouse (Pyramid >= 2) checks the CSRF origin on
+        # every POST and answers HTTP 400 when neither Origin nor Referer
+        # is present, before any credential validation happens. Sending the
+        # Origin header is what makes the login POST survive long enough to
+        # ask for credentials.
+        headers = purge.post_headers()
+        assert headers["Origin"] == "https://pypi.org"
+        assert headers["Content-Type"] == "application/x-www-form-urlencoded"
+        assert headers["User-Agent"].startswith("agentic-dev-loop")
+
+
 class TestPlanText:
     def test_plan_names_every_version_to_delete(self):
         text = purge.plan_text(REAL_RELEASES, "0.3.0", "agentic-dev-loop")

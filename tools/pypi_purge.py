@@ -64,6 +64,26 @@ class PurgeError(Exception):
     """A loud, user-facing failure. The message is complete on its own."""
 
 
+def post_headers() -> dict:
+    """Headers for form POSTs.
+
+    The Origin header is load-bearing: pypi.org (warehouse on Pyramid >= 2)
+    checks the CSRF origin on every POST and answers HTTP 400 when neither
+    Origin nor Referer is present, before any credential or form validation
+    happens. A bare urllib POST without it never gets to log in.
+    """
+    return {
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Origin": PYPI,
+    }
+
+
+def body_excerpt(page: str, limit: int = 600) -> str:
+    """The response body, flattened, for loud failure messages."""
+    return " ".join(page.split())[:limit]
+
+
 def versions_to_delete(releases: dict, keep: str) -> list[str]:
     """Every version with at least one file except `keep`, oldest first.
 
@@ -157,7 +177,7 @@ class Session:
         headers = {"User-Agent": USER_AGENT}
         if data is not None:
             body = urllib.parse.urlencode(data).encode("utf-8")
-            headers["Content-Type"] = "application/x-www-form-urlencoded"
+            headers = post_headers()
         req = urllib.request.Request(url, data=body, headers=headers, method=method)
         try:
             resp = self.opener.open(req)
@@ -206,6 +226,8 @@ def login(session: Session) -> None:
          "password": getpass.getpass("PyPI password: ")},
     )
     if status not in (301, 302, 303):
+        print(f"login POST returned HTTP {status}: {body_excerpt(page)}",
+              file=sys.stderr)
         if "Invalid username or password" in page or status == 200:
             raise PurgeError("login failed (bad credentials)")
         raise PurgeError(f"login returned HTTP {status}")
@@ -233,6 +255,8 @@ def submit_two_factor(session: Session, url: str) -> None:
         )
         if status in (301, 302, 303):
             return
+        print(f"two-factor POST returned HTTP {status}: {body_excerpt(page)}",
+              file=sys.stderr)
         print("Two-factor rejected; retry.", file=sys.stderr)
     raise PurgeError("two-factor authentication failed three times")
 
@@ -251,6 +275,8 @@ def reauthenticate(session: Session, page: str) -> None:
         )
         if status in (301, 302, 303):
             return
+        print(f"re-auth POST returned HTTP {status}: {body_excerpt(page)}",
+              file=sys.stderr)
         print("Re-auth rejected; retry.", file=sys.stderr)
     raise PurgeError("re-authentication failed three times")
 
@@ -292,7 +318,8 @@ def delete_version(session: Session, project: str, version: str) -> None:
             reauthenticate(session, page)
             continue  # now re-fetch the manage page and re-POST the delete
         raise PurgeError(
-            f"delete for {version} was refused (HTTP {status}, no re-auth form)"
+            f"delete for {version} was refused "
+            f"(HTTP {status}, no re-auth form): {body_excerpt(page)}"
         )
     else:
         raise PurgeError(f"delete for {version} never went through")
