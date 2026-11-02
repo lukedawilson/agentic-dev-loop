@@ -29,12 +29,10 @@ deps_policy: open
 # both the loop (AI-DLC mandates audit.md logging) and the operator - union-merge
 # those edits instead of raising a sync-back conflict.
 merge_on_conflict: [aidlc-docs/audit.md]
-# Venv-boundary enforcement: keep the container-built sandbox venv OUT of
-# the workspace - it is bind-mounted in from this host dir at
-# {ws}/.venv-sandbox (rw), so `git add -A` sees no venv noise and the host
-# `.venv` stays masked (read-only empty tmpfs) from the sandbox.
+# 052: per-run setup at the step boundary, fresh every entry, targeting the
+# export. The sandbox venv is a gitignored dir built by the dev step's setup
+# hook (no engine-level venv special case).
 isolation:
-  sandbox_venv_dir: ~/.agentic-dev-loop/venvs/agent-engine
   cpus: 2
 
 steps:
@@ -70,10 +68,14 @@ steps:
   - name: dev
     agent: dev
     reasoning_effort: high
-    max_iterations: 100        # 035: turn cap; hard outer bound against verification spirals
+    max_iterations: 150        # 035: turn cap; hard outer bound against verification spirals
     finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
     produces: implementation-summary.md   # hygiene-tracked, no verdict
     mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
+    # 052: build the sandbox venv fresh at every dev entry (per-run, export
+    # target; network-on in the provision container). Dev agents run python
+    # in-sandbox and restore/test both need .venv-sandbox/bin/python.
+    setup: python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"
     # Banned-command deny-list: custom entries append after the engine
     # defaults (git mutations, package installs, playwright, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
@@ -104,8 +106,6 @@ steps:
 
   - name: test
     command: .venv-sandbox/bin/python -m pytest tests/ -q -m "not docker"   # sandboxed: exit code is the verdict
-    setup: |-
-      { [ -x .venv-sandbox/bin/python ] && .venv-sandbox/bin/python -c 'import sys' ; } || { rm -rf .venv-sandbox/* && python -m venv .venv-sandbox ; } && .venv-sandbox/bin/python -m pip install -e ".[dev]"
     timeout: 600
     mounts: [{path: ".", mode: rw}]
     on_pass: review
