@@ -192,6 +192,12 @@ class TestExportAndMountsE2E:
         (ws / "src" / "a.py").write_text("orig")
         (ws / "ro").mkdir()
         (ws / "ro" / "f").write_text("read-only")
+        # 052: sync-back resolves ignored paths via `git check-ignore` against
+        # the workspace, which must be a git repo (production workspaces
+        # always are). The synthetic fixture workspace needs the same shape.
+        init = SubprocessRunner().run(["git", "init", "-q", str(ws)], timeout=30)
+        if init.exit_code != 0:
+            pytest.fail(f"git init failed: {init.stderr}")
         export = tmp_path / "state" / "exports" / "r1"
         ws_obj = StepWorkspace.materialise(ws, [], "linux", export)
         profile = resolve_effective_profile(IsolationConfig(image=TEST_IMAGE))

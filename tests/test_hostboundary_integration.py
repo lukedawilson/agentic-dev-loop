@@ -46,6 +46,12 @@ def backend(tmp_path):
         pytest.skip(f"integration image {TEST_IMAGE!r} not present locally")
     ws = tmp_path / "ws"
     ws.mkdir()
+    # 052: sync-back resolves ignored paths via `git check-ignore` against
+    # the workspace, which must be a git repo (production workspaces always
+    # are). The synthetic fixture workspace needs the same shape.
+    init = SubprocessRunner().run(["git", "init", "-q", str(ws)], timeout=30)
+    if init.exit_code != 0:
+        pytest.fail(f"git init failed: {init.stderr}")
     # unit-5: every step resolves a mount set, so enforcement needs the
     # materialised .git-free export (AE-SBX-017 otherwise). Wire the export
     # the way startup_sandbox does (mirror test_isolation_integration's
