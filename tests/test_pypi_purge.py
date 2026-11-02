@@ -67,13 +67,30 @@ REAL_RELEASES = {
     ],
 }
 
-# Warehouse manage release page: the Delete release form.
+# Warehouse manage release page: the Delete release form, including the five
+# acknowledgment checkboxes the server demands before it will delete.
 DELETE_PAGE = """<!DOCTYPE html>
 <html><body>
 <form method="POST" action="/manage/project/agentic-dev-loop/release/1.0.0a51/">
   <input name="csrf_token" type="hidden" value="TOKEN123">
   <input name="confirm_delete_version" type="text" value="">
+  <input name="acknowledge_delete_files" type="checkbox" value="">
+  <input name="acknowledge_install_break" type="checkbox" value="">
+  <input name="acknowledge_no_reupload" type="checkbox" value="">
+  <input name="acknowledge_irreversible" type="checkbox" value="">
+  <input name="acknowledge_admins_cannot_undo" type="checkbox" value="">
   <button type="submit">Delete release</button>
+</form>
+</body></html>"""
+
+# Warehouse login page, for the session-expired guard in verification.
+LOGIN_PAGE = """<!DOCTYPE html>
+<html><body>
+<form method="POST" action="/account/login/">
+  <input name="csrf_token" type="hidden" value="TOKEN000">
+  <input name="username" type="text" value="">
+  <input name="password" type="password" value="">
+  <button type="submit">Log in</button>
 </form>
 </body></html>"""
 
@@ -115,6 +132,16 @@ class TestVersionSelection:
     def test_plan_is_oldest_first(self):
         plan = purge.versions_to_delete(REAL_RELEASES, "0.3.0")
         assert plan == sorted(plan, key=Version)
+
+    def test_multiple_keeps_all_survive(self):
+        plan = purge.versions_to_delete(REAL_RELEASES, "0.2.0,0.3.0")
+        assert "0.2.0" not in plan
+        assert "0.3.0" not in plan
+        assert plan == ["1.0.0a1", "1.0.0a2", "1.0.0a16", "1.0.0a51"]
+
+    def test_partially_missing_keep_list_refuses(self):
+        with pytest.raises(purge.PurgeError, match="'0.1.0'"):
+            purge.versions_to_delete(REAL_RELEASES, "0.3.0,0.1.0")
 
     def test_missing_keep_refuses_loudly(self):
         with pytest.raises(purge.PurgeError, match="not on PyPI"):
@@ -175,6 +202,44 @@ class TestPostHeaders:
         assert headers["Origin"] == "https://pypi.org"
         assert headers["Content-Type"] == "application/x-www-form-urlencoded"
         assert headers["User-Agent"].startswith("agentic-dev-loop")
+
+
+class TestDeletePostBody:
+    def test_body_carries_version_acks_and_csrf(self):
+        form = purge.find_form(purge.parse_forms(DELETE_PAGE),
+                               "confirm_delete_version")
+        body = purge.delete_post_body(form, "1.0.0a51")
+        assert body["confirm_delete_version"] == "1.0.0a51"
+        assert body["csrf_token"] == "TOKEN123"
+        for field in purge.DELETE_RELEASE_ACKNOWLEDGMENTS:
+            assert body[field] == "on"
+
+
+class TestRedirectBackDetection:
+    def test_redirect_back_to_release_page_is_a_refusal(self):
+        location = "/manage/project/agentic-dev-loop/release/1.0.0a1/"
+        assert purge.delete_redirects_back(location, "agentic-dev-loop", "1.0.0a1")
+
+    def test_redirect_away_is_success(self):
+        location = "/manage/project/agentic-dev-loop/releases/"
+        assert not purge.delete_redirects_back(location, "agentic-dev-loop",
+                                               "1.0.0a1")
+
+    def test_absolute_location_is_parsed(self):
+        location = ("https://pypi.org/manage/project/agentic-dev-loop/"
+                    "release/1.0.0a1/")
+        assert purge.delete_redirects_back(location, "agentic-dev-loop", "1.0.0a1")
+
+
+class TestLoginPageDetection:
+    def test_login_page_detected(self):
+        assert purge.is_login_page(purge.parse_forms(LOGIN_PAGE))
+
+    def test_reauth_page_is_not_login_page(self):
+        assert not purge.is_login_page(purge.parse_forms(REAUTH_PAGE))
+
+    def test_delete_page_is_not_login_page(self):
+        assert not purge.is_login_page(purge.parse_forms(DELETE_PAGE))
 
 
 class TestPlanText:

@@ -14,14 +14,18 @@ The flow, per version:
    account has 2FA) for destructive actions once per 30 minutes: the POST
    comes back with the re-auth form instead of a redirect. Submit it once
    and the whole remaining batch goes through.
-4. Verify against the JSON API that the release is actually gone before
-   touching the next one; a failed verification aborts loudly.
+4. The delete POST must carry the five acknowledgment checkboxes the form
+   renders (warehouse refuses without them, bouncing back to the release
+   page with a flash error). A redirect back to the release page is
+   treated as a refusal and reported loudly with the flash text.
+5. Verify against the DB-backed manage page that the release is actually
+   gone before touching the next one; a failed verification aborts loudly.
 
 Safety:
 - --dry-run fetches the release list and prints the plan, deleting nothing.
 - The live run demands the project name typed at the prompt before the
   first delete.
-- The keep version is validated against the release list before anything
+- The keep versions are validated against the release list before anything
   is touched, so a typo'd --keep cannot nuke the whole project.
 - Credentials are read from the terminal (getpass) and never stored.
 - Deleted versions can never be re-uploaded to PyPI: this script cannot
@@ -53,11 +57,23 @@ from packaging.version import Version
 
 PYPI = "https://pypi.org"
 DEFAULT_PROJECT = "agentic-dev-loop"
-DEFAULT_KEEP = "0.3.0"
+DEFAULT_KEEP = "0.2.0,0.3.0"
 USER_AGENT = "agentic-dev-loop pypi-purge (maintainer script)"
 VERIFY_TRIES = 3
 VERIFY_WAIT = 2.0
 DELETE_PAUSE = 0.5
+
+#: Acknowledgments the user must check to delete a release, mirroring
+#: warehouse.utils.project.DELETE_RELEASE_ACKNOWLEDGMENTS. The server
+#: refuses the delete (303 back to the release page with a flash error)
+#: unless every one of these fields is present and truthy in the POST.
+DELETE_RELEASE_ACKNOWLEDGMENTS = (
+    "acknowledge_delete_files",
+    "acknowledge_install_break",
+    "acknowledge_no_reupload",
+    "acknowledge_irreversible",
+    "acknowledge_admins_cannot_undo",
+)
 
 
 class PurgeError(Exception):
@@ -84,16 +100,21 @@ def body_excerpt(page: str, limit: int = 600) -> str:
     return " ".join(page.split())[:limit]
 
 
-def versions_to_delete(releases: dict, keep: str) -> list[str]:
-    """Every version with at least one file except `keep`, oldest first.
+def versions_to_delete(releases: dict, keep) -> list[str]:
+    """Every version with at least one file except the keeps, oldest first.
 
-    Raises PurgeError when `keep` is not present in the release list, so a
-    typo'd keep version refuses to run instead of deleting everything.
+    `keep` is one version or a comma-separated list of versions. Raises
+    PurgeError when any keep is not present in the release list, so a
+    typo'd keep refuses to run instead of deleting everything.
     """
-    if keep not in releases:
-        raise PurgeError(f"keep version {keep!r} is not on PyPI; refusing to run")
-    versions = [v for v in releases if releases[v]]
-    versions.remove(keep)
+    keeps = [k.strip() for k in keep.split(",")] if isinstance(keep, str) else list(keep)
+    missing = [k for k in keeps if k not in releases]
+    if missing:
+        raise PurgeError(
+            f"keep version(s) {', '.join(map(repr, missing))} not on PyPI; "
+            "refusing to run"
+        )
+    versions = [v for v in releases if releases[v] and v not in keeps]
     return sorted(versions, key=Version)
 
 
@@ -282,18 +303,59 @@ def reauthenticate(session: Session, page: str) -> None:
 
 
 def release_gone(session: Session, project: str, version: str) -> bool:
-    """True when the JSON API 404s for the version (deletion confirmed)."""
-    url = f"{PYPI}/pypi/{project}/{version}/json"
+    """True when the DB-backed manage page 404s for the release.
+
+    The JSON API is backed by the search index and can lag a successful
+    delete; the manage release page is served from the database, so a 404
+    there is authoritative.
+    """
+    url = f"{PYPI}/manage/project/{project}/release/{version}/"
     for attempt in range(VERIFY_TRIES):
-        status, _, _ = session.request("GET", url)
+        status, _, page = session.follow(url)
         if status == 404:
             return True
         if status != 200:
             raise PurgeError(
                 f"verification for {version} returned HTTP {status}"
             )
+        if is_login_page(parse_forms(page)):
+            raise PurgeError(
+                f"session expired while verifying {version}; "
+                "re-run the script (already-deleted versions are skipped)"
+            )
         time.sleep(VERIFY_WAIT)
     return False
+
+
+def delete_post_body(form: dict, version: str) -> dict:
+    """The exact POST body the delete form needs: the form's own hidden
+    fields, the typed version, and every acknowledgment checkbox checked."""
+    body = dict(form["inputs"])
+    body["confirm_delete_version"] = version
+    for field in DELETE_RELEASE_ACKNOWLEDGMENTS:
+        body[field] = "on"
+    return body
+
+
+def delete_redirects_back(location: str, project: str, version: str) -> bool:
+    """True when a 3xx sends us back to the release page instead of away.
+
+    The delete view answers refusals with HTTPSeeOther to the same release
+    page (carrying a flash error), while success goes to the project
+    releases list. A redirect back therefore means nothing was deleted.
+    """
+    path = urllib.parse.urlsplit(location).path
+    return path.rstrip("/") == f"/manage/project/{project}/release/{version}"
+
+
+def is_login_page(forms: list[dict]) -> bool:
+    """True when the page is the login form rather than a manage page.
+
+    Used by verification to tell "the session died and we were bounced to
+    the login page" apart from "the release is still there".
+    """
+    form = find_form(forms, "password")
+    return form is not None and "next_route" not in form["inputs"]
 
 
 def delete_version(session: Session, project: str, version: str) -> None:
@@ -308,11 +370,19 @@ def delete_version(session: Session, project: str, version: str) -> None:
             raise PurgeError(
                 f"manage page for {version} has no delete form"
             )
-        status, _, page = session.request(
+        status, headers, page = session.request(
             "POST", urllib.parse.urljoin(PYPI, form["action"]),
-            {**form["inputs"], "confirm_delete_version": version},
+            delete_post_body(form, version),
         )
         if status in (301, 302, 303):
+            location = headers.get("Location") or headers.get("location") or ""
+            if delete_redirects_back(location, project, version):
+                # The server refused: follow the bounce once so the flash
+                # error it planted in the session lands in the page body.
+                _, _, page = session.follow(urllib.parse.urljoin(PYPI, location))
+                raise PurgeError(
+                    f"PyPI refused to delete {version}: {body_excerpt(page)}"
+                )
             break
         if needs_reauth(parse_forms(page)):
             reauthenticate(session, page)
@@ -363,7 +433,8 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--project", default=DEFAULT_PROJECT,
                         help=f"PyPI project name (default: {DEFAULT_PROJECT})")
     parser.add_argument("--keep", default=DEFAULT_KEEP,
-                        help=f"version to keep (default: {DEFAULT_KEEP})")
+                        help="comma-separated versions to keep "
+                             f"(default: {DEFAULT_KEEP})")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the plan and delete nothing")
     parser.add_argument("--from-json", metavar="FILE",
