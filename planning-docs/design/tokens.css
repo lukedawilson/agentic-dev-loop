@@ -1,0 +1,88 @@
+/*
+ * agentic-dev-loop viz - theme tokens (Carbon re-skin).
+ *
+ * Carbon Web Components read --cds-* custom properties. These override the
+ * g100 (dark) and g10 (light) base themes with the brand palette. Apply the
+ * theme by setting data-theme="dark" | "light" on <html>; default follows
+ * prefers-color-scheme, the header toggle overrides it.
+ *
+ * --adl-* are product tokens with no Carbon equivalent (status tints,
+ * unverifiable status, console surface).
+ */
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --cds-background: #0F1214;
+  --cds-layer-01: #171B1F;
+  --cds-layer-02: #20262B;
+  --cds-layer-03: #2A3137;
+  --cds-layer-hover-01: #20262B;
+  --cds-border-subtle-01: #2E353B;
+  --cds-border-strong-01: #4D565E;
+  --cds-text-primary: #EEF1F3;
+  --cds-text-secondary: #A3ACB4;
+  --cds-text-helper: #8A949C;
+  --cds-icon-primary: #EEF1F3;
+  --cds-icon-secondary: #A3ACB4;
+  --cds-interactive: #08BDBA;
+  --cds-focus: #3DDBD9;
+  --cds-link-primary: #3DDBD9;
+  --cds-support-success: #42BE65;
+  --cds-support-warning: #F1C21B;
+  --cds-support-error: #FF6B72;
+  --cds-support-info: #08BDBA;
+
+  --adl-support-unverifiable: #BE95FF;
+  --adl-tint-run: rgba(8, 189, 186, .14);
+  --adl-tint-ok: rgba(66, 190, 101, .11);
+  --adl-tint-warn: rgba(241, 194, 27, .12);
+  --adl-tint-err: rgba(250, 77, 86, .14);
+  --adl-tint-unv: rgba(165, 110, 255, .14);
+  --adl-console: #0B0E10;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --cds-background: #F2F4F5;
+  --cds-layer-01: #FFFFFF;
+  --cds-layer-02: #F4F6F7;
+  --cds-layer-03: #E6E9EB;
+  --cds-layer-hover-01: #F4F6F7;
+  --cds-border-subtle-01: #DDE1E4;
+  --cds-border-strong-01: #8D969E;
+  --cds-text-primary: #15191C;
+  --cds-text-secondary: #4C555D;
+  --cds-text-helper: #5F6870;
+  --cds-icon-primary: #15191C;
+  --cds-icon-secondary: #4C555D;
+  --cds-interactive: #007D79;
+  --cds-focus: #007D79;
+  --cds-link-primary: #007D79;
+  --cds-support-success: #198038;
+  --cds-support-warning: #8E6A00;
+  --cds-support-error: #DA1E28;
+  --cds-support-info: #007D79;
+
+  --adl-support-unverifiable: #8A3FFC;
+  --adl-tint-run: rgba(0, 125, 121, .09);
+  --adl-tint-ok: rgba(25, 128, 56, .08);
+  --adl-tint-warn: rgba(241, 194, 27, .18);
+  --adl-tint-err: rgba(218, 30, 40, .08);
+  --adl-tint-unv: rgba(138, 63, 252, .08);
+  --adl-console: #121619;
+}
+
+/* Console is always dark, in both themes. */
+:root {
+  --adl-console-text: #D6DCE0;
+  --adl-console-muted: #8A949C;
+  --adl-console-control: #20262B;
+  --adl-console-control-hover: #2A3137;
+  --adl-console-scroll-thumb: #4D565E;
+
+  --adl-font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --adl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --adl-radius: 0;
+  --adl-motion-productive: cubic-bezier(.2, 0, .38, .9);
+}

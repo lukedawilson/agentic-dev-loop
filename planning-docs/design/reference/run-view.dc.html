@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>agentic-dev-loop - run view</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#08BDBA}a:hover{color:#3DDBD9}
+.t-dark{
+  --cds-background:#0F1214;--cds-layer-01:#171B1F;--cds-layer-02:#20262B;--cds-layer-03:#2A3137;
+  --cds-border-subtle-01:#2E353B;--cds-border-strong-01:#4D565E;
+  --cds-text-primary:#EEF1F3;--cds-text-secondary:#A3ACB4;--cds-text-helper:#8A949C;
+  --cds-interactive:#08BDBA;--cds-focus:#3DDBD9;
+  --cds-support-success:#42BE65;--cds-support-warning:#F1C21B;--cds-support-error:#FF6B72;--adl-support-unverifiable:#BE95FF;
+  --adl-tint-run:rgba(8,189,186,.14);--adl-tint-ok:rgba(66,190,101,.11);--adl-tint-warn:rgba(241,194,27,.12);--adl-tint-err:rgba(250,77,86,.14);--adl-tint-unv:rgba(165,110,255,.14);
+  --adl-console:#0B0E10;
+}
+.t-light{
+  --cds-background:#F2F4F5;--cds-layer-01:#FFFFFF;--cds-layer-02:#F4F6F7;--cds-layer-03:#E6E9EB;
+  --cds-border-subtle-01:#DDE1E4;--cds-border-strong-01:#8D969E;
+  --cds-text-primary:#15191C;--cds-text-secondary:#4C555D;--cds-text-helper:#5F6870;
+  --cds-interactive:#007D79;--cds-focus:#007D79;
+  --cds-support-success:#198038;--cds-support-warning:#8E6A00;--cds-support-error:#DA1E28;--adl-support-unverifiable:#8A3FFC;
+  --adl-tint-run:rgba(0,125,121,.09);--adl-tint-ok:rgba(25,128,56,.08);--adl-tint-warn:rgba(241,194,27,.18);--adl-tint-err:rgba(218,30,40,.08);--adl-tint-unv:rgba(138,63,252,.08);
+  --adl-console:#121619;
+}
+.adl{font-family:'IBM Plex Sans',system-ui,sans-serif;background:var(--cds-background);color:var(--cds-text-primary);height:100vh;display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+@media (max-width:760px){.adl{height:auto;overflow:visible}.grow{flex:none!important}.panel-scroll{overflow:visible!important}}
+.pipe{position:relative;margin:0 auto}
+.nrow{font-size:11px;line-height:14px}
+.nname{font-size:13px;letter-spacing:-.01em;line-height:18px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* progressive disclosure as the pipeline shrinks: drop secondary text, never clip names */
+/* scrollbars: Carbon-flat, themed */
+.panel-scroll,.console{scrollbar-width:thin;scrollbar-color:var(--cds-border-strong-01) transparent}
+.console{scrollbar-color:#4D565E #0B0E10}
+.panel-scroll::-webkit-scrollbar,.console::-webkit-scrollbar{width:8px;height:8px}
+.panel-scroll::-webkit-scrollbar-track{background:transparent;border-left:1px solid var(--cds-border-subtle-01)}
+.panel-scroll::-webkit-scrollbar-thumb{background:var(--cds-border-strong-01)}
+.panel-scroll::-webkit-scrollbar-thumb:hover{background:var(--cds-text-helper)}
+.console::-webkit-scrollbar-track{background:#0B0E10}
+.console::-webkit-scrollbar-thumb{background:#4D565E}
+.console::-webkit-scrollbar-thumb:hover{background:#8A949C}
+.mono{font-family:'IBM Plex Mono',ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+.lbl{font:500 11px/16px 'IBM Plex Mono',ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--cds-text-helper)}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:2px solid var(--cds-focus);outline-offset:-2px}
+
+/* status LEDs */
+.led{display:inline-block;width:8px;height:8px;flex:0 0 8px;background:var(--cds-border-strong-01)}
+.lg-pass{background:var(--cds-support-success)}
+.lg-run{background:var(--cds-interactive)}
+.lg-fail{background:var(--cds-support-warning)}
+.lg-fatal{background:var(--cds-support-error)}
+.lg-unv{background:var(--adl-support-unverifiable)}
+.lg-pend{background:transparent;box-shadow:inset 0 0 0 1px var(--cds-text-helper)}
+
+/* pipeline stations */
+.node{position:absolute;top:0;width:112px;height:76px;box-sizing:border-box;padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;background:var(--cds-layer-01);border:1px solid var(--cds-border-strong-01);overflow:hidden}
+.node .stt{color:var(--cds-text-secondary)}
+.st-pass{border-color:var(--cds-support-success);background:var(--adl-tint-ok)}
+.st-pass .led{background:var(--cds-support-success)}.st-pass .stt{color:var(--cds-support-success)}
+.st-running{border:2px solid var(--cds-interactive);background:var(--adl-tint-run);padding:7px 9px}
+.st-running .led{background:var(--cds-interactive);animation:blink 1.2s steps(2,start) infinite}.st-running .stt{color:var(--cds-interactive)}
+.st-fail{border-color:var(--cds-support-warning);background:var(--adl-tint-warn)}
+.st-fail .led{background:var(--cds-support-warning)}.st-fail .stt{color:var(--cds-support-warning)}
+.st-fatal{border:2px solid var(--cds-support-error);background:var(--adl-tint-err);padding:7px 9px}
+.st-fatal .led{background:var(--cds-support-error)}.st-fatal .stt{color:var(--cds-support-error)}
+.st-unverifiable{border-color:var(--adl-support-unverifiable);background:var(--adl-tint-unv)}
+.st-unverifiable .led{background:var(--adl-support-unverifiable)}.st-unverifiable .stt{color:var(--adl-support-unverifiable)}
+.st-pending{border-style:dashed;color:var(--cds-text-secondary)}
+.st-pending .led{background:transparent;box-shadow:inset 0 0 0 1px var(--cds-text-helper)}
+.bar{display:none}
+.st-running .bar{display:block;position:absolute;left:0;right:0;bottom:0;height:3px;overflow:hidden}
+.st-running .bar::after{content:'';position:absolute;top:0;bottom:0;width:32%;background:var(--cds-interactive);animation:sweep 1.6s linear infinite}
+@keyframes sweep{from{left:-32%}to{left:100%}}
+@keyframes blink{0%{opacity:1}100%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.st-running .bar::after,.st-running .led{animation:none}.st-running .bar::after{left:0;width:100%}}
+
+/* forward rail + back-edges */
+.ln{position:absolute;box-sizing:content-box;color:var(--cds-border-strong-01)}
+.ln.h.flow{border-top:2px solid currentColor}
+.ln.v.flow{border-left:2px solid currentColor}
+.ln.h.back{border-top:1px dashed currentColor}
+.ln.v.back{border-left:1px dashed currentColor}
+.ln.on,.arr.on{color:var(--cds-support-success)}
+.arr{position:absolute;width:0;height:0;color:var(--cds-border-strong-01)}
+.arr.right{border-left:6px solid currentColor;border-top:5px solid transparent;border-bottom:5px solid transparent}
+.arr.up{border-bottom:7px solid currentColor;border-left:5px solid transparent;border-right:5px solid transparent}
+.elabel{position:absolute;transform:translateX(-100%);height:18px;line-height:16px;box-sizing:border-box;padding:0 6px;font:500 11px/16px 'IBM Plex Mono',monospace;letter-spacing:.03em;background:var(--cds-layer-01);color:var(--cds-text-secondary);border:1px solid var(--cds-border-subtle-01);white-space:nowrap}
+
+/* Carbon tag (re-skinned: square, mono) */
+.tag{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;box-sizing:border-box;font:400 12px/16px 'IBM Plex Mono',monospace;white-space:nowrap}
+.tag-pass{color:var(--cds-support-success);background:var(--adl-tint-ok)}
+.tag-fail{color:var(--cds-support-warning);background:var(--adl-tint-warn)}
+.tag-fatal{color:var(--cds-support-error);background:var(--adl-tint-err)}
+.tag-unv{color:var(--adl-support-unverifiable);background:var(--adl-tint-unv)}
+.tag-unclear{color:var(--cds-text-secondary);background:var(--cds-layer-03)}
+
+/* attempt meter */
+.seg{height:6px;background:var(--cds-layer-03)}
+.seg.on{background:var(--cds-interactive)}
+.seg.ex{background:var(--cds-support-error)}
+
+.btn-icon{width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;padding:0;background:transparent;border:0;color:var(--cds-text-secondary);cursor:pointer}
+.btn-icon:hover{background:var(--cds-layer-03);color:var(--cds-text-primary)}
+
+/* Carbon accordion (re-skinned) */
+.acc{border-top:1px solid var(--cds-border-subtle-01)}
+.acc:last-child{border-bottom:1px solid var(--cds-border-subtle-01)}
+.acc-h{width:100%;display:grid;grid-template-columns:16px 24px minmax(0,1fr) auto 72px;align-items:center;column-gap:12px;min-height:44px;padding:0 16px;box-sizing:border-box;background:transparent;border:0;text-align:left;cursor:pointer}
+.acc-h:hover{background:var(--cds-layer-02)}
+.acc.is-running .acc-h{background:var(--adl-tint-run)}
+.chev{display:block;color:var(--cds-text-secondary);transition:transform 110ms cubic-bezier(.2,0,.38,.9)}
+.chev.open{transform:rotate(90deg)}
+.console{position:relative;margin:0 16px 16px 56px;max-height:320px;overflow-y:auto;background:var(--adl-console);border:1px solid var(--cds-border-subtle-01)}
+.console pre{margin:0;padding:12px 16px;font:12px/1.6 'IBM Plex Mono',ui-monospace,monospace;color:#D6DCE0;white-space:pre-wrap;word-break:break-all}
+.cline{display:block;min-height:1.6em}
+.ph{color:#8A949C;font-style:italic}
+.copy{position:sticky;top:8px;float:right;margin:8px 8px 0 0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;border:0;background:#20262B;color:#D6DCE0;cursor:pointer}
+.copy:hover{background:#2A3137;color:#FFFFFF}
+.copy:focus-visible{outline:2px solid #3DDBD9;outline-offset:-2px}
+
+.divider{display:flex;align-items:center;justify-content:center;width:100%;height:16px;padding:0;background:transparent;border:0;cursor:row-resize;color:var(--cds-text-helper)}
+.divider:hover .grip{background:var(--cds-interactive)}
+.grip{width:48px;height:2px;background:var(--cds-border-strong-01)}
+
+.note-ok{border:1px solid var(--cds-support-success);background:var(--adl-tint-ok)}
+.note-err{border:1px solid var(--cds-support-error);background:var(--adl-tint-err)}
+</style>
+</helmet>
+<div class="adl t-{{theme}}">
+
+  <!-- Carbon UI shell header -->
+  <header style="height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 16px; background: var(--cds-layer-01); border-bottom: 1px solid var(--cds-border-subtle-01); flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="1" y="1" width="18" height="18" stroke="currentColor" stroke-width="1.5"></rect><rect x="6" y="6" width="8" height="8" fill="var(--cds-interactive)"></rect></svg>
+      <span class="mono" style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em;">agentic-dev-loop</span>
+      <span style="font-size: 14px; color: var(--cds-text-secondary);">viz</span>
+    </div>
+    <div style="flex-grow: 1;"></div>
+    <sc-if value="{{live}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; gap: 8px;"><span class="led lg-pass"></span><span class="lbl">Stream live</span></div>
+    </sc-if>
+    <sc-if value="{{reconnecting}}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; align-items: center; gap: 8px;"><span class="led lg-fail"></span><span class="lbl" style="color: var(--cds-support-warning);">Reconnecting</span></div>
+    </sc-if>
+    <button class="btn-icon" type="button" aria-label="{{themeLabel}}" title="{{themeLabel}}" onClick="{{toggleTheme}}" style="width: 48px; height: 48px; margin-right: -16px; border-left: 1px solid var(--cds-border-subtle-01);">
+      <sc-if value="{{isDark}}" hint-placeholder-val="{{ true }}">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="3.75"></circle><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6 16 16M4 16l1.4-1.4M14.6 5.4 16 4"></path></svg>
+      </sc-if>
+      <sc-if value="{{isLight}}" hint-placeholder-val="{{ false }}">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z"></path></svg>
+      </sc-if>
+    </button>
+  </header>
+
+  <!-- stream-lost banner -->
+  <sc-if value="{{reconnecting}}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #F1C21B; color: #161616; flex-wrap: wrap;">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 1.5 15 14.5H1z"></path><path d="M8 6v4M8 11.5v1"></path></svg>
+      <strong style="font-size: 14px; font-weight: 600;">Connection lost, reconnecting…</strong>
+      <span class="mono" style="font-size: 12px;">attempt 1/3 · page reloads after 3 failed attempts · no events for 10 s</span>
+    </div>
+  </sc-if>
+
+  <main class="grow" style="flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1600px; margin: 0 auto; padding: 16px 24px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px;">
+
+    <!-- run summary -->
+    <section aria-label="Run summary" style="flex: none;">
+      <div style="display: flex; flex-wrap: wrap; gap: 1px; background: var(--cds-border-subtle-01); border: 1px solid var(--cds-border-subtle-01);">
+        <div style="flex: 2 1 240px; padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Run</span>
+          <h1 class="mono" style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em;">{{subject}}</h1>
+        </div>
+        <div style="flex: 1 1 200px; padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Attempt</span>
+          <div class="mono" style="font-size: 20px; line-height: 28px;"><span>{{attempt}}</span><span style="color: var(--cds-text-helper);"> / 10</span></div>
+          <div style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; max-width: 200px;">
+            <sc-for list="{{meter}}" as="m" hint-placeholder-count="10"><div class="{{m.cls}}"></div></sc-for>
+          </div>
+        </div>
+        <div style="flex: 2 1 340px; padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Thread ID</span>
+          <div style="display: flex; align-items: center; background: var(--cds-layer-02); border-bottom: 1px solid var(--cds-border-strong-01); max-width: 100%; align-self: flex-start;">
+            <code class="mono" style="font-size: 13px; padding: 0 12px; user-select: all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">44d07da3646946419986cc4c10636e74</code>
+            <button class="btn-icon" type="button" aria-label="Copy thread ID" title="Copy thread ID"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8"></rect><path d="M10.5 3.5v-1h-8v8h1"></path></svg></button>
+          </div>
+        </div>
+        <div style="flex: 1 1 200px; padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Total elapsed</span>
+          <div style="display: flex; align-items: baseline; gap: 10px;">
+            <span class="mono" style="font-size: 20px; line-height: 28px;">{{total}}</span>
+            <span class="lbl" style="color: {{totalNoteColor}};">{{totalNote}}</span>
+          </div>
+        </div>
+        <div style="flex: 3 1 420px; padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px;">
+          <span class="lbl">Step verdicts</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <sc-for list="{{verdicts}}" as="v" hint-placeholder-count="7"><span class="{{v.cls}}">{{v.text}}</span></sc-for>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- run outcome (Carbon inline notification, low contrast) -->
+    <sc-if value="{{showOutcome}}" hint-placeholder-val="{{ false }}">
+      <div role="status" class="{{outcomeCls}}" style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap;">
+        <sc-if value="{{isSuccess}}" hint-placeholder-val="{{ false }}">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cds-support-success)" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8.25"></circle><path d="m6 10.2 2.7 2.7L14.2 7.4"></path></svg>
+        </sc-if>
+        <sc-if value="{{isFailure}}" hint-placeholder-val="{{ false }}">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cds-support-error)" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8.25"></circle><path d="m7 7 6 6M13 7l-6 6"></path></svg>
+        </sc-if>
+        <strong class="mono" style="font-size: 14px; font-weight: 600; letter-spacing: 0.04em;">{{outcomeTitle}}</strong>
+        <span style="font-size: 14px; color: var(--cds-text-secondary);">{{outcomeBody}}</span>
+      </div>
+    </sc-if>
+
+    <!-- pipeline -->
+    <section aria-label="Pipeline topology" style="flex: none; background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01);">
+      <div style="display: flex; align-items: center; gap: 24px; padding: 12px 16px; border-bottom: 1px solid var(--cds-border-subtle-01); flex-wrap: wrap;">
+        <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600;">Pipeline</h2>
+        <div style="flex-grow: 1;"></div>
+        <ul aria-label="Legend" style="list-style: none; margin: 0; padding: 0; display: flex; gap: 16px; flex-wrap: wrap;">
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-pass"></span><span class="lbl">Pass</span></li>
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-run"></span><span class="lbl">Running</span></li>
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-fail"></span><span class="lbl">Fail · retry</span></li>
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-fatal"></span><span class="lbl">Fatal</span></li>
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-unv"></span><span class="lbl">Unverifiable</span></li>
+          <li style="display: flex; align-items: center; gap: 6px;"><span class="led lg-pend"></span><span class="lbl">Pending</span></li>
+        </ul>
+      </div>
+      <div ref="{{pipeRef}}" style="padding: 20px 20px 12px; overflow-x: auto;">
+        <div role="img" class="pipe" aria-label="{{graphLabel}}" style="width: {{pipeW}}px; height: {{pipeH}}px;">
+          <sc-for list="{{lines}}" as="l" hint-placeholder-count="20"><div class="{{l.cls}}" style="left: {{l.x}}px; top: {{l.y}}px; width: {{l.w}}px; height: {{l.h}}px;"></div></sc-for>
+          <sc-for list="{{arrows}}" as="a" hint-placeholder-count="14"><div class="{{a.cls}}" style="left: {{a.x}}px; top: {{a.y}}px;"></div></sc-for>
+          <sc-for list="{{labels}}" as="t" hint-placeholder-count="5"><span class="elabel" style="left: {{t.x}}px; top: {{t.y}}px;">{{t.text}}</span></sc-for>
+          <sc-for list="{{nodes}}" as="n" hint-placeholder-count="10">
+            <div class="{{n.cls}}" style="left: {{n.left}}px; top: {{n.top}}px;">
+              <div class="mono nrow n-top" style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                <span class="n-idx" style="color: var(--cds-text-helper);">{{n.idx}}</span>
+                <span class="n-time" style="color: var(--cds-text-secondary);">{{n.time}}</span>
+              </div>
+              <div class="nname">{{n.name}}</div>
+              <div class="mono nrow n-bot" style="display: flex; align-items: center; gap: 6px;">
+                <span class="led"></span>
+                <span class="stt" style="letter-spacing: 0.04em; white-space: nowrap;">{{n.stLabel}}</span>
+              </div>
+              <div class="bar"></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <button class="divider" type="button" aria-label="Drag to resize the pipeline panel" style="flex: none; margin: -6px 0;"><span class="grip"></span></button>
+
+    <!-- stages + event log -->
+    <div class="grow" style="flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch;">
+      <section aria-label="Stages" style="flex: 999 1 640px; min-width: 0; max-height: 100%; display: flex; flex-direction: column; background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01);">
+        <div style="flex: none; display: flex; align-items: center; padding: 12px 16px;">
+          <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600;">Stages</h2>
+          <div style="flex-grow: 1;"></div>
+          <span class="lbl">Duration</span>
+        </div>
+        <div class="panel-scroll" style="flex: 1 1 auto; min-height: 0; overflow-y: auto;">
+        <sc-for list="{{stages}}" as="s" hint-placeholder-count="10">
+          <div class="{{s.cls}}">
+            <button class="acc-h" type="button" aria-expanded="{{s.aria}}" onClick="{{s.toggle}}">
+              <svg class="{{s.chev}}" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5"></path></svg>
+              <span class="mono" style="font-size: 12px; color: var(--cds-text-helper);">{{s.idx}}</span>
+              <span style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                <span class="{{s.led}}"></span>
+                <span class="mono" style="font-size: 14px; font-weight: 500;">{{s.name}}</span>
+                <span style="font-size: 14px; color: {{s.wordColor}};">{{s.word}}</span>
+              </span>
+              <span>
+                <sc-if value="{{s.hasTag}}" hint-placeholder-val="{{ true }}"><span class="{{s.tagCls}}">verdict: {{s.tag}}</span></sc-if>
+              </span>
+              <span class="mono" style="font-size: 14px; text-align: right; color: var(--cds-text-secondary);">{{s.time}}</span>
+            </button>
+            <sc-if value="{{s.open}}" hint-placeholder-val="{{ false }}">
+              <div class="console">
+                <button class="copy" type="button" aria-label="Copy {{s.name}} console output" title="Copy output"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8"></rect><path d="M10.5 3.5v-1h-8v8h1"></path></svg></button>
+                <pre><sc-if value="{{s.empty}}" hint-placeholder-val="{{ false }}"><span class="ph">No output</span></sc-if><sc-for list="{{s.lines}}" as="line" hint-placeholder-count="5"><span class="cline"><sc-for list="{{line.segs}}" as="seg" hint-placeholder-count="1"><span style="color: {{seg.c}}; font-weight: {{seg.w}};">{{seg.t}}</span></sc-for></span></sc-for></pre>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+        </div>
+      </section>
+
+      <section aria-label="Event log" style="flex: 1 1 360px; min-width: 0; max-height: 100%; display: flex; flex-direction: column; background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01);">
+        <div style="flex: none; display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--cds-border-subtle-01);">
+          <h2 style="margin: 0; font-size: 14px; line-height: 20px; font-weight: 600;">Event log</h2>
+        </div>
+        <ol class="mono panel-scroll" style="flex: 1 1 auto; min-height: 0; list-style: none; margin: 0; padding: 0; overflow-y: auto; font-size: 12px; line-height: 18px;">
+          <sc-for list="{{log}}" as="l" hint-placeholder-count="2">
+            <li style="display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--cds-border-subtle-01); word-break: break-all;">
+              <span style="color: var(--cds-text-helper);">{{l.n}}</span>
+              <span style="color: {{l.c}};">{{l.t}}</span>
+            </li>
+          </sc-for>
+        </ol>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"runState":{"editor":"enum","options":["running","success","failure","reconnecting"],"default":"running"},"topology":{"editor":"enum","options":["full","short"],"default":"full"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  componentWillUnmount() { if (this._ro) { this._ro.disconnect(); } }
+  renderVals() {
+    var self = this;
+    var st0 = this.state || {};
+    var theme = st0.theme || (this.props.theme ?? 'dark');
+    var W = 1336;
+    var P = function (v) { return (v / W * 100).toFixed(3); };
+    var rs = this.props.runState ?? 'running';
+    var TOPO = {
+      full: {
+        names: ['brief','deps','dev','be-tests','fe-tests','conformance','review','qa','commit','success'],
+        edges: [['be-tests','dev','fail'],['fe-tests','dev','fail'],['conformance','dev','fail'],['review','dev','NEEDS CHANGES'],['qa','dev','FAIL']],
+        times: { brief: '1:04', deps: '1:14', dev: '139:55', 'be-tests': '1:27', 'fe-tests': '1:13', conformance: '2:09', review: '4:28', qa: '7:41', commit: '0:12', success: '0:01' },
+        run: 'qa', runTime: '6:03', failTime: '5:12', totals: { running: '157:33', success: '158:22', failure: '163:45' }
+      },
+      short: {
+        names: ['brief','dev','tests','review','commit','success'],
+        edges: [['tests','dev','fail'],['review','dev','NEEDS CHANGES']],
+        times: { brief: '0:58', dev: '42:10', tests: '2:31', review: '3:47', commit: '0:09', success: '0:01' },
+        run: 'review', runTime: '2:14', failTime: '3:02', totals: { running: '47:53', success: '49:26', failure: '50:41' }
+      }
+    };
+    var T = TOPO[this.props.topology ?? 'full'] || TOPO.full;
+    var names = T.names;
+    var runIdx = names.indexOf(T.run);
+    var noVerdict = { commit: true, success: true };
+    var S = {};
+    names.forEach(function (n, i) {
+      S[n] = i < runIdx
+        ? { st: 'pass', word: 'completed', verdict: noVerdict[n] ? null : 'pass', time: T.times[n] }
+        : { st: 'pending', word: '', verdict: null, time: '' };
+    });
+
+    var attempt = 3, total = T.totals.running, totalNote = 'live', outcome = null;
+    var log = [{ t: 'run started: unit unit-15 (thread 44d07da3646946419986cc4c10636e74)', c: 'var(--cds-text-primary)' }];
+    if (rs === 'running' || rs === 'reconnecting') {
+      S[T.run] = { st: 'running', word: 'running', verdict: null, time: T.runTime };
+      if (rs === 'reconnecting') { log.push({ t: 'event stream interrupted', c: 'var(--cds-support-warning)' }); }
+    } else if (rs === 'success') {
+      names.forEach(function (n, i) {
+        if (i >= runIdx) { S[n] = { st: 'pass', word: 'completed', verdict: noVerdict[n] ? null : 'pass', time: T.times[n] }; }
+      });
+      total = T.totals.success; totalNote = 'final'; outcome = 'success';
+      log.push({ t: 'run finished: success', c: 'var(--cds-support-success)' });
+    } else if (rs === 'failure') {
+      attempt = 10;
+      S[T.run] = { st: 'fatal', word: 'completed', verdict: 'fail', time: T.failTime };
+      total = T.totals.failure; totalNote = 'final'; outcome = 'failure';
+      log.push({ t: 'state: failed', c: 'var(--cds-support-error)' });
+      log.push({ t: 'run finished: failure', c: 'var(--cds-support-error)' });
+    }
+
+    var stLabel = { pass: 'PASS', running: 'RUNNING', pending: 'PENDING', fatal: 'FATAL', fail: 'RETRY', unverifiable: 'UNVERIF' };
+    var ledCls = { pass: 'lg-pass', running: 'lg-run', pending: 'lg-pend', fatal: 'lg-fatal', fail: 'lg-fail', unverifiable: 'lg-unv' };
+    var tagCls = { pass: 'tag tag-pass', fail: 'tag tag-fail', unverifiable: 'tag tag-unv', env: 'tag tag-fatal' };
+
+    // ---- topology-driven layout -------------------------------------------
+    // Stations keep their natural size. Pick the fewest rows that fit the
+    // measured width; wrap with a carriage-return connector; route back-edges
+    // orthogonally through per-row gutters and a left-hand return channel,
+    // with lane/channel/entry ordering chosen so no two routes cross.
+    var NW = 112, NH = 76, GAP = 24, STEP = NW + GAP, LANE = 18;
+    var N = names.length;
+    if (!this._pipeRef) {
+      this._pipeRef = function (el) {
+        if (!el || el === self._pipeEl) { return; }
+        if (self._ro) { self._ro.disconnect(); }
+        self._pipeEl = el;
+        if (typeof ResizeObserver === 'undefined') { return; }
+        self._ro = new ResizeObserver(function (entries) {
+          var w = Math.floor(entries[0].contentRect.width);
+          if (w > 0 && w !== (self.state || {}).avail) { self.setState({ avail: w }); }
+        });
+        self._ro.observe(el);
+      };
+    }
+    var avail = st0.avail || 1336;
+
+    function plan(R) {
+      var per = Math.ceil(N / R);
+      var rows = Math.ceil(N / per);
+      var pos = names.map(function (n, i) { return { r: Math.floor(i / per), c: i % per }; });
+      var es = T.edges.map(function (e) {
+        var si = names.indexOf(e[0]), ti = names.indexOf(e[1]);
+        return { label: e[2], si: si, ti: ti, rs: pos[si].r, rt: pos[ti].r };
+      });
+      var U = es.filter(function (e) { return e.rs === e.rt; })
+        .sort(function (a, b) { return (a.si - a.ti) - (b.si - b.ti); });
+      var C = es.filter(function (e) { return e.rs > e.rt; })
+        .sort(function (a, b) { return a.rs - b.rs || a.si - b.si; });
+      C.forEach(function (e, j) { e.j = j; });
+      var O = rows > 1 ? 12 + 12 * C.length + 8 : 0;
+      var width = O + per * STEP - GAP + (rows > 1 ? 14 : 0);
+      return { per: per, rows: rows, pos: pos, U: U, C: C, O: O, width: width };
+    }
+    var L = plan(1);
+    for (var R = 2; L.width > avail && L.per > 2; R++) { L = plan(R); }
+    W = L.width;
+    var O = L.O;
+
+    // gutter lanes: U-edges (inner first), returns into this row (outer first),
+    // returns leaving this row (leftmost first), wrap connector deepest
+    var gut = [];
+    for (var g = 0; g < L.rows; g++) {
+      var items = [];
+      L.U.filter(function (e) { return e.rt === g; }).forEach(function (e) { items.push(e); e.laneS = items.length - 1; });
+      L.C.filter(function (e) { return e.rt === g; }).sort(function (a, b) { return b.j - a.j; })
+        .forEach(function (e) { items.push(e); e.laneT = items.length - 1; });
+      L.C.filter(function (e) { return e.rs === g; }).sort(function (a, b) { return a.si - b.si; })
+        .forEach(function (e) { items.push(e); e.laneS = items.length - 1; });
+      var wrap = g < L.rows - 1;
+      gut.push({ n: items.length + (wrap ? 1 : 0), wrapLane: wrap ? items.length : -1 });
+    }
+    var rowY = [0];
+    gut.forEach(function (gt, g) {
+      var h = gt.n ? 14 + (gt.n - 1) * LANE + 16 : 4;
+      gt.h = h;
+      rowY.push(rowY[g] + NH + h);
+    });
+    var pipeH = rowY[L.rows];
+    var laneY = function (g, l) { return rowY[g] + NH + 14 + l * LANE; };
+    var nx = function (i) { return O + L.pos[i].c * STEP; };
+    var ny = function (i) { return rowY[L.pos[i].r]; };
+
+    // entry points into each target: U-edges rightmost, then returns inner→outer
+    var entryCount = {};
+    L.U.concat(L.C).forEach(function (e) {
+      var m = entryCount[e.ti] || 0;
+      entryCount[e.ti] = m + 1;
+      e.xe = Math.max(nx(e.ti) + 8, nx(e.ti) + NW - 14 - m * 14);
+    });
+
+    var lines = [], arrows = [], labels = [];
+    function H(x1, x2, y, cls) { lines.push({ x: Math.min(x1, x2), y: y, w: Math.abs(x2 - x1), h: 0, cls: 'ln h ' + cls }); }
+    function V(x, y1, y2, cls) { lines.push({ x: x, y: Math.min(y1, y2), w: 0, h: Math.abs(y2 - y1), cls: 'ln v ' + cls }); }
+
+    // forward flow + wraps
+    for (var i = 0; i < N - 1; i++) {
+      var on = S[names[i + 1]].st !== 'pending' ? ' on' : '';
+      if (L.pos[i + 1].r === L.pos[i].r) {
+        H(nx(i) + NW, nx(i + 1), ny(i) + 37, 'flow' + on);
+        arrows.push({ x: nx(i + 1) - 6, y: ny(i) + 33, cls: 'arr right flow' + on });
+      } else {
+        var r = L.pos[i].r, xr = nx(i) + NW + 12, yw = laneY(r, gut[r].wrapLane), yn = ny(i + 1) + 37;
+        H(nx(i) + NW, xr + 2, ny(i) + 37, 'flow' + on);
+        V(xr, ny(i) + 37, yw, 'flow' + on);
+        H(O - 12, xr + 2, yw - 1, 'flow' + on);
+        V(O - 12, yw - 1, yn + 2, 'flow' + on);
+        H(O - 12, O, yn, 'flow' + on);
+        arrows.push({ x: O - 6, y: yn - 4, cls: 'arr right flow' + on });
+      }
+    }
+    // back-edges
+    L.U.concat(L.C).forEach(function (e) {
+      var xs = nx(e.si) + NW / 2, top = ny(e.ti) + NH;
+      var y1 = laneY(e.rs, e.laneS);
+      V(xs, ny(e.si) + NH, y1, 'back');
+      if (e.rs === e.rt) {
+        H(e.xe, xs, y1, 'back');
+        V(e.xe, top + 6, y1, 'back');
+      } else {
+        var xc = O - 12 - 12 * (e.j + 1), y2 = laneY(e.rt, e.laneT);
+        H(xc, xs, y1, 'back');
+        V(xc, y2, y1, 'back');
+        H(xc, e.xe, y2, 'back');
+        V(e.xe, top + 6, y2, 'back');
+      }
+      arrows.push({ x: e.xe - 5, y: top, cls: 'arr up back' });
+      labels.push({ x: xs - 6, y: y1 - 9, text: e.label });
+    });
+
+    var nodes = names.map(function (n, i) {
+      var s = S[n];
+      var label = s.st === 'pass' && !s.verdict ? 'DONE' : stLabel[s.st];
+      if (s.st === 'fatal' && s.verdict === 'fail') { label = 'FAIL'; }
+      return { name: n, idx: (i < 9 ? '0' : '') + (i + 1), left: nx(i), top: ny(i), cls: 'node st-' + s.st, stLabel: label, time: s.time || '-' };
+    });
+
+    var verdicts = names.filter(function (n) { return S[n].verdict !== null; }).map(function (n) {
+      var v = S[n].verdict;
+      return { text: n + ': ' + v, cls: tagCls[v] || 'tag tag-unclear' };
+    });
+
+    var qaLines = [
+      [{ t: 'Summary:', c: '#78A9FF', w: 600 }, { t: ' terminal: {"command": "cd /Users/luke/.agentic-dev-loop/runs/5367f0c488d8/exports/1e55b2aa7b214001bbc7611655f9abab && cat src/Yosk.SiteBuilder/Features/SiteModel/Site.cs"}', c: '#D6DCE0', w: 400 }],
+      [{ t: '', c: '#D6DCE0', w: 400 }],
+      [{ t: '$ ', c: '#3DDBD9', w: 600 }, { t: 'cd /Users/luke/.agentic-dev-loop/runs/5367f0c488d8/exports/1e55b2aa7b214001bbc7611655f9abab && cat src/Yosk.SiteBuilder/Features/SiteModel/Site.cs', c: '#D6DCE0', w: 400 }],
+      [{ t: '', c: '#D6DCE0', w: 400 }],
+      [{ t: 'Tokens: ', c: '#D6DCE0', w: 400 }, { t: '↑ input 800.88K', c: '#78A9FF', w: 400 }, { t: ' • ', c: '#8A949C', w: 400 }, { t: 'cache hit 89.98%', c: '#BE95FF', w: 400 }, { t: ' • ', c: '#8A949C', w: 400 }, { t: 'reasoning 655', c: '#F1C21B', w: 400 }, { t: ' • ', c: '#8A949C', w: 400 }, { t: '↓ output 1.94K', c: '#78A9FF', w: 400 }, { t: ' • ', c: '#8A949C', w: 400 }, { t: '$ 0.00', c: '#42BE65', w: 400 }]
+    ];
+
+    var st = this.state || {};
+    var defOpen = (rs === 'running' || rs === 'reconnecting') ? T.run : '';
+    var openName = st.open !== undefined ? st.open : defOpen;
+    var wordColor = { running: 'var(--cds-interactive)', completed: 'var(--cds-text-secondary)', errored: 'var(--cds-support-error)', '': 'var(--cds-text-helper)' };
+
+    var stages = names.map(function (n, i) {
+      var s = S[n];
+      var open = openName === n;
+      var lines = n === T.run ? qaLines.map(function (l) { return { segs: l }; }) : [];
+      return {
+        name: n, idx: (i < 9 ? '0' : '') + (i + 1),
+        cls: 'acc' + (s.st === 'running' ? ' is-running' : ''),
+        led: 'led ' + ledCls[s.st],
+        word: s.word || 'pending',
+        wordColor: wordColor[s.word] || 'var(--cds-text-helper)',
+        hasTag: s.verdict !== null,
+        tag: s.verdict ? s.verdict.toUpperCase() : '',
+        tagCls: s.st === 'fatal' ? 'tag tag-fatal' : (tagCls[s.verdict] || 'tag tag-unclear'),
+        time: s.time || '-',
+        open: open, aria: open ? 'true' : 'false',
+        chev: 'chev' + (open ? ' open' : ''),
+        lines: lines, empty: lines.length === 0,
+        toggle: function () { self.setState({ open: open ? '' : n }); }
+      };
+    });
+
+    var meter = [];
+    for (var m = 0; m < 10; m++) {
+      meter.push({ cls: 'seg' + (m < attempt ? (attempt >= 10 && outcome === 'failure' ? ' on ex' : ' on') : '') });
+    }
+
+    var running = names.filter(function (n) { return S[n].st === 'running'; });
+    return {
+      theme: theme,
+      isDark: theme === 'dark',
+      isLight: theme === 'light',
+      themeLabel: theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme',
+      toggleTheme: function () { self.setState({ theme: theme === 'dark' ? 'light' : 'dark' }); },
+      subject: 'unit unit-15',
+      attempt: String(attempt),
+      total: total,
+      totalNote: totalNote,
+      totalNoteColor: totalNote === 'live' ? 'var(--cds-interactive)' : 'var(--cds-text-helper)',
+      live: rs !== 'reconnecting',
+      reconnecting: rs === 'reconnecting',
+      showOutcome: outcome !== null,
+      isSuccess: outcome === 'success',
+      isFailure: outcome === 'failure',
+      outcomeCls: outcome === 'success' ? 'note-ok' : 'note-err',
+      outcomeTitle: outcome === 'success' ? 'SUCCESS' : 'FAILURE',
+      outcomeBody: outcome === 'success' ? 'Run finished · unit unit-15 · attempt 3/10 · total ' + total : 'Run finished · ' + T.run + ' verdict FAIL with attempts exhausted (10/10) · total ' + total,
+      pipeW: W,
+      pipeH: pipeH,
+      pipeRef: this._pipeRef,
+      lines: lines, arrows: arrows, labels: labels,
+      graphLabel: 'Pipeline: ' + names.map(function (n) { return n + ' ' + S[n].st; }).join(', ') + (running.length ? '. Running: ' + running[0] : ''),
+      meter: meter, nodes: nodes, verdicts: verdicts, stages: stages,
+      log: log.map(function (l, i) { return { t: l.t, c: l.c, n: String(i + 1) }; })
+    };
+  }
+}
+</script>
+</body>
+</html>

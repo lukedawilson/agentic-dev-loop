@@ -1,0 +1,260 @@
+// Figma design primitives - global resets. Utility classes are minted per the
+// genuine-mapping test and documented in
+// .opencode/skills/frontend-development/SKILL.md; component classes (no prefix)
+// name a UI pattern and live in the SKILL.md component table.
+//
+// Carbon colour/layer tokens come from @carbon/styles/css/styles.min.css
+// (imported by the app entry point), spacing tokens from carbon-tokens.scss,
+// and type utilities from carbon-type.scss.
+
+// ---- global resets ---------------------------------------------------------
+// UA-default and web-component-host fixes only (escape hatch 1) - every rule
+// here must be listed in the SKILL.md "Sanctioned element rules" register.
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+cds-checkbox {
+  margin-block-end: 0;
+}
+cds-grid {
+  display: block;
+}
+// Carbon notification host caps max-inline-size at 18rem (and larger per
+// breakpoint) - banners in our layouts should fill their container width.
+// Escape hatch 1 (web-component host default the design system never uses
+// at app level). Registered in SKILL.md.
+cds-inline-notification {
+  max-inline-size: none;
+}
+em {
+  font-style: normal;
+}
+svg {
+  vertical-align: text-bottom;
+}
+body {
+  margin: 0;
+  font-family: 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+  background: var(--cds-background);
+  color: var(--cds-text-primary);
+}
+h1, h2, h3, h4, h5, p, pre {
+  margin: 0;
+}
+a {
+  color: var(--cds-link-primary);
+}
+a:hover {
+  color: var(--cds-link-primary-hover);
+}
+iframe {
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 20rem;
+  border: 1px solid var(--cds-border-subtle);
+}
+// Carbon's `.cds--header ~ .cds--content { margin-block-start: 3rem }` is dead
+// for the web-component header (its host carries no class) - the preview shell
+// offsets its own main below the fixed 3rem header plus 3rem toolbar (escape
+// hatch 1, cds-grid precedent). Component class registered in SKILL.md.
+.portal-main {
+  display: flex;
+  margin-block-start: 6rem;
+  // Constrain the shell to the viewport so the panel content scrolls
+  // internally (the content pane's overflow-y:auto only engages with a
+  // bounded height) - without this, tall panel content stretches the panel,
+  // canvas and preview iframe and the whole page scrolls.
+  block-size: calc(100vh - 6rem);
+}
+
+// Layout utilities - registered in SKILL.md (Figma: Auto Layout panel -
+// direction: Horizontal / distribution: Space between / alignment: Center /
+// gap: spacing-03).
+.l-flex {
+  display: flex;
+}
+.l-space-between {
+  justify-content: space-between;
+}
+.l-align-center {
+  align-items: center;
+}
+.l-gap-03 {
+  gap: 0.5rem;
+}
+
+// ---- component classes (UI patterns, no prefix) ----------------------------
+// Registered in SKILL.md component table. The preview shell's chrome is custom
+// only where no Carbon component provides the layout (a fixed side panel beside
+// a flex-filling canvas, an internal subrail, a toolbar row, and a mobile
+// drawer).
+.portal-canvas {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding: 1rem;
+}
+.portal-panel {
+  flex: 0 0 20rem;
+  inline-size: 20rem;
+  display: flex;
+  border-inline-end: 1px solid var(--cds-border-subtle);
+  background: var(--cds-layer-01);
+}
+.portal-rail {
+  flex: 0 0 4rem;
+  inline-size: 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 1rem 0.25rem;
+  border-inline-end: 1px solid var(--cds-border-subtle);
+}
+// Native rail entry - cds-button labels are max-content with no truncation and
+// cannot stack icon-over-label, so the rail strip uses native buttons.
+.portal-rail-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  inline-size: 100%;
+  padding-block: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--cds-text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.portal-rail-entry[aria-selected='true'] {
+  background: var(--cds-background-selected);
+  color: var(--cds-text-primary);
+}
+// A no-site dashboard opens with Pages selected AND disabled (Pages needs a
+// site) - equal specificity, later rule, so the disabled look wins over the
+// selected look.
+.portal-rail-entry:disabled {
+  cursor: not-allowed;
+  color: var(--cds-text-disabled);
+}
+.portal-rail-sites {
+  margin-block-start: auto;
+}
+// The panel is a non-scrolling flex row; scrolling lives on the content pane
+// so the rail strip (Pages/Assets/Export/Sites) stays pinned while a long
+// category scrolls.
+.portal-panel-content {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding: 1rem;
+  overflow-y: auto;
+}
+.portal-toolbar {
+  position: fixed;
+  inset-block-start: 3rem;
+  inset-inline: 0;
+  z-index: 6000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  block-size: 3rem;
+  padding-inline: 1rem;
+  background: var(--cds-layer-01);
+  border-block-end: 1px solid var(--cds-border-subtle);
+}
+// The cds-header web component is a dumb slot with no internal layout - the
+// classic .cds--header__global wrapper that right-aligns content does not
+// exist in the WC. The header status (site name + pill) carries the auto
+// margin so it and the logout action sit at the right edge.
+.portal-header-status {
+  margin-inline-start: auto;
+}
+// List rows in the panel categories - a select control whose label truncates
+// (cds-button labels cannot: inline-size max-content, no text-overflow) plus
+// the row's action buttons.
+.panel-row {
+  min-inline-size: 0;
+}
+.panel-row-main {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.panel-row-select {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cds-link-primary);
+  font: inherit;
+  text-align: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.panel-row-select[aria-current='true'] {
+  color: var(--cds-text-primary);
+  font-weight: 600;
+}
+.panel-row-name {
+  inline-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Collapsible asset preview sections (cds-accordion): the expanded item content
+// renders the readonly preview (image / media player / font specimen).
+// Intrinsic media widths (image files, the UA 300px video/audio default) would
+// overflow the 16rem panel content - cap them at the container width.
+.asset-preview-media {
+  display: block;
+  max-inline-size: 100%;
+}
+// The specimen renders in the previewed font via a FontFace registered at
+// runtime under the 'yosk-asset-preview-font' alias (uploads are dynamic, an
+// authored @font-face is impossible) - fallback stacks to the app typeface.
+.asset-preview-specimen {
+  font-family: 'yosk-asset-preview-font', 'IBM Plex Sans', 'Helvetica Neue', Arial, sans-serif;
+}
+
+// Carbon's accordion title is built for short plain text: inside the heading's
+// row-reverse flex it shrinks with a min-content floor. An unbreakable asset
+// filename lifts that floor past the available width, so the title refuses to
+// shrink and overflows 32px left of the heading (long names misalign against
+// short ones). Zero the floor via Carbon's sanctioned ::part(title) hook -
+// escape hatch 1 (web-component default the design never uses), cds-grid
+// precedent. Registered in SKILL.md.
+cds-accordion-item::part(title) {
+  min-inline-size: 0;
+}
+
+// BR-97: below 66rem the toolbar hides (its controls move into the header
+// panel), the main region sits under the 3rem header only, and the
+// Dashboard/Agent panel becomes a full-height drawer overlaying the canvas.
+@media (max-width: 65.99rem) {
+  .portal-toolbar {
+    display: none;
+  }
+  .portal-main {
+    margin-block-start: 3rem;
+    block-size: calc(100vh - 3rem);
+  }
+  .portal-panel {
+    position: fixed;
+    inset-block: 3rem 0;
+    inset-inline-start: 0;
+    z-index: 10;
+    inline-size: 100%;
+    max-inline-size: 24rem;
+  }
+}

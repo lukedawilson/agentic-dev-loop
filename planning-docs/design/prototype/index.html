@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentic-dev-loop viz - redesign prototype</title>
+<!--
+  Runnable prototype of the viz redesign. Open this file directly in a
+  browser (file:// is fine). It drives the UI with the SAME event types the
+  real /events SSE stream emits (run_started, node_started, node_finished,
+  heartbeat, state, console, run_finished), so the reducer here is a
+  stand-in for the production handle() in server.py.
+
+  Visuals are hand-built to Carbon structure + the re-skinned tokens in
+  ../tokens.css; production should mount the real Carbon Web Components
+  per ../viz-redesign-spec.md §5. Layout comes from ../pipeline-layout.js.
+
+  Prototype controls (bottom-right): scenario, topology, Replay.
+  URL params: ?scenario=running|success|failure|reconnecting&topology=full|short&theme=dark|light
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../tokens.css">
+<script src="../pipeline-layout.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: var(--adl-font-sans); background: var(--cds-background); color: var(--cds-text-primary); -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; }
+  button:focus-visible { outline: 2px solid var(--cds-focus); outline-offset: -2px; }
+  .mono { font-family: var(--adl-font-mono); font-variant-numeric: tabular-nums; }
+  .lbl { font: 500 11px/16px var(--adl-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--cds-text-helper); }
+
+  .app { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+  @media (max-width: 760px) { .app { height: auto; overflow: visible; } .grow { flex: none !important; } .panel-scroll { overflow: visible !important; max-height: none !important; } }
+
+  /* UI shell header */
+  .shell { flex: none; height: 48px; display: flex; align-items: center; gap: 16px; padding: 0 0 0 16px; background: var(--cds-layer-01); border-bottom: 1px solid var(--cds-border-subtle-01); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand b { font: 600 14px/1 var(--adl-font-mono); letter-spacing: -.01em; }
+  .brand span { font-size: 14px; color: var(--cds-text-secondary); }
+  .spacer { flex: 1 1 auto; }
+  .stream { display: flex; align-items: center; gap: 8px; }
+  .hdr-action { width: 48px; height: 48px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-left: 1px solid var(--cds-border-subtle-01); background: transparent; color: var(--cds-text-secondary); cursor: pointer; }
+  .hdr-action:hover { background: var(--cds-layer-03); color: var(--cds-text-primary); }
+
+  #stream-banner { display: none; flex: none; align-items: center; gap: 12px; padding: 10px 16px; background: #F1C21B; color: #161616; flex-wrap: wrap; }
+  #stream-banner.show { display: flex; }
+  #stream-banner strong { font-size: 14px; font-weight: 600; }
+
+  main { flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1600px; margin: 0 auto; padding: 16px 24px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* summary tiles */
+  .tiles { flex: none; display: flex; flex-wrap: wrap; gap: 1px; background: var(--cds-border-subtle-01); border: 1px solid var(--cds-border-subtle-01); }
+  .tile { padding: 12px 16px; background: var(--cds-layer-01); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tile h1 { margin: 0; font: 500 20px/28px var(--adl-font-mono); letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .big { font: 400 20px/28px var(--adl-font-mono); font-variant-numeric: tabular-nums; }
+  .meter { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 2px; max-width: 200px; }
+  .seg { height: 6px; background: var(--cds-layer-03); }
+  .seg.on { background: var(--cds-interactive); }
+  .seg.ex { background: var(--cds-support-error); }
+  .snippet { display: flex; align-items: center; align-self: flex-start; max-width: 100%; background: var(--cds-layer-02); border-bottom: 1px solid var(--cds-border-strong-01); }
+  .snippet code { font: 13px/32px var(--adl-font-mono); padding: 0 12px; user-select: all; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn-icon { width: 32px; height: 32px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0; background: transparent; border: 0; color: var(--cds-text-secondary); cursor: pointer; }
+  .btn-icon:hover { background: var(--cds-layer-03); color: var(--cds-text-primary); }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font: 400 12px/16px var(--adl-font-mono); white-space: nowrap; }
+  .tag-pass { color: var(--cds-support-success); background: var(--adl-tint-ok); }
+  .tag-fail { color: var(--cds-support-warning); background: var(--adl-tint-warn); }
+  .tag-fatal { color: var(--cds-support-error); background: var(--adl-tint-err); }
+  .tag-unv { color: var(--adl-support-unverifiable); background: var(--adl-tint-unv); }
+  .tag-unclear { color: var(--cds-text-secondary); background: var(--cds-layer-03); }
+
+  /* outcome notification */
+  #outcome { display: none; flex: none; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
+  #outcome.ok { display: flex; border: 1px solid var(--cds-support-success); background: var(--adl-tint-ok); }
+  #outcome.err { display: flex; border: 1px solid var(--cds-support-error); background: var(--adl-tint-err); }
+  #outcome strong { font: 600 14px/20px var(--adl-font-mono); letter-spacing: .04em; }
+  #outcome span { font-size: 14px; color: var(--cds-text-secondary); }
+
+  /* panels */
+  .panel { background: var(--cds-layer-01); border: 1px solid var(--cds-border-subtle-01); min-width: 0; }
+  .panel-h { flex: none; display: flex; align-items: center; gap: 24px; padding: 12px 16px; flex-wrap: wrap; }
+  .panel-h h2 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .legend { list-style: none; margin: 0; padding: 0; display: flex; gap: 16px; flex-wrap: wrap; }
+  .legend li { display: flex; align-items: center; gap: 6px; }
+
+  /* LEDs */
+  .led { display: inline-block; width: 8px; height: 8px; flex: 0 0 8px; background: var(--cds-border-strong-01); }
+  .lg-pass { background: var(--cds-support-success); }
+  .lg-running { background: var(--cds-interactive); }
+  .lg-fail { background: var(--cds-support-warning); }
+  .lg-fatal { background: var(--cds-support-error); }
+  .lg-unverifiable { background: var(--adl-support-unverifiable); }
+  .lg-pending { background: transparent; box-shadow: inset 0 0 0 1px var(--cds-text-helper); }
+
+  /* pipeline */
+  #graph { flex: none; }
+  #graph-body { padding: 20px 20px 12px; overflow: auto; border-top: 1px solid var(--cds-border-subtle-01); }
+  .pipe { position: relative; margin: 0 auto; }
+  .node { position: absolute; width: 112px; height: 76px; padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; background: var(--cds-layer-01); border: 1px solid var(--cds-border-strong-01); overflow: hidden; }
+  .nrow { font: 11px/14px var(--adl-font-mono); font-variant-numeric: tabular-nums; display: flex; align-items: center; }
+  .nrow.top { justify-content: space-between; gap: 4px; }
+  .nrow.top .i { color: var(--cds-text-helper); }
+  .nrow.top .t { color: var(--cds-text-secondary); }
+  .nrow.bot { gap: 6px; }
+  .nname { font-size: 13px; letter-spacing: -.01em; line-height: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stt { letter-spacing: .04em; white-space: nowrap; color: var(--cds-text-secondary); }
+  .st-pass { border-color: var(--cds-support-success); background: var(--adl-tint-ok); }
+  .st-pass .led { background: var(--cds-support-success); } .st-pass .stt { color: var(--cds-support-success); }
+  .st-running { border: 2px solid var(--cds-interactive); background: var(--adl-tint-run); padding: 7px 9px; }
+  .st-running .led { background: var(--cds-interactive); animation: blink 1.2s steps(2, start) infinite; } .st-running .stt { color: var(--cds-interactive); }
+  .st-fail { border-color: var(--cds-support-warning); background: var(--adl-tint-warn); }
+  .st-fail .led { background: var(--cds-support-warning); } .st-fail .stt { color: var(--cds-support-warning); }
+  .st-fatal { border: 2px solid var(--cds-support-error); background: var(--adl-tint-err); padding: 7px 9px; }
+  .st-fatal .led { background: var(--cds-support-error); } .st-fatal .stt { color: var(--cds-support-error); }
+  .st-unverifiable { border-color: var(--adl-support-unverifiable); background: var(--adl-tint-unv); }
+  .st-unverifiable .led { background: var(--adl-support-unverifiable); } .st-unverifiable .stt { color: var(--adl-support-unverifiable); }
+  .st-pending { border-style: dashed; color: var(--cds-text-secondary); }
+  .st-pending .led { background: transparent; box-shadow: inset 0 0 0 1px var(--cds-text-helper); }
+  .bar { display: none; }
+  .st-running .bar { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; }
+  .st-running .bar::after { content: ""; position: absolute; top: 0; bottom: 0; width: 32%; background: var(--cds-interactive); animation: sweep 1.6s linear infinite; }
+  @keyframes sweep { from { left: -32%; } to { left: 100%; } }
+  @keyframes blink { 0% { opacity: 1; } 100% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .st-running .bar::after, .st-running .led { animation: none; } .st-running .bar::after { left: 0; width: 100%; } }
+  .ln { position: absolute; box-sizing: content-box; color: var(--cds-border-strong-01); }
+  .ln.h.flow { border-top: 2px solid currentColor; } .ln.v.flow { border-left: 2px solid currentColor; }
+  .ln.h.back { border-top: 1px dashed currentColor; } .ln.v.back { border-left: 1px dashed currentColor; }
+  .ln.on, .arr.on { color: var(--cds-support-success); }
+  .arr { position: absolute; width: 0; height: 0; color: var(--cds-border-strong-01); }
+  .arr.right { border-left: 6px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
+  .arr.up { border-bottom: 7px solid currentColor; border-left: 5px solid transparent; border-right: 5px solid transparent; }
+  .elabel { position: absolute; transform: translateX(-100%); height: 18px; padding: 0 6px; font: 500 11px/16px var(--adl-font-mono); letter-spacing: .03em; background: var(--cds-layer-01); color: var(--cds-text-secondary); border: 1px solid var(--cds-border-subtle-01); white-space: nowrap; }
+
+  .divider { flex: none; display: flex; align-items: center; justify-content: center; width: 100%; height: 16px; margin: -6px 0; padding: 0; background: transparent; border: 0; cursor: row-resize; touch-action: none; }
+  .divider .grip { width: 48px; height: 2px; background: var(--cds-border-strong-01); }
+  .divider:hover .grip, .divider.dragging .grip { background: var(--cds-interactive); }
+
+  .lower { flex: 1 1 0; min-height: 0; display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch; }
+  #stages-panel { flex: 999 1 640px; max-height: 100%; display: flex; flex-direction: column; }
+  #log-panel { flex: 1 1 360px; max-height: 100%; display: flex; flex-direction: column; }
+  .panel-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+  /* accordion */
+  .acc { border-top: 1px solid var(--cds-border-subtle-01); }
+  .acc:last-child { border-bottom: 1px solid var(--cds-border-subtle-01); }
+  .acc-h { width: 100%; display: grid; grid-template-columns: 16px 24px minmax(0, 1fr) auto 72px; align-items: center; column-gap: 12px; min-height: 44px; padding: 0 16px; background: transparent; border: 0; text-align: left; cursor: pointer; }
+  .acc-h:hover { background: var(--cds-layer-02); }
+  .acc.is-running .acc-h { background: var(--adl-tint-run); }
+  .acc-h .i { font: 12px var(--adl-font-mono); color: var(--cds-text-helper); }
+  .acc-h .nm { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .acc-h .nm b { font: 500 14px var(--adl-font-mono); }
+  .acc-h .w { font-size: 14px; }
+  .acc-h .t { font: 14px var(--adl-font-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--cds-text-secondary); }
+  .chev { color: var(--cds-text-secondary); transition: transform 110ms var(--adl-motion-productive); }
+  .acc.open .chev { transform: rotate(90deg); }
+  .console { display: none; position: relative; margin: 0 16px 16px 56px; max-height: 320px; overflow-y: auto; background: var(--adl-console); border: 1px solid var(--cds-border-subtle-01); }
+  .acc.open .console { display: block; }
+  .console pre { margin: 0; padding: 12px 16px; font: 12px/1.6 var(--adl-font-mono); color: var(--adl-console-text); white-space: pre-wrap; word-break: break-all; }
+  .cline { display: block; min-height: 1.6em; }
+  .ph, .omitted { color: var(--adl-console-muted); font-style: italic; }
+  .copy { position: sticky; top: 8px; float: right; margin: 8px 8px 0 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; background: var(--adl-console-control); color: var(--adl-console-text); cursor: pointer; }
+  .copy:hover { background: var(--adl-console-control-hover); color: #FFFFFF; }
+  .copy:focus-visible { outline: 2px solid #3DDBD9; outline-offset: -2px; }
+
+  #run-log { list-style: none; margin: 0; padding: 0; font: 12px/18px var(--adl-font-mono); border-top: 1px solid var(--cds-border-subtle-01); }
+  #run-log li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--cds-border-subtle-01); word-break: break-all; }
+  #run-log li .n { color: var(--cds-text-helper); }
+
+  /* scrollbars */
+  .panel-scroll, #graph-body { scrollbar-width: thin; scrollbar-color: var(--cds-border-strong-01) transparent; }
+  .console { scrollbar-width: thin; scrollbar-color: var(--adl-console-scroll-thumb) var(--adl-console); }
+  .panel-scroll::-webkit-scrollbar, .console::-webkit-scrollbar, #graph-body::-webkit-scrollbar { width: 8px; height: 8px; }
+  .panel-scroll::-webkit-scrollbar-track { background: transparent; border-left: 1px solid var(--cds-border-subtle-01); }
+  .panel-scroll::-webkit-scrollbar-thumb, #graph-body::-webkit-scrollbar-thumb { background: var(--cds-border-strong-01); }
+  .panel-scroll::-webkit-scrollbar-thumb:hover { background: var(--cds-text-helper); }
+  .console::-webkit-scrollbar-track { background: var(--adl-console); }
+  .console::-webkit-scrollbar-thumb { background: var(--adl-console-scroll-thumb); }
+
+  /* prototype-only controls */
+  #proto { position: fixed; right: 16px; bottom: 16px; z-index: 50; background: var(--cds-layer-02); border: 1px solid var(--cds-border-strong-01); font-size: 13px; }
+  #proto summary { padding: 8px 12px; cursor: pointer; font: 500 11px/16px var(--adl-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--cds-text-secondary); }
+  #proto .body { padding: 8px 12px 12px; display: grid; grid-template-columns: auto auto; gap: 8px 12px; align-items: center; }
+  #proto select, #proto button { height: 32px; padding: 0 8px; background: var(--cds-layer-01); color: var(--cds-text-primary); border: 1px solid var(--cds-border-strong-01); }
+  #proto button { cursor: pointer; grid-column: span 2; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="shell">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="1" y="1" width="18" height="18" stroke="currentColor" stroke-width="1.5"></rect><rect x="6" y="6" width="8" height="8" fill="var(--cds-interactive)"></rect></svg>
+      <b>agentic-dev-loop</b><span>viz</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="stream" id="stream-ind"><span class="led lg-pass"></span><span class="lbl">Stream live</span></div>
+    <button class="hdr-action" id="theme-toggle" type="button" aria-label="Switch theme" title="Switch theme"></button>
+  </header>
+
+  <div id="stream-banner" role="status">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 1.5 15 14.5H1z"></path><path d="M8 6v4M8 11.5v1"></path></svg>
+    <strong>Connection lost, reconnecting…</strong>
+    <span class="mono" style="font-size:12px" id="stream-detail">attempt 1/3 · page reloads after 3 failed attempts · no events for 10 s</span>
+  </div>
+
+  <main class="grow">
+    <section class="tiles" aria-label="Run summary">
+      <div class="tile" style="flex: 2 1 240px;"><span class="lbl">Run</span><h1 id="subject">agentic-dev-loop pipeline</h1></div>
+      <div class="tile" style="flex: 1 1 200px;"><span class="lbl">Attempt</span>
+        <div class="big"><span id="attempt">?</span><span style="color: var(--cds-text-helper);"> / <span id="max-attempts">?</span></span></div>
+        <div class="meter" id="meter"></div>
+      </div>
+      <div class="tile" style="flex: 2 1 340px;"><span class="lbl">Thread ID</span>
+        <div class="snippet"><code id="thread-id">-</code><button class="btn-icon" id="copy-thread" type="button" aria-label="Copy thread ID" title="Copy thread ID"></button></div>
+      </div>
+      <div class="tile" style="flex: 1 1 200px;"><span class="lbl">Total elapsed</span>
+        <div style="display:flex;align-items:baseline;gap:10px;"><span class="big" id="total">-</span><span class="lbl" id="total-note"></span></div>
+      </div>
+      <div class="tile" style="flex: 3 1 420px;"><span class="lbl">Step verdicts</span><div class="tags" id="verdicts"></div></div>
+    </section>
+
+    <div id="outcome" role="status"><span id="outcome-icon"></span><strong id="outcome-title"></strong><span id="outcome-body"></span></div>
+
+    <section class="panel" id="graph" aria-label="Pipeline topology">
+      <div class="panel-h">
+        <h2>Pipeline</h2><div class="spacer"></div>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="led lg-pass"></span><span class="lbl">Pass</span></li>
+          <li><span class="led lg-running"></span><span class="lbl">Running</span></li>
+          <li><span class="led lg-fail"></span><span class="lbl">Fail · retry</span></li>
+          <li><span class="led lg-fatal"></span><span class="lbl">Fatal</span></li>
+          <li><span class="led lg-unverifiable"></span><span class="lbl">Unverifiable</span></li>
+          <li><span class="led lg-pending"></span><span class="lbl">Pending</span></li>
+        </ul>
+      </div>
+      <div id="graph-body"><div class="pipe" id="pipe" role="img" aria-label="Pipeline"></div></div>
+    </section>
+
+    <button class="divider" id="divider" type="button" aria-label="Drag to resize the pipeline panel"><span class="grip"></span></button>
+
+    <div class="lower grow">
+      <section class="panel" id="stages-panel" aria-label="Stages">
+        <div class="panel-h"><h2>Stages</h2><div class="spacer"></div><span class="lbl">Duration</span></div>
+        <div class="panel-scroll" id="stages"></div>
+      </section>
+      <section class="panel" id="log-panel" aria-label="Event log">
+        <div class="panel-h"><h2>Event log</h2></div>
+        <ol class="panel-scroll" id="run-log"></ol>
+      </section>
+    </div>
+  </main>
+</div>
+
+<details id="proto">
+  <summary>Prototype</summary>
+  <div class="body">
+    <label for="p-scenario">Scenario</label>
+    <select id="p-scenario"><option>running</option><option>success</option><option>failure</option><option>reconnecting</option></select>
+    <label for="p-topology">Topology</label>
+    <select id="p-topology"><option>full</option><option>short</option></select>
+    <button id="p-replay" type="button">Replay events</button>
+  </div>
+</details>
+
+<script>
+(function () {
+  "use strict";
+  var ICON = {
+    copy: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8"></rect><path d="M10.5 3.5v-1h-8v8h1"></path></svg>',
+    check: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m3 8.5 3 3 7-7"></path></svg>',
+    chev: '<svg class="chev" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="m6 3.5 4.5 4.5L6 12.5"></path></svg>',
+    sun: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="10" cy="10" r="3.75"></circle><path d="M10 1.5v2M10 16.5v2M1.5 10h2M16.5 10h2M4 4l1.4 1.4M14.6 14.6 16 16M4 16l1.4-1.4M14.6 5.4 16 4"></path></svg>',
+    moon: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z"></path></svg>',
+    ok: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cds-support-success)" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8.25"></circle><path d="m6 10.2 2.7 2.7L14.2 7.4"></path></svg>',
+    err: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="var(--cds-support-error)" stroke-width="1.75" aria-hidden="true"><circle cx="10" cy="10" r="8.25"></circle><path d="m7 7 6 6M13 7l-6 6"></path></svg>'
+  };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function mmss(t) { var s = t % 60, m = Math.floor(t / 60); return m + ":" + (s < 10 ? "0" : "") + s; }
+  var params = new URLSearchParams(location.search);
+
+  // ---------- theme ----------
+  function storedTheme() { try { return localStorage.getItem("adl-theme"); } catch (e) { return null; } }
+  function applyTheme(t) {
+    document.documentElement.setAttribute("data-theme", t);
+    var b = el("theme-toggle"), dark = t === "dark";
+    b.innerHTML = dark ? ICON.sun : ICON.moon;
+    b.setAttribute("aria-label", dark ? "Switch to light theme" : "Switch to dark theme");
+    b.title = b.getAttribute("aria-label");
+  }
+  var theme = params.get("theme") || storedTheme()
+    || (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  applyTheme(theme);
+  el("theme-toggle").addEventListener("click", function () {
+    theme = theme === "dark" ? "light" : "dark";
+    applyTheme(theme);
+    try { localStorage.setItem("adl-theme", theme); } catch (e) {}
+  });
+
+  // ---------- topology fixtures (shape of GET /topology + structured edges) ----------
+  var TOPOLOGIES = {
+    full: {
+      subject: "unit unit-15",
+      nodes: ["brief", "deps", "dev", "be-tests", "fe-tests", "conformance", "review", "qa", "commit", "success"],
+      flow: [["brief","deps"],["deps","dev"],["dev","be-tests"],["be-tests","fe-tests"],["fe-tests","conformance"],["conformance","review"],["review","qa"],["qa","commit"],["commit","success"]],
+      edges: [["be-tests","dev","fail"],["fe-tests","dev","fail"],["conformance","dev","fail"],["review","dev","NEEDS CHANGES"],["qa","dev","FAIL"]],
+      secs: { brief: 64, deps: 74, dev: 8395, "be-tests": 87, "fe-tests": 73, conformance: 129, review: 268, qa: 461, commit: 12, success: 1 },
+      run: "qa", runSecs: 363, failSecs: 312
+    },
+    short: {
+      subject: "unit unit-15",
+      nodes: ["brief", "dev", "tests", "review", "commit", "success"],
+      flow: [["brief","dev"],["dev","tests"],["tests","review"],["review","commit"],["commit","success"]],
+      edges: [["tests","dev","fail"],["review","dev","NEEDS CHANGES"]],
+      secs: { brief: 58, dev: 2530, tests: 151, review: 227, commit: 9, success: 1 },
+      run: "review", runSecs: 134, failSecs: 182
+    }
+  };
+  var VERDICTLESS = { commit: true, success: true, failure: true };
+  var THREAD = "44d07da3646946419986cc4c10636e74";
+  var CONSOLE = [
+    "\x1b[1;94mSummary:\x1b[0m terminal: {\"command\": \"cd /Users/luke/.agentic-dev-loop/runs/5367f0c488d8/exports/1e55b2aa7b214001bbc7611655f9abab && cat src/Yosk.SiteBuilder/Features/SiteModel/Site.cs\"}",
+    "",
+    "\x1b[96m$ \x1b[0mcd /Users/luke/.agentic-dev-loop/runs/5367f0c488d8/exports/1e55b2aa7b214001bbc7611655f9abab && cat src/Yosk.SiteBuilder/Features/SiteModel/Site.cs",
+    "",
+    "Tokens: \x1b[94m↑ input 800.88K\x1b[0m • \x1b[95mcache hit 89.98%\x1b[0m • \x1b[93mreasoning 655\x1b[0m • \x1b[94m↓ output 1.94K\x1b[0m • \x1b[92m$ 0.00\x1b[0m"
+  ];
+
+  // Build the event sequence the real server would emit for a scenario.
+  function scenarioEvents(topoKey, scenario) {
+    var T = TOPOLOGIES[topoKey], ev = [], runIdx = T.nodes.indexOf(T.run);
+    var before = T.nodes.slice(0, runIdx);
+    var elapsedBefore = before.reduce(function (a, n) { return a + T.secs[n]; }, 0);
+    var live = scenario === "running" || scenario === "reconnecting";
+    var attempt = scenario === "failure" ? 10 : 3;
+    var started = Date.now() / 1000 - elapsedBefore - (live ? T.runSecs : 0) - 6;
+    ev.push({ type: "run_started", subject: T.subject, attempt: attempt, max_attempts: 10, thread_id: THREAD, started_at: started });
+    var verdicts = {};
+    function finish(n, secs, verdict, ok) {
+      ev.push({ type: "node_started", node: n });
+      ev.push({ type: "node_finished", node: n, ok: ok !== false, elapsed_seconds: secs });
+      if (!VERDICTLESS[n]) { verdicts[n] = verdict; ev.push({ type: "state", attempt: attempt, step_verdicts: JSON.parse(JSON.stringify(verdicts)) }); }
+    }
+    before.forEach(function (n) { finish(n, T.secs[n], "pass"); });
+    if (live) {
+      ev.push({ type: "node_started", node: T.run });
+      CONSOLE.forEach(function (line) { ev.push({ type: "console", node: T.run, text: line }); });
+      ev.push({ type: "heartbeat", node: T.run, elapsed_seconds: T.runSecs });
+      if (scenario === "reconnecting") { ev.push({ type: "_stream_lost" }); }
+    } else if (scenario === "success") {
+      ev.push({ type: "node_started", node: T.run });
+      CONSOLE.forEach(function (line) { ev.push({ type: "console", node: T.run, text: line }); });
+      ev.push({ type: "node_finished", node: T.run, ok: true, elapsed_seconds: T.secs[T.run] });
+      verdicts[T.run] = "pass"; ev.push({ type: "state", attempt: attempt, step_verdicts: JSON.parse(JSON.stringify(verdicts)) });
+      T.nodes.slice(runIdx + 1).forEach(function (n) { finish(n, T.secs[n], null); });
+      ev.push({ type: "run_finished", success: true, elapsed_seconds: Math.round(Date.now() / 1000 - started) });
+    } else {
+      ev.push({ type: "node_started", node: T.run });
+      CONSOLE.forEach(function (line) { ev.push({ type: "console", node: T.run, text: line }); });
+      ev.push({ type: "node_finished", node: T.run, ok: true, elapsed_seconds: T.failSecs });
+      verdicts[T.run] = "fail"; ev.push({ type: "state", attempt: attempt, step_verdicts: JSON.parse(JSON.stringify(verdicts)), failed: true });
+      ev.push({ type: "run_finished", success: false, elapsed_seconds: Math.round(Date.now() / 1000 - started) });
+    }
+    return ev;
+  }
+
+  // ---------- view model (mirrors server.py PAGE state) ----------
+  var M, topo;
+  function reset(topoKey) {
+    topo = TOPOLOGIES[topoKey];
+    M = {
+      nodeStatus: {}, stageWord: {}, verdicts: {}, stepTimes: {}, liveElapsed: {}, fatal: {},
+      consoles: {}, open: null, attempt: null, maxAttempts: null, subject: topo.subject,
+      thread: "-", runStartWall: null, finalTotal: null, runActive: false,
+      outcome: null, log: [], streamLost: false
+    };
+    topo.nodes.forEach(function (n) { M.consoles[n] = []; });
+  }
+  function statusOf(n) {
+    if (M.nodeStatus[n] === "running") { return "running"; }
+    if (M.fatal[n] || M.nodeStatus[n] === "fatal") { return "fatal"; }
+    var v = M.verdicts[n];
+    if (v === "fail") { return "fail"; }
+    if (v === "pass") { return "pass"; }
+    if (v === "unverifiable") { return "unverifiable"; }
+    if (v === "env") { return "fatal"; }
+    return M.nodeStatus[n] || "pending";
+  }
+
+  function handle(ev) {
+    switch (ev.type) {
+      case "run_started":
+        M.runActive = true; M.runStartWall = ev.started_at; M.finalTotal = null;
+        M.attempt = ev.attempt; M.maxAttempts = ev.max_attempts; M.subject = ev.subject; M.thread = ev.thread_id;
+        M.log.push({ t: "run started: " + ev.subject + " (thread " + ev.thread_id + ")" });
+        break;
+      case "node_started":
+        M.nodeStatus[ev.node] = "running"; M.stageWord[ev.node] = "running";
+        M.liveElapsed = {}; M.liveElapsed[ev.node] = 0; M.open = ev.node;
+        break;
+      case "node_finished":
+        M.stepTimes[ev.node] = (M.stepTimes[ev.node] || 0) + (ev.elapsed_seconds || 0);
+        if (!M.fatal[ev.node]) { M.nodeStatus[ev.node] = ev.ok ? "pass" : "fail"; }
+        M.stageWord[ev.node] = ev.ok ? "completed" : "errored";
+        if (M.open === ev.node) { M.open = null; }
+        break;
+      case "heartbeat":
+        if (M.nodeStatus[ev.node] === "running") { M.liveElapsed[ev.node] = ev.elapsed_seconds; }
+        break;
+      case "state":
+        if (ev.attempt !== undefined) { M.attempt = ev.attempt; }
+        if (ev.step_verdicts) { Object.keys(ev.step_verdicts).forEach(function (k) { M.verdicts[k] = ev.step_verdicts[k]; }); }
+        if (ev.failed) {
+          Object.keys(M.nodeStatus).forEach(function (n) { if (M.nodeStatus[n] === "running") { M.fatal[n] = true; } });
+          M.log.push({ t: "state: failed", c: "var(--cds-support-error)" });
+        }
+        break;
+      case "run_finished":
+        M.runActive = false; M.finalTotal = ev.elapsed_seconds; M.runStartWall = null;
+        if (!ev.success) {
+          Object.keys(M.nodeStatus).forEach(function (n) { var s = statusOf(n); if (s === "fail" || s === "running") { M.nodeStatus[n] = "fatal"; } });
+        }
+        M.open = null; M.outcome = ev.success ? "success" : "failure";
+        M.log.push({ t: "run finished: " + (ev.success ? "success" : "failure"), c: ev.success ? "var(--cds-support-success)" : "var(--cds-support-error)" });
+        break;
+      case "console":
+        if (ev.node && M.consoles[ev.node]) {
+          var c = M.consoles[ev.node];
+          c.push(ansiToHtml(ev.text));
+          if (c.length > 500) { c.shift(); c.omitted = (c.omitted || 0) + 1; }
+        } else { M.log.push({ h: ansiToHtml(ev.text) }); }
+        break;
+      case "_stream_lost":
+        M.streamLost = true; M.log.push({ t: "event stream interrupted", c: "var(--cds-support-warning)" });
+        break;
+    }
+  }
+
+  // minimal SGR → HTML (production keeps server.py's full ansiToHtml)
+  var PAL = ["#0c0c0c","#c50f1f","#13a10e","#c19c00","#0037da","#881798","#3a96dd","#cccccc"];
+  var BRT = ["#767676","#FF6B72","#42BE65","#F1C21B","#78A9FF","#BE95FF","#3DDBD9","#f2f2f2"];
+  function ansiToHtml(text) {
+    var out = "", open = false, fg = null, bold = false;
+    var parts = esc(text).split(/\x1b\[([0-9;]*)m/);
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) { out += parts[i]; continue; }
+      (parts[i] === "" ? ["0"] : parts[i].split(";")).forEach(function (p) {
+        var c = parseInt(p, 10) || 0;
+        if (c === 0) { fg = null; bold = false; } else if (c === 1) { bold = true; } else if (c === 22) { bold = false; }
+        else if (c >= 30 && c <= 37) { fg = PAL[c - 30]; } else if (c >= 90 && c <= 97) { fg = BRT[c - 90]; } else if (c === 39) { fg = null; }
+      });
+      if (open) { out += "</span>"; open = false; }
+      var st = (fg ? "color:" + fg + ";" : "") + (bold ? "font-weight:600;" : "");
+      if (st) { out += '<span style="' + st + '">'; open = true; }
+    }
+    if (open) { out += "</span>"; }
+    return out;
+  }
+
+  // ---------- render ----------
+  var LABEL = { pass: "PASS", running: "RUNNING", pending: "PENDING", fatal: "FATAL", fail: "RETRY", unverifiable: "UNVERIF" };
+  var TAG = { pass: "tag tag-pass", fail: "tag tag-fail", unverifiable: "tag tag-unv", env: "tag tag-fatal" };
+  function pad(i) { return (i < 9 ? "0" : "") + (i + 1); }
+  function nodeTime(n) {
+    var w = M.stageWord[n];
+    if (w === "running" && M.liveElapsed[n] !== undefined) { return mmss(M.liveElapsed[n]); }
+    if (M.stepTimes[n]) { return mmss(M.stepTimes[n]); }
+    return "-";
+  }
+
+  function renderSummary() {
+    el("subject").textContent = M.subject;
+    el("attempt").textContent = M.attempt === null ? "?" : M.attempt;
+    el("max-attempts").textContent = M.maxAttempts === null ? "?" : M.maxAttempts;
+    var meter = el("meter"); meter.innerHTML = "";
+    var max = M.maxAttempts || 10, exhausted = M.outcome === "failure" && M.attempt >= max;
+    for (var i = 0; i < max; i++) {
+      var s = document.createElement("div");
+      s.className = "seg" + (M.attempt !== null && i < M.attempt ? (exhausted ? " on ex" : " on") : "");
+      meter.appendChild(s);
+    }
+    meter.style.gridTemplateColumns = "repeat(" + max + ", minmax(0, 1fr))";
+    el("thread-id").textContent = M.thread;
+    renderTotal();
+    var vb = el("verdicts"); vb.innerHTML = "";
+    Object.keys(M.verdicts).forEach(function (k) {
+      var v = M.verdicts[k], t = document.createElement("span");
+      t.className = TAG[v] || "tag tag-unclear";
+      t.textContent = k + ": " + (v == null ? "no verdict" : v);
+      vb.appendChild(t);
+    });
+    var oc = el("outcome");
+    if (!M.outcome) { oc.className = ""; }
+    else {
+      var ok = M.outcome === "success";
+      oc.className = ok ? "ok" : "err";
+      el("outcome-icon").innerHTML = ok ? ICON.ok : ICON.err;
+      el("outcome-title").textContent = ok ? "SUCCESS" : "FAILURE";
+      el("outcome-body").textContent = "Run finished · " + M.subject + " · attempt " + M.attempt + "/" + M.maxAttempts + " · total " + mmss(M.finalTotal || 0);
+    }
+    el("stream-banner").className = M.streamLost ? "show" : "";
+    el("stream-ind").innerHTML = M.streamLost
+      ? '<span class="led lg-fail"></span><span class="lbl" style="color:var(--cds-support-warning)">Reconnecting</span>'
+      : '<span class="led lg-pass"></span><span class="lbl">Stream live</span>';
+  }
+  function renderTotal() {
+    var secs = M.finalTotal !== null ? M.finalTotal : (M.runStartWall ? Math.max(0, Math.round(Date.now() / 1000 - M.runStartWall)) : null);
+    el("total").textContent = secs === null ? "-" : mmss(secs);
+    var note = el("total-note");
+    note.textContent = M.finalTotal !== null ? "final" : (M.runActive && !M.streamLost ? "live" : "");
+    note.style.color = M.finalTotal !== null ? "var(--cds-text-helper)" : "var(--cds-interactive)";
+  }
+
+  function renderGraph() {
+    var body = el("graph-body"), pipe = el("pipe");
+    var cs = getComputedStyle(body);
+    var avail = body.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    var status = {};
+    topo.nodes.forEach(function (n) { status[n] = statusOf(n); });
+    var Lo = layoutPipeline({
+      nodes: topo.nodes,
+      flow: topo.flow.map(function (f) { return { src: f[0], dst: f[1] }; }),
+      edges: topo.edges.map(function (e) { return { src: e[0], dst: e[1], label: e[2] }; }),
+      status: status, availWidth: avail
+    });
+    var h = [];
+    Lo.lines.forEach(function (l) {
+      h.push('<div class="ln ' + l.dir + " " + l.kind + (l.on ? " on" : "") + '" style="left:' + l.x + "px;top:" + l.y + "px;width:" + l.w + "px;height:" + l.h + 'px"></div>');
+    });
+    Lo.arrows.forEach(function (a) {
+      h.push('<div class="arr ' + a.dir + " " + a.kind + (a.on ? " on" : "") + '" style="left:' + a.x + "px;top:" + a.y + 'px"></div>');
+    });
+    Lo.labels.forEach(function (t) { h.push('<span class="elabel" style="left:' + t.x + "px;top:" + t.y + 'px">' + esc(t.text) + "</span>"); });
+    Lo.nodes.forEach(function (nd) {
+      var s = status[nd.id];
+      var lab = s === "pass" && !M.verdicts[nd.id] ? "DONE" : (s === "fatal" && M.verdicts[nd.id] === "fail" ? "FAIL" : LABEL[s]);
+      h.push('<div class="node st-' + s + '" style="left:' + nd.x + "px;top:" + nd.y + 'px">'
+        + '<div class="nrow top"><span class="i">' + pad(nd.index) + '</span><span class="t">' + nodeTime(nd.id) + "</span></div>"
+        + '<div class="nname">' + esc(nd.id) + "</div>"
+        + '<div class="nrow bot"><span class="led"></span><span class="stt">' + lab + "</span></div>"
+        + '<div class="bar"></div></div>');
+    });
+    pipe.style.width = Lo.width + "px";
+    pipe.style.height = Lo.height + "px";
+    pipe.innerHTML = h.join("");
+    pipe.setAttribute("aria-label", "Pipeline, " + Lo.rows + " row" + (Lo.rows > 1 ? "s" : "") + ": "
+      + topo.nodes.map(function (n) { return n + " " + status[n]; }).join(", "));
+  }
+
+  function renderStages() {
+    var box = el("stages"), scrollTop = box.scrollTop;
+    var consoleScroll = {};
+    Array.prototype.forEach.call(box.querySelectorAll(".console"), function (c) { consoleScroll[c.dataset.node] = c.scrollTop; });
+    box.innerHTML = "";
+    topo.nodes.forEach(function (n, i) {
+      var s = statusOf(n), w = M.stageWord[n] || "", v = M.verdicts[n], open = M.open === n;
+      var sec = document.createElement("div");
+      sec.className = "acc" + (s === "running" ? " is-running" : "") + (open ? " open" : "");
+      var wordColor = w === "running" ? "var(--cds-interactive)" : w === "errored" ? "var(--cds-support-error)" : w ? "var(--cds-text-secondary)" : "var(--cds-text-helper)";
+      var tag = (w === "completed" && v) ? '<span class="' + (s === "fatal" ? "tag tag-fatal" : (TAG[v] || "tag tag-unclear")) + '">verdict: ' + String(v).toUpperCase() + "</span>" : "";
+      sec.innerHTML = '<button class="acc-h" type="button" aria-expanded="' + open + '" aria-controls="con-' + n + '">' + ICON.chev
+        + '<span class="i">' + pad(i) + '</span><span class="nm"><span class="led lg-' + s + '"></span><b>' + esc(n) + '</b><span class="w" style="color:' + wordColor + '">' + (w || "pending") + "</span></span>"
+        + "<span>" + tag + '</span><span class="t">' + nodeTime(n) + "</span></button>"
+        + '<div class="console" id="con-' + n + '" data-node="' + n + '"><button class="copy" type="button" title="Copy output" aria-label="Copy ' + esc(n) + ' console output">' + ICON.copy + "</button><pre></pre></div>";
+      var pre = sec.querySelector("pre"), lines = M.consoles[n];
+      if (!lines.length) { pre.innerHTML = '<span class="ph">No output</span>'; }
+      else {
+        pre.innerHTML = (lines.omitted ? '<span class="omitted">…' + lines.omitted + " lines omitted</span>" : "")
+          + lines.map(function (l) { return '<span class="cline">' + l + "</span>"; }).join("");
+      }
+      sec.querySelector(".acc-h").addEventListener("click", function () { M.open = open ? "" : n; renderStages(); });
+      var cb = sec.querySelector(".copy");
+      cb.addEventListener("click", function () {
+        var txt = Array.prototype.map.call(pre.querySelectorAll(".cline"), function (c) { return c.textContent; }).join("\n");
+        copyText(txt, cb);
+      });
+      box.appendChild(sec);
+      var con = sec.querySelector(".console");
+      if (open) { con.scrollTop = consoleScroll[n] !== undefined ? consoleScroll[n] : con.scrollHeight; }
+    });
+    box.scrollTop = scrollTop;
+  }
+
+  function renderLog() {
+    var log = el("run-log");
+    log.innerHTML = M.log.map(function (l, i) {
+      return '<li><span class="n">' + (i + 1) + '</span><span style="color:' + (l.c || "var(--cds-text-primary)") + '">' + (l.h || esc(l.t)) + "</span></li>";
+    }).join("");
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function render() { renderSummary(); renderGraph(); renderStages(); renderLog(); }
+
+  function copyText(text, btn) {
+    function done(ok) {
+      btn.innerHTML = ok ? ICON.check : ICON.copy;
+      btn.title = ok ? "Copied!" : (text ? "Copy failed" : "Nothing to copy");
+      if (ok) { setTimeout(function () { btn.innerHTML = ICON.copy; btn.title = "Copy output"; }, 1500); }
+    }
+    if (!text) { done(false); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(false); });
+    } else {
+      var ta = document.createElement("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.top = "-1000px";
+      document.body.appendChild(ta); ta.select(); var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); done(ok);
+    }
+  }
+  el("copy-thread").innerHTML = ICON.copy;
+  el("copy-thread").addEventListener("click", function () { copyText(M.thread === "-" ? "" : M.thread, el("copy-thread")); });
+
+  // ---------- scenario driver ----------
+  var replayTimer = null;
+  function load(immediate) {
+    if (replayTimer) { clearTimeout(replayTimer); replayTimer = null; }
+    var topoKey = el("p-topology").value, scen = el("p-scenario").value;
+    reset(topoKey);
+    var events = scenarioEvents(topoKey, scen);
+    if (immediate) { events.forEach(handle); render(); return; }
+    var i = 0;
+    render();
+    (function step() {
+      if (i >= events.length) { replayTimer = null; return; }
+      var ev = events[i++];
+      handle(ev); render();
+      replayTimer = setTimeout(step, ev.type === "console" ? 120 : 420);
+    })();
+  }
+  el("p-scenario").value = params.get("scenario") || "running";
+  el("p-topology").value = params.get("topology") || "full";
+  el("p-scenario").addEventListener("change", function () { load(true); });
+  el("p-topology").addEventListener("change", function () { load(true); });
+  el("p-replay").addEventListener("click", function () { load(false); });
+
+  setInterval(function () { if (M && M.runActive) { renderTotal(); } }, 1000);
+  if (typeof ResizeObserver !== "undefined") { new ResizeObserver(function () { if (M) { renderGraph(); } }).observe(el("graph-body")); }
+  else { window.addEventListener("resize", function () { renderGraph(); }); }
+
+  // ---------- divider: drag to resize the pipeline panel height ----------
+  (function () {
+    var d = el("divider"), body = el("graph-body"), dragging = false, startY = 0, startH = 0;
+    d.addEventListener("pointerdown", function (e) {
+      dragging = true; startY = e.clientY; startH = body.getBoundingClientRect().height;
+      d.classList.add("dragging"); d.setPointerCapture(e.pointerId); e.preventDefault();
+    });
+    d.addEventListener("pointermove", function (e) {
+      if (!dragging) { return; }
+      var hgt = Math.max(96, Math.min(startH + e.clientY - startY, window.innerHeight * 0.7));
+      body.style.height = hgt + "px";
+    });
+    d.addEventListener("pointerup", function () { dragging = false; d.classList.remove("dragging"); });
+    d.addEventListener("dblclick", function () { body.style.height = ""; });
+    d.addEventListener("keydown", function (e) {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") { return; }
+      var cur = body.getBoundingClientRect().height;
+      body.style.height = Math.max(96, cur + (e.key === "ArrowDown" ? 16 : -16)) + "px";
+      e.preventDefault();
+    });
+  })();
+
+  load(true);
+})();
+</script>
+</body>
+</html>
