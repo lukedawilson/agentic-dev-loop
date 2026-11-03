@@ -1,7 +1,6 @@
 # 053: Viz page stream watchdog (zombie EventSource recovery)
 
 > **Status: COMPLETED**
-behind the repo ask-before-coding gate.
 
 ## Problem
 

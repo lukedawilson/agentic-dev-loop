@@ -1,7 +1,6 @@
 # 052: Per-run step-boundary setup, no stamping, host-side caches
 
-Status: approved design (2026-11-02). Implementation is TDD red-green-refactor,
-behind the repo ask-before-coding gate.
+> **Status: COMPLETED**
 
 ## Problem
 

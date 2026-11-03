@@ -18,18 +18,21 @@ llm:
   api_key_env: OPENAI_API_KEY
   # timeout omitted → opinionated no-timeout default
 
-# 054 (D9): commented-out example only - no live profile until an observed
-# multi-profile run proves it end to end. A step names a profile with
-# `llm: <name>` to move the whole profile (model, endpoint, key, effort
-# default) together; the `llm:` block above stays the default. Profile keys
-# are host-side: sandbox access still goes through `secrets:`, never a
-# profile key.
-# llms:
-#   review:
-#     model: openai/deepseek-v4-pro
-#     base_url: https://api.deepseek.com
-#     api_key_env: REVIEW_API_KEY
-#     reasoning_effort: xhigh
+# 054: named LLM profiles. A step names a profile with `llm: <name>` to move
+# the whole profile (model, endpoint, key, effort default) together; the
+# `llm:` block above stays the default. Profile keys are host-side: sandbox
+# access still goes through `secrets:`, never a profile key.
+# flash (DeepSeek-V4.1-Flash) is thinking-capable and the API reasons at its
+# "high" default when no effort is sent, so every step naming this profile
+# must set reasoning_effort (brief/dev do); otherwise the engine's D12
+# passback error fires on the first multi-turn request. A step's own
+# reasoning_effort overrides the profile's.
+llms:
+  flash:
+    model: openai/deepseek-flash
+    base_url: https://api.deepseek.com
+    api_key_env: OPENAI_API_KEY
+    reasoning_effort: medium
 
 max_attempts: 10                     # CLI --max-attempts overrides
 agents_dir: sdk_agents               # resolved relative to the pipeline file's dir
@@ -50,6 +53,7 @@ isolation:
 
 steps:
   - name: brief
+    llm: flash
     reasoning_effort: medium
     # Per-run context digestion: a native brief step (049) - `brief_inputs:` is
     # the type discriminator, so there is no agent/produces/max_iterations.
@@ -80,6 +84,7 @@ steps:
 
   - name: dev
     agent: dev
+    llm: flash
     reasoning_effort: high
     max_iterations: 150        # 035: turn cap; hard outer bound against verification spirals
     finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
