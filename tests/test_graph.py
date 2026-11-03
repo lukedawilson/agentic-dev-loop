@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from agentic_dev_loop.core.config import load_config
-from agentic_dev_loop.engine.graph import build_graph, run_pipeline
+from agentic_dev_loop.engine.graph import _build_profile_llms, build_graph, run_pipeline
 from agentic_dev_loop.engine.llm import build_llm
 from agentic_dev_loop.engine.registry import Registry, default_registry, load_extensions
 from agentic_dev_loop.engine.stages import Runtime
@@ -582,3 +582,68 @@ def test_run_pipeline_registry_param_typed():
     ann = sig.parameters["registry"].annotation
     assert ann is not inspect.Parameter.empty
     assert get_type_hints(run_pipeline)["registry"] == Registry | None
+
+
+PROFILE_YAML = """\
+name: profile-pipeline
+llm:
+  model: openai/deepseek-v4-pro
+  base_url: https://api.deepseek.com
+  api_key_env: TEST_LLM_KEY
+llms:
+  review:
+    model: openai/review-model
+    api_key_env: REVIEW_KEY
+state_dir: .pr
+agents_dir: sdk_agents
+deps_policy: open
+steps:
+  - name: dev
+    agent: dev
+    produces: implementation-summary.md
+    on_pass: review
+  - name: review
+    agent: review
+    llm: review
+    artifact: review-findings.md
+    verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
+    on_pass: success
+"""
+
+
+def _load_yaml(tmp_path, yaml_text):
+    p = tmp_path / "pipeline.yaml"
+    p.write_text(yaml_text)
+    return load_config(p)
+
+
+class TestLlmProfileEagerBuild:
+    """054 (D7): referenced profiles are built eagerly at run start - a
+    missing key fails there, not mid-run; unreferenced profiles are not
+    checked."""
+
+    def test_referenced_profile_built(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TEST_LLM_KEY", "sk-default")
+        monkeypatch.setenv("REVIEW_KEY", "sk-review")
+        cfg = _load_yaml(tmp_path, PROFILE_YAML)
+
+        llms = _build_profile_llms(cfg)
+
+        assert list(llms) == ["review"]
+        assert llms["review"].model == "openai/review-model"
+
+    def test_referenced_profile_missing_key_fails(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TEST_LLM_KEY", "sk-default")
+        monkeypatch.delenv("REVIEW_KEY", raising=False)
+        cfg = _load_yaml(tmp_path, PROFILE_YAML)
+
+        with pytest.raises(RuntimeError, match="REVIEW_KEY"):
+            _build_profile_llms(cfg)
+
+    def test_unreferenced_profile_key_not_checked(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("TEST_LLM_KEY", "sk-default")
+        monkeypatch.delenv("REVIEW_KEY", raising=False)
+        yaml_text = PROFILE_YAML.replace("    llm: review\n", "")
+        cfg = _load_yaml(tmp_path, yaml_text)
+
+        assert _build_profile_llms(cfg) == {}

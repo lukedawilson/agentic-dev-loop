@@ -1025,3 +1025,83 @@ class TestProvisionNodeIntegration:
         rt, step = self._rt_with_setup(runtime, "agent")
         update = make_agent_node(rt, step)(make_state())
         assert update == {"failed": True, "failed_step": "dev"}
+
+
+class TestRunAgentProfileSelection:
+    """054 (D6/D7): a step's `llm:` selects the named profile's LLM; the
+    step's reasoning_effort then overrides that profile's value."""
+
+    def _profile_cfg(self, **step_over):
+        return make_cfg(
+            [{"name": "dev", "agent": "dev", "on_pass": "success", **step_over}],
+            llms={"review": {"model": "review-model", "api_key_env": "REVIEW_KEY"}})
+
+    def _write_agent(self, runtime):
+        runtime.agents_dir.mkdir(exist_ok=True)
+        (runtime.agents_dir / "dev.agent.md").write_text(
+            "---\nname: dev\ntools: [terminal]\n---\nDo the work.")
+
+    def _stub_conversation(self, monkeypatch):
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.Conversation",
+            lambda **kw: FakeConversation(
+                ConversationExecutionStatus.FINISHED, **kw))
+
+    def test_selects_profile_llm(self, runtime, monkeypatch):
+        cfg = self._profile_cfg(llm="review")
+        profile_llm = LLM(model="openai/review-model", api_key="sk-review")
+        runtime = dataclasses.replace(runtime, cfg=cfg,
+                                      llms={"review": profile_llm})
+        self._write_agent(runtime)
+        self._stub_conversation(monkeypatch)
+        captured = {}
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.load_agent",
+            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+                                           and object()))
+
+        result = runtime.run_agent("dev", "msg", step=cfg.steps[0])
+
+        assert result.ok
+        assert captured["llm"] is profile_llm
+
+    def test_default_llm_without_profile(self, runtime, monkeypatch):
+        cfg = self._profile_cfg()
+        runtime = dataclasses.replace(runtime, cfg=cfg)
+        self._write_agent(runtime)
+        self._stub_conversation(monkeypatch)
+        captured = {}
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.load_agent",
+            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+                                           and object()))
+
+        result = runtime.run_agent("dev", "msg", step=cfg.steps[0])
+
+        assert result.ok
+        assert captured["llm"] is runtime.llm
+
+    def test_step_effort_rebuilds_from_profile_cfg(self, runtime, monkeypatch):
+        cfg = self._profile_cfg(llm="review", reasoning_effort="high")
+        profile_llm = LLM(model="openai/review-model", api_key="sk-review")
+        runtime = dataclasses.replace(runtime, cfg=cfg,
+                                      llms={"review": profile_llm})
+        self._write_agent(runtime)
+        self._stub_conversation(monkeypatch)
+        build_calls = []
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.build_llm",
+            lambda cfg, reasoning_effort=None: (
+                build_calls.append((cfg.model, cfg.api_key_env, reasoning_effort))
+                or profile_llm))
+        captured = {}
+        monkeypatch.setattr(
+            "agentic_dev_loop.engine.stages.load_agent",
+            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+                                           and object()))
+
+        result = runtime.run_agent("dev", "msg", step=cfg.steps[0])
+
+        assert result.ok
+        assert build_calls == [("review-model", "REVIEW_KEY", "high")]
+        assert captured["llm"] is profile_llm

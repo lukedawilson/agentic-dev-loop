@@ -120,6 +120,9 @@ class Runtime:
     agents_dir: Path
     state_dir: Path
     workspace: Path
+    # 054 (D7): named-profile LLMs built eagerly at run start, keyed by the
+    # `llms:` profile name. `llm` above remains the default (`llm:` block).
+    llms: dict[str, "LLM"] = field(default_factory=dict)
     sandbox: Sandbox | None = None
     # unit-5: the .git-free export root sandboxed steps run in (BR-2); None =
     # the real workspace (no export materialised - fake/legacy paths).
@@ -176,13 +179,18 @@ class Runtime:
                              if step is not None else None),
                     forbidden_commands=forbidden_commands,
                     allowlist=allowlist)
-            # 047 (D7): a step's reasoning_effort overrides the llm block's;
-            # self.llm already carries the block value (or the SDK default),
-            # so only build a fresh LLM when the step overrides it.
+            # 054 (D6/D7): a named profile selects the whole config (model,
+            # endpoint, key, effort default move together); the step's own
+            # reasoning_effort then overrides the effective profile's value.
             llm = self.llm
-            if step is not None and step.reasoning_effort is not None:
-                llm = build_llm(self.cfg.llm,
-                                reasoning_effort=step.reasoning_effort)
+            if step is not None:
+                effective_cfg = (self.cfg.llms[step.llm]
+                                 if step.llm is not None else self.cfg.llm)
+                if step.llm is not None:
+                    llm = self.llms.get(step.llm, self.llm)
+                if step.reasoning_effort is not None:
+                    llm = build_llm(effective_cfg,
+                                    reasoning_effort=step.reasoning_effort)
             if step is not None and step.kind == "brief":
                 agent = load_brief_agent(
                     agent_name, step.brief_inputs.sections, llm)

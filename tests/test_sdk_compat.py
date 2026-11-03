@@ -37,9 +37,9 @@ def test_openhands_sdk_within_tested_range():
 
 
 def test_canary_sdk_still_drops_reasoning_on_split_tool_call_turn(monkeypatch):
-    """Canary: passes while the SDK bug shim 2 works around is still present;
-    fails once the SDK fixes it - shim 2 is then dead code and must be
-    removed per COMPAT-SHIMS.md."""
+    """Canary: passes while the SDK bug the reasoning passback serializer
+    works around is still present; fails once the SDK fixes it - the
+    serializer is then dead code and must be removed per COMPAT-SHIMS.md."""
     monkeypatch.setenv(KEY, "sk-test")
     llm = build_llm(_cfg())
     messages = [
@@ -63,8 +63,9 @@ def test_canary_sdk_still_drops_reasoning_on_split_tool_call_turn(monkeypatch):
 
     assert "reasoning_content" not in out[2], (
         "The SDK now carries reasoning_content on every assistant tool-call "
-        "message - shim 2 in src/agentic_dev_loop/llm.py is dead code. Remove it "
-        "and update COMPAT-SHIMS.md."
+        "message - the reasoning passback serializer in "
+        "src/agentic_dev_loop/engine/llm.py is dead code. Remove it and update "
+        "COMPAT-SHIMS.md."
     )
 
 

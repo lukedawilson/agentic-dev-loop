@@ -177,11 +177,25 @@ def run_pipeline(cfg_path, args, *, viz_bus=None,
             sandbox.close()
 
 
+def _build_profile_llms(cfg) -> dict:
+    """054 (D7): build the LLM for each profile referenced by any step,
+    eagerly, so a missing api_key_env fails at run start, not mid-run.
+    Declared-but-unreferenced profiles are shape-validated at load; their
+    keys are not checked here."""
+    referenced = {step.llm for step in cfg.steps if step.llm is not None}
+    return {name: build_llm(cfg.llms[name]) for name in sorted(referenced)}
+
+
 def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                   sandbox, resolved_secrets, tooling_paths) -> tuple[bool, int]:
     export_root = getattr(sandbox, "export_root", None)
     engine_allowlist = resolve_engine_allowlist(registry, args)
+    # 054 (D7): build the default LLM plus one per profile referenced by any
+    # step, eagerly, so a missing api_key_env for a referenced profile fails
+    # at run start, not mid-run.
+    profile_llms = _build_profile_llms(cfg)
     runtime = Runtime(cfg=cfg, registry=registry, llm=build_llm(cfg.llm),
+                      llms=profile_llms,
                       agents_dir=base / cfg.agents_dir, state_dir=state_dir,
                       workspace=Path.cwd(), sandbox=sandbox,
                       sandbox_cwd=Path(export_root) if export_root else None,

@@ -396,9 +396,13 @@ class StepConfig(BaseModel):
     terminal_timeout: float | None = Field(default=None, gt=0)  # seconds, agent steps only (032)
     finalize_nudge_turns: int | None = Field(default=None, gt=0)  # agent steps only (035)
     brief_inputs: BriefInputsSpec | None = None  # agent steps only (033)
-    # 047 (D7): per-step opt-in override; unset falls back to the llm block,
-    # then the SDK default. Full SDK literal, passthrough semantics.
+    # 047 (D7) / 054 (D6): per-step opt-in override; unset falls back to the
+    # effective profile's value (the named `llms:` profile, else the `llm:`
+    # block), else reasoning is off. Full SDK literal, passthrough semantics.
     reasoning_effort: ReasoningEffort | None = None
+    # 054 (D3): names a top-level `llms:` profile; the whole profile moves
+    # together (model, endpoint, key, effort default). None = the `llm:` block.
+    llm: str | None = None
     custom_prompt: str | None = None  # agent steps only (040); file path resolved at load
     env: dict[str, str | None] | None = None  # NFR-1: null = inherit host value
     setup: str | None = None  # command or agent steps; runs fresh at each step entry (052)
@@ -486,6 +490,16 @@ class StepConfig(BaseModel):
                 f"step {self.name!r}: exactly one of 'agent', 'action', "
                 "'command', or 'brief_inputs' is required"
             )
+        if self.llm is not None:
+            if not self.llm.strip():
+                raise ValueError(
+                    f"step {self.name!r}: 'llm' must be a non-empty profile name"
+                )
+            if self.kind not in ("agent", "brief"):
+                raise ValueError(
+                    f"step {self.name!r}: 'llm' names an LLM profile and is "
+                    "only allowed on 'agent' or 'brief_inputs' steps"
+                )
         if self.brief_inputs is not None:
             if self.produces:
                 raise ValueError(
@@ -587,9 +601,9 @@ class LlmConfig(BaseModel):
     base_url: str | None = None
     api_key_env: str
     timeout: float | None = None  # omitted → opinionated no-timeout default
-    # 047 (D1): opt-in passthrough; unset means the field is not passed at
-    # all, so the SDK default ("high") applies and today's behavior is
-    # byte-identical. No default may move without an observed run (D6).
+    # 047 (D1) / 054 (D6): opt-in passthrough; unset means reasoning is off
+    # (the engine forwards none and strips reasoning passback). The SDK
+    # "high" default never engages because build_llm always passes the value.
     reasoning_effort: ReasoningEffort | None = None
 
 
@@ -606,6 +620,9 @@ class PipelineConfig(BaseModel):
     extensions_dir: str = "~/.agentic-dev-loop/extensions"
     env_allowlist: list[str] = []
     llm: LlmConfig
+    # 054 (D1): named LLM profiles, each a strict LlmConfig. Optional and
+    # purely additive - the `llm:` block above remains the default.
+    llms: dict[str, LlmConfig] = {}
     isolation: IsolationConfig | None = None  # None = always-on defaults
     state_dir: str = ".pr"  # default relocated to ~/.agentic-dev-loop/runs/<hash>/ at load
     secrets: dict[str, SecretSpec] = {}  # ref name -> locator; values never appear here
@@ -688,6 +705,23 @@ class PipelineConfig(BaseModel):
                 "deps_policy 'locked' requires at least one entry in "
                 "'lockfiles:' - name the lockfile(s) the locked boundary "
                 "enforces, or set 'deps_policy: open'")
+        return self
+
+    @model_validator(mode="after")
+    def _check_llm_profiles(self) -> "PipelineConfig":
+        """054 (D5): the registry is additive and referential. A profile
+        literally named 'default' is rejected (the `llm:` block already is the
+        default), and any step naming an undeclared profile fails at load,
+        never mid-run."""
+        if "default" in self.llms:
+            raise ValueError(
+                "'llms' cannot declare a profile named 'default' - the "
+                "top-level 'llm:' block is already the default")
+        for step in self.steps:
+            if step.llm is not None and step.llm not in self.llms:
+                raise ValueError(
+                    f"step {step.name!r}: unknown LLM profile {step.llm!r} - "
+                    f"declared profiles: {sorted(self.llms)}")
         return self
 
     @model_validator(mode="after")

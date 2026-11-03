@@ -828,3 +828,91 @@ def test_env_keyword_optional_three_keyword_still_loads(tmp_path):
     step = _load(tmp_path, data).steps[0]
     assert step.verdicts.env is None
     assert step.on_env is None
+
+
+class TestLlmProfiles:
+    """054 (D1/D3/D4/D5): the named `llms:` registry and the per-step `llm:`
+    profile reference - additive, referential, and strict."""
+
+    def _profile(self, **over):
+        return {"model": "m", "api_key_env": "K", **over}
+
+    def test_llms_defaults_to_empty(self, tmp_path):
+        assert _load(tmp_path, _base()).llms == {}
+
+    def test_llms_profile_round_trips(self, tmp_path):
+        data = _base()
+        data["llms"] = {
+            "review": self._profile(
+                model="openai/deepseek-v4-pro",
+                base_url="https://api.deepseek.com",
+                api_key_env="REVIEW_KEY",
+                reasoning_effort="xhigh"),
+        }
+        data["steps"][0]["llm"] = "review"
+        cfg = _load(tmp_path, data)
+        profile = cfg.llms["review"]
+        assert profile.model == "openai/deepseek-v4-pro"
+        assert profile.base_url == "https://api.deepseek.com"
+        assert profile.api_key_env == "REVIEW_KEY"
+        assert profile.reasoning_effort == "xhigh"
+        assert cfg.steps[0].llm == "review"
+
+    def test_llms_unknown_profile_key_rejected(self, tmp_path):
+        data = _base()
+        data["llms"] = {"review": self._profile(bogus=1)}
+        with pytest.raises(ValidationError, match="bogus"):
+            _load(tmp_path, data)
+
+    def test_step_llm_defaults_none(self, tmp_path):
+        assert _load(tmp_path, _base()).steps[0].llm is None
+
+    def test_step_llm_unknown_profile_rejected(self, tmp_path):
+        data = _base()
+        data["steps"][0]["llm"] = "ghost"
+        with pytest.raises(ValidationError, match="ghost"):
+            _load(tmp_path, data)
+
+    def test_llms_default_name_rejected(self, tmp_path):
+        data = _base()
+        data["llms"] = {"default": self._profile()}
+        with pytest.raises(ValidationError, match="'default'"):
+            _load(tmp_path, data)
+
+    def test_step_llm_empty_name_rejected(self, tmp_path):
+        data = _base()
+        data["llms"] = {"review": self._profile()}
+        data["steps"][0]["llm"] = ""
+        with pytest.raises(ValidationError, match="non-empty profile name"):
+            _load(tmp_path, data)
+
+    @pytest.mark.parametrize("step", [
+        {"name": "x", "command": "true"},
+        {"name": "x", "action": "commit"},
+    ])
+    def test_step_llm_rejected_on_command_and_action(self, tmp_path, step):
+        data = _base()
+        data["llms"] = {"review": self._profile()}
+        step = {**step, "llm": "review", "on_pass": "success"}
+        data["steps"] = [step]
+        with pytest.raises(ValidationError, match="only allowed on"):
+            _load(tmp_path, data)
+
+    def test_step_llm_allowed_on_agent_step(self, tmp_path):
+        data = _base()
+        data["llms"] = {"review": self._profile()}
+        data["steps"][0]["llm"] = "review"
+        assert _load(tmp_path, data).steps[0].llm == "review"
+
+    def test_step_llm_allowed_on_brief_step(self, tmp_path):
+        data = _base()
+        data["llms"] = {"review": self._profile()}
+        data["steps"] = [{
+            "name": "brief",
+            "brief_inputs": {"sections": ["Repo rules digest"]},
+            "llm": "review",
+            "on_pass": "success",
+        }]
+        step = _load(tmp_path, data).steps[0]
+        assert step.kind == "brief"
+        assert step.llm == "review"
