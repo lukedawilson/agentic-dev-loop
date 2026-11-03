@@ -158,6 +158,17 @@ llm:
   api_key_env: OPENAI_API_KEY
   # reasoning_effort: medium                        # optional: low | medium | high | xhigh | none
 
+# Named LLM profiles (054): a step names one with `llm: <name>` to move the
+# whole profile (model, endpoint, key, effort default) together - no partial
+# merges. The `llm:` block above remains the default. Profile keys are
+# host-side: sandbox access still goes through `secrets:`, never a profile key.
+# llms:
+#   review:
+#     model: openai/deepseek-v4-pro
+#     base_url: https://api.deepseek.com
+#     api_key_env: REVIEW_API_KEY
+#     reasoning_effort: xhigh
+
 max_attempts: 10                                        # CLI --max-attempts overrides
 agents_dir: sdk_agents                                  # your <name>.agent.md files
 
@@ -187,7 +198,8 @@ steps:
     agent: review
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
-    # reasoning_effort: xhigh                        # per-step override; falls back to the llm block, then SDK default
+    # reasoning_effort: xhigh                        # per-step override of the effective profile's effort
+    # llm: review                                    # (054) select a named `llms:` profile for this step
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -213,7 +225,8 @@ steps:
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
 | `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
-| `reasoning_effort:` | Optional `low` / `medium` / `high` / `xhigh` / `none`. Set on the `llm` block (pipeline-global) or per-step (overrides the block). Unset anywhere = the field is not passed and the SDK default (`high`) applies, so today's behavior is unchanged. Forwarded only for models the SDK/LiteLLM mark as supporting it; an unsupported value fails at the first LLM call. See [Reasoning effort](#reasoning-effort-opt-in). |
+| `llms:` (top-level) / step `llm:` | Named LLM profiles, each a full `LlmConfig` (`model`, `base_url`, `api_key_env`, `timeout`, `reasoning_effort`). A step names one with `llm: <profile-name>`; the whole profile moves together (no partial merges). Allowed only on agent and brief steps. The top-level `llm:` block remains the default. Profile keys are host-side - sandbox access still goes through `secrets:`. |
+| `reasoning_effort:` | Optional `low` / `medium` / `high` / `xhigh` / `none`. Set on the `llm` block, a `llms:` profile, or per-step (a step value overrides the effective profile's). Unset anywhere = reasoning off: nothing is forwarded and reasoning is stripped from requests. A thinking model without an effort level is invalid config and fails at the first request (crap in, crap out). See [Reasoning effort](#reasoning-effort-opt-in). |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` runs fresh at every step boundary in a one-shot provision container targeting the export (command or agent steps; network ON; no stamping); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
@@ -228,17 +241,25 @@ steps:
 
 ### Reasoning effort (opt-in)
 
-`reasoning_effort` is an opt-in latency dial on the pipeline `llm` block and
-on individual agent steps. It takes one of `low`, `medium`, `high`, `xhigh`,
-or `none`; unset means the field is never passed and the SDK default
-(`high`) applies, so a pipeline that omits it behaves exactly as before. A
-step's value overrides the `llm` block's value, so the review lane can hold
-a higher effort than the rest.
+`reasoning_effort` is an opt-in latency dial on the pipeline `llm` block, a
+named `llms:` profile, and individual agent steps. It takes one of `low`,
+`medium`, `high`, `xhigh`, or `none`; unset means reasoning is off - the
+field is forwarded as none, reasoning is stripped from requests, and a
+thinking model whose history still carries reasoning fails fast with an
+actionable engine error rather than a provider 400. A step's value overrides
+the effective profile's value, so the review lane can hold a higher effort
+than the rest, or a named profile can move an entire lane to a different
+provider.
 
-The value is forwarded only for models the SDK/LiteLLM mark as supporting
-it; an unsupported value fails at the first LLM call (the schema rejects
-unknown names at load time, but cannot know provider capability). No
-pipeline ships a value: adopt one only after an observed run proves lower
+Reasoning is opt-in and provider-generic: any openai-compatible endpoint
+expressible as an `LlmConfig` works, and reasoning passback is gated on the
+configured effort level, never on a model-name list. A thinking model without
+an effort level (or with `none` where the provider ignores it) is invalid
+config - it still reasons but its API requires the passback the engine strips,
+so the engine raises before the doomed request is sent. Set
+`reasoning_effort` on the step or its profile, or use a non-thinking model.
+The schema rejects unknown effort names at load time, but cannot know provider
+capability; adopt an effort value only after an observed run proves lower
 per-turn latency with a green suite and no provider 400s.
 
 Recommended lane defaults (guidance only, not enforced):
@@ -471,22 +492,23 @@ adapt per repo.
 Adaptation checklist for a new repo:
 
 1. `llm:` - model, `base_url`, `api_key_env`.
-2. `isolation:` - toolchain image override (the consumer repo pins a
+2. `llms:` (optional) - named profiles for multi-provider lanes (keep review on the strongest model); a step opts in with `llm: <name>`.
+3. `isolation:` - toolchain image override (the consumer repo pins a
    toolchain image by digest) and `seccomp_profile: bundled:chromium-userns`
    only if a stage runs Chromium.
-3. `caches:` - toolchain cache dirs as rw bind-mounts shared across runs
+4. `caches:` - toolchain cache dirs as rw bind-mounts shared across runs
    (`.nuget-packages`, `qa/node_modules`, `qa/.browsers`,
    `frontend-editor/node_modules`); caches are never synced back, and a
    step's `setup:` hook runs with them mounted so it can warm them.
-4. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
-5. `secrets:` - refs only, resolved from host env; each step opts in to the
+5. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
+6. `secrets:` - refs only, resolved from host env; each step opts in to the
    refs it needs.
-6. `egress:` - `presets: [package-registries]` for fetch steps;
+7. `egress:` - `presets: [package-registries]` for fetch steps;
    `class: browser` (broad-but-logged) for browser-tier qa only.
-7. `deps_policy:` and `lockfiles:` - see
+8. `deps_policy:` and `lockfiles:` - see
    [Dependency policy](#dependency-policy-locked-by-default).
-8. The dev prompt's impossible set - write it for your toolchain.
-9. `additional_files:` - the repo's `AGENTS.md`, coding standards, design
+9. The dev prompt's impossible set - write it for your toolchain.
+10. `additional_files:` - the repo's `AGENTS.md`, coding standards, design
    docs: shared context for every agent step.
 
 Validate before the first run - dry-run loads and prints the resolved plan

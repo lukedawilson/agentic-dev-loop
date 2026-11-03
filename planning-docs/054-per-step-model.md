@@ -1,6 +1,6 @@
 # Plan 054: per-step model specification via a named llm registry
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 

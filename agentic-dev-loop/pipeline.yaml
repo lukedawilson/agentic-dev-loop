@@ -18,6 +18,19 @@ llm:
   api_key_env: OPENAI_API_KEY
   # timeout omitted → opinionated no-timeout default
 
+# 054 (D9): commented-out example only - no live profile until an observed
+# multi-profile run proves it end to end. A step names a profile with
+# `llm: <name>` to move the whole profile (model, endpoint, key, effort
+# default) together; the `llm:` block above stays the default. Profile keys
+# are host-side: sandbox access still goes through `secrets:`, never a
+# profile key.
+# llms:
+#   review:
+#     model: openai/deepseek-v4-pro
+#     base_url: https://api.deepseek.com
+#     api_key_env: REVIEW_API_KEY
+#     reasoning_effort: xhigh
+
 max_attempts: 10                     # CLI --max-attempts overrides
 agents_dir: sdk_agents               # resolved relative to the pipeline file's dir
 # Supply-chain dial: this repo's dogfood loop still runs the bootstrap

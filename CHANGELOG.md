@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-03
+
+### Changed
+
+- feat: construct plan 054-per-step-model.md (agent dev loop)
+- docs: add plan 054 per-step model specification
+- docs: mark plan 053 completed
+- docs: add plan 055 consumer onboarding (init + doctor)
+- docs: consumer onboarding design (init + doctor)
+- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, planning-docs/054-per-step-model.md
+
 ## [0.9.2] - 2026-11-02
 
 ### Changed
