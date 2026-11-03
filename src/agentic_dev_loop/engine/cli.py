@@ -165,6 +165,12 @@ def main(argv: list[str] | None = None) -> int:
         argv = list(argv)
     if argv and argv[0] == "containers":
         return _run_containers(argv[1:])
+    if argv and argv[0] == "init":
+        from .onboarding.init import run_init
+        return run_init(argv[1:])
+    if argv and argv[0] == "doctor":
+        from .onboarding.doctor import run_doctor
+        return run_doctor(argv[1:])
     probe = argparse.ArgumentParser(add_help=False)
     probe.add_argument("pipeline", type=Path, nargs="?")
     _add_version_flag(probe)

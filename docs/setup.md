@@ -50,6 +50,37 @@ export AGENTIC_DEV_LOOP_DEV_IMAGE=ghcr.io/lukedawilson/agentic-dev-loop/dev:late
 The override wins over the pinned digest and over any per-pipeline
 `isolation.image:` - it is the explicit, never-silent escape hatch.
 
+## Onboarding: init and doctor
+
+A new consumer repo starts with one command:
+
+```bash
+agentic-dev-loop init --profile python        # or: --profile dotnet-node
+agentic-dev-loop init --profile ./my-profile.yaml --recipe python
+```
+
+`init` detects solution files, `package.json` directories, lockfiles, README,
+AGENTS.md, and a conformance script; asks only what it cannot detect; and
+writes `agentic-dev-loop/pipeline.yaml`, the agent files, an executable
+`trigger-agentic-dev-loop.sh`, `agentic-dev-loop/.engine-version`, missing
+premise files, gitignore additions, and an env-file template. It refuses to
+overwrite an existing `agentic-dev-loop/` directory.
+
+`doctor` is the per-run host gate the trigger runs before every run:
+
+```bash
+agentic-dev-loop doctor --fast      # per-run gate: hard failures abort
+agentic-dev-loop doctor --json      # machine-readable results
+```
+
+Hard checks: engine import/version, installed version equals the
+`.engine-version` pin, the pin is not behind the latest release, the engine
+runtime is available with API >= 1.43 and a Linux OSType, the workspace is a
+git repo, and no `.env*` files exist. Warnings: profile-contributed probes,
+premise files, the LLM key env var, declared secret env vars, and
+compose-service reachability. `--fast` skips checks needing more than one
+quick network round trip; the pin-vs-latest check stays in.
+
 ## 3. Writing pipeline.yaml
 
 The `isolation:` section is optional (opinionated defaults apply when absent):
@@ -239,6 +270,8 @@ and `sandbox_venv_dir` fail loudly with a migration message if a pipeline still
 sets them.
 
 ## 5. Troubleshooting
+
+Run `agentic-dev-loop doctor --fast` first: it names the likeliest host-side cause and the fix command.
 
 Every fail-fast error points here (`AE-SBX-<NNN>`):
 

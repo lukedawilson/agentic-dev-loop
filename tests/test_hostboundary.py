@@ -77,12 +77,22 @@ class TestToolingRelPaths:
         pipeline = base / "pipeline.yaml"
         rels = tooling_rel_paths(cfg, pipeline, base, ws)
         assert rels == [
+            "agentic-dev-loop/.engine-version",
             "agentic-dev-loop/agents",
             "agentic-dev-loop/pipeline.yaml",
             "agentic-dev-loop/shared/spec.yaml",
             "aidlc-docs",
             "tools",
+            "trigger-agentic-dev-loop.sh",
         ]
+
+    def test_trigger_and_engine_pin_are_tooling(self, tmp_path):
+        ws = tmp_path / "ws"
+        ws.mkdir()
+        cfg = _cfg()
+        rels = tooling_rel_paths(cfg, ws / "pipeline.yaml", ws, ws)
+        assert "trigger-agentic-dev-loop.sh" in rels
+        assert "agentic-dev-loop/.engine-version" in rels
 
     def test_outside_workspace_paths_are_excluded(self, tmp_path):
         ws = tmp_path / "ws"

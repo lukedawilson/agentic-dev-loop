@@ -31,7 +31,7 @@ VIZ_FORBIDDEN = ("agentic_dev_loop.engine", "openhands", "langgraph",
 
 def _forbidden_imports(py_dir: Path, forbidden: tuple[str, ...]) -> list[str]:
     offenders: list[str] = []
-    for py in py_dir.glob("*.py"):
+    for py in py_dir.rglob("*.py"):
         tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
         for node in ast.walk(tree):
             names = []
@@ -60,6 +60,25 @@ def test_core_fresh_import_loads_no_heavy_deps():
     code = (
         "import sys, json\n"
         "import agentic_dev_loop.core\n"
+        "heavy = sorted(m for m in sys.modules if any(\n"
+        "    m == p or m.startswith(p + '.') for p in "
+        "['openhands', 'langgraph', 'langchain', 'docker', "
+        "'agentic_dev_loop.engine', 'agentic_dev_loop.viz']))\n"
+        "print(json.dumps(heavy))\n"
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(SRC) + os.pathsep + env.get("PYTHONPATH", "")
+    out = subprocess.run([sys.executable, "-c", code],
+                         capture_output=True, text=True, env=env,
+                         cwd=REPO_ROOT)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == "[]", out.stdout
+
+
+def test_core_profiles_fresh_import_loads_no_heavy_deps():
+    code = (
+        "import sys, json\n"
+        "import agentic_dev_loop.core.profiles\n"
         "heavy = sorted(m for m in sys.modules if any(\n"
         "    m == p or m.startswith(p + '.') for p in "
         "['openhands', 'langgraph', 'langchain', 'docker', "

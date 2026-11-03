@@ -32,6 +32,8 @@ if TYPE_CHECKING:
 # the dogfood pipeline and the consumer repo use); the other tooling paths are config- or
 # pipeline-file-relative.
 TOOLING_DIR_NAMES = ("aidlc-docs", "tools")
+TOOLING_FILE_NAMES = ("trigger-agentic-dev-loop.sh",
+                      "agentic-dev-loop/.engine-version")
 
 
 class HostBoundaryError(RuntimeError):
@@ -73,6 +75,7 @@ def tooling_rel_paths(cfg: "PipelineConfig", pipeline_path: str | Path,
         (base / cfg.agents_dir).resolve(),
         *((base / rel).resolve() for rel in cfg.additional_files),
         *(ws / name for name in TOOLING_DIR_NAMES),
+        *(ws / name for name in TOOLING_FILE_NAMES),
     ]
     rels = {p.relative_to(ws).as_posix() for p in candidates
             if p.is_relative_to(ws)}

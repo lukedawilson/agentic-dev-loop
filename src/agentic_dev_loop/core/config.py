@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import re
 import warnings
 from pathlib import Path
@@ -647,6 +648,9 @@ class PipelineConfig(BaseModel):
     # edit instead of raising. Same declared-path vocabulary as
     # ``sync_excludes:``.
     merge_on_conflict: list[str] = []
+    # 055: the toolchain profile resolved at load time. Kept on the validated
+    # config so the run records which profile supplied its defaults.
+    profile: str | None = None
 
     @field_validator("deps_policy")
     @classmethod
@@ -892,6 +896,21 @@ def load_config(path: Path) -> PipelineConfig:
         raise ValueError(
             f"pipeline config must be a mapping, got {type(data).__name__}: {path}"
         )
+    profile_ref = data.pop("profile", None)
+    if profile_ref is not None:
+        from agentic_dev_loop.core.profiles import (
+            ProfileError,
+            load_profile,
+            merge_profile,
+        )
+
+        try:
+            installed = importlib.metadata.version("agentic-dev-loop")
+            profile = load_profile(str(profile_ref), installed)
+            data = merge_profile(data, profile)
+        except ProfileError as exc:
+            raise ValueError(f"pipeline {path}: {exc}") from exc
+        data["profile"] = profile_ref
     if "state_dir" not in data:
         data["state_dir"] = default_state_dir(path)
     cfg = PipelineConfig.model_validate(data)

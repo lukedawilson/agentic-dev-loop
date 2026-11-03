@@ -1,0 +1,85 @@
+name: dotnet-node
+placeholders:
+  __SOLUTION__: DETECTED
+  __FRONTEND_DIR__: DETECTED
+  __QA_FRONTEND_DIR__: __FRONTEND_DIR__
+  __FILTER__: "Category!=Database"
+brief_env_facts:
+  - "the workspace is an export with no .git; verify with find/ls, never git status"
+  - "the sandbox is network-off by default; package fetches (dotnet restore, npm ci) run only in the network-on pipeline steps and in per-step setup hooks (a one-shot network-on provision container runs before each step entry); agent turns never fetch packages"
+  - "database-tagged tests never run in the loop: dotnet test always runs --filter __FILTER__"
+dev_impossible_set:
+  - "package-manager fetches outside network-on steps and setup hooks"
+  - "playwright browser downloads"
+  - "database-category tests"
+  - "commands that boot servers or need external services"
+steps:
+  - {name: brief, kind: brief, brief_inputs: {include: [AGENTS.md]}, on_pass: dev}
+  - name: dev
+    kind: agent
+    agent: dev
+    reasoning_effort: high
+    max_iterations: 100
+    finalize_nudge_turns: 10
+    produces: implementation-summary.md
+    setup: 'cd __FRONTEND_DIR__ && npm ci && cd .. && dotnet restore __SOLUTION__'
+    mounts: [{path: ".", mode: rw}]
+    on_pass: restore
+  - name: restore
+    kind: command
+    command: 'dotnet restore __SOLUTION__'
+    timeout: 1800
+    network: true
+    egress: {presets: [package-registries]}
+    mounts: [{path: ".", mode: rw}]
+    on_pass: test
+    on_fail: {goto: dev, retry: true}
+  - name: test
+    kind: command
+    command: 'dotnet test __SOLUTION__ --filter "__FILTER__"'
+    timeout: 1800
+    network: true
+    egress: {presets: [package-registries]}
+    mounts: [{path: ".", mode: rw}]
+    on_pass: editor-tests
+    on_fail: {goto: dev, retry: true}
+  - name: editor-tests
+    kind: command
+    command: 'cd __FRONTEND_DIR__ && npm ci && npm test'
+    timeout: 1200
+    network: true
+    egress: {presets: [package-registries]}
+    mounts: [{path: ".", mode: rw}]
+    on_pass: conformance
+    on_fail: {goto: dev, retry: true}
+  - name: conformance
+    kind: command
+    command: 'bash tools/run-conformance.sh'
+    timeout: 1800
+    network: true
+    egress: {presets: [package-registries]}
+    mounts: [{path: ".", mode: rw}]
+    optional: {detect: tools/run-conformance.sh}
+    on_pass: review
+    on_fail: {goto: dev, retry: true}
+  - {name: review, kind: agent, agent: review, reasoning_effort: xhigh,
+     artifact: review-findings.md, verdicts: {pass: APPROVED, fail: NEEDS CHANGES},
+     mounts: [{path: ".", mode: ro}], on_pass: qa, on_fail: {goto: dev, retry: true}}
+  - name: qa
+    kind: agent
+    agent: qa
+    reasoning_effort: medium
+    artifact: qa-report.md
+    verdicts: {pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE, env: ENV}
+    max_iterations: 100
+    finalize_nudge_turns: 10
+    setup: 'cd __QA_FRONTEND_DIR__ && npm ci'
+    network: true
+    egress: {class: browser}
+    env: {PLAYWRIGHT_BROWSERS_PATH: qa/.browsers}
+    mounts: [{path: ".", mode: rw}]
+    on_pass: commit
+    on_fail: {goto: dev, retry: true}
+    on_unverifiable: commit
+  - {name: commit, kind: action, action: commit,
+     params: {message: "feat: construct {subject} (agent dev loop)"}, on_pass: success}

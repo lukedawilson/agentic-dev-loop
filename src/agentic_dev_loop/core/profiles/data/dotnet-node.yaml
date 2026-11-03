@@ -1,0 +1,22 @@
+name: dotnet-node
+engine_min: 0.9.2
+description: .NET backend with a Node.js frontend
+isolation:
+  image: ghcr.io/lukedawilson/agentic-dev-loop/dev-dotnet@sha256:d15d1c6115fafc3d5f3bfb567338d61441081e5d7ff83d7770bc0b5f14f977fc
+  seccomp_profile: bundled:chromium-userns
+  cpus: 6
+caches:
+  - .nuget-packages
+premise_files:
+  - path: NuGet.Config
+    content: |
+      <configuration>
+        <config>
+          <add key="globalPackagesFolder" value=".nuget-packages" />
+        </config>
+      </configuration>
+gitignore_additions:
+  - bin/
+  - obj/
+  - node_modules/
+  - .nuget-packages/

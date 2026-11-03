@@ -76,8 +76,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 agentic_dev_loop = ["py.typed"]
+"agentic_dev_loop.core.profiles" = ["data/*.yaml"]
 "agentic_dev_loop.engine" = ["*.md"]
 "agentic_dev_loop.engine.seccomp" = ["*.json"]
+"agentic_dev_loop.engine.onboarding" = ["recipes/*.yaml", "templates/*"]
 
 [tool.pytest.ini_options]
 markers = [

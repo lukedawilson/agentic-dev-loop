@@ -1,0 +1,57 @@
+name: python
+placeholders:
+  __VENV__: .venv-sandbox
+  __DEV_EXTRAS__: ".[dev]"
+  __TEST_PATH__: tests/
+  __TEST_FILTER__: "not docker"
+brief_env_facts:
+  - "the workspace is an export with no .git; verify with find/ls, never git status"
+  - "the sandbox is network-off by default; never run package-manager fetches"
+  - "Python packages resolve from the sandbox venv; run __VENV__/bin/python"
+dev_impossible_set:
+  - "package-manager fetches after a new pin run only in the network-on restore step"
+steps:
+  - {name: brief, kind: brief, brief_inputs: {include: [AGENTS.md]}, on_pass: dev}
+  - name: dev
+    kind: agent
+    agent: dev
+    reasoning_effort: high
+    max_iterations: 150
+    finalize_nudge_turns: 10
+    produces: implementation-summary.md
+    setup: 'python -m venv __VENV__ && __VENV__/bin/pip install -e "__DEV_EXTRAS__"'
+    mounts: [{path: ".", mode: rw}]
+    on_pass: restore
+  - name: restore
+    kind: command
+    command: '__VENV__/bin/python -m pip install --upgrade pip && __VENV__/bin/python -m pip install -e "__DEV_EXTRAS__" && __VENV__/bin/python -m pip_audit --skip-editable'
+    timeout: 600
+    network: true
+    egress: {presets: [package-registries]}
+    mounts: [{path: ".", mode: rw}]
+    on_pass: test
+    on_fail: {goto: dev, retry: true}
+  - name: test
+    kind: command
+    command: '__VENV__/bin/python -m pytest __TEST_PATH__ -q -m "__TEST_FILTER__"'
+    timeout: 600
+    mounts: [{path: ".", mode: rw}]
+    on_pass: review
+    on_fail: {goto: dev, retry: true}
+  - {name: review, kind: agent, agent: review, reasoning_effort: xhigh,
+     artifact: review-findings.md, verdicts: {pass: APPROVED, fail: NEEDS CHANGES},
+     mounts: [{path: ".", mode: ro}], on_pass: qa, on_fail: {goto: dev, retry: true}}
+  - name: qa
+    kind: agent
+    agent: qa
+    reasoning_effort: medium
+    artifact: qa-report.md
+    verdicts: {pass: PASS, fail: FAIL, unverifiable: UNVERIFIABLE, env: ENV}
+    max_iterations: 150
+    finalize_nudge_turns: 10
+    mounts: [{path: ".", mode: ro}]
+    on_pass: commit
+    on_fail: {goto: dev, retry: true}
+    on_unverifiable: commit
+  - {name: commit, kind: action, action: commit,
+     params: {message: "feat: construct {subject} (agent dev loop)"}, on_pass: success}

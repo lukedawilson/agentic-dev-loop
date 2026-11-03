@@ -1,0 +1,8 @@
+name: python
+engine_min: 0.9.2
+description: Python project; the sandbox builds its own venv per run
+isolation:
+  image: ghcr.io/lukedawilson/agentic-dev-loop/dev@sha256:890105209c127446caf20ce3dc05f0c0f5527e9d679e18cc0075e6b0ee917434
+  cpus: 2
+gitignore_additions:
+  - .venv-sandbox/
