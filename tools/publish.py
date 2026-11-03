@@ -49,6 +49,8 @@ CONSUMER_ADOPTION_PLANS = {
     "-egress-proxy-runtime-hardening": "plan 039",
     "-embed-brief-prompt": "plan 046",
     "-native-brief-step-type": "plan 049",
+    "-per-step-model": "plan 054",
+    "-consumer-onboarding-init-doctor": "plan 055",
 }
 
 

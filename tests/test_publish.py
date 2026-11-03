@@ -299,6 +299,44 @@ class TestConsumerAdoption:
         assert read_version(repo) == "0.2.0"
         assert tags(repo) == []
 
+    def test_054_marker_without_adoption_section_fails(self, tmp_path):
+        """Plan 054 flips reasoning passback to config-gated: pipelines
+        whose llm:/llms: entries point at a thinking model must set
+        reasoning_effort (absent effort now forwards nothing and raises a
+        D12 engine error), so its slug is registered: a release entry
+        referencing it without a `### Consumer adoption` note gets
+        refused."""
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: implement plan 054-per-step-model\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode != 0
+        assert "Consumer adoption" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+
+    def test_055_marker_without_adoption_section_fails(self, tmp_path):
+        """Plan 055 migrates consumer repos onto profiles and recipes
+        (profile key, trigger rewrite, isolation-block deletion), so its
+        slug is registered: a release entry referencing it without a
+        `### Consumer adoption` note gets refused."""
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased=(
+                "### Changed\n\n"
+                "- feat: implement plan 055-consumer-onboarding-init-doctor\n"
+            ),
+        )
+        proc = run_publish(repo, "--patch")
+        assert proc.returncode != 0
+        assert "Consumer adoption" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+
 
 class TestGitOps:
     def test_commit_tag_and_push(self, tmp_path):
