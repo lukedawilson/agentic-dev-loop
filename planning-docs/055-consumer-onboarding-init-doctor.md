@@ -1,6 +1,6 @@
 # 055: Consumer onboarding: init + doctor
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 Authored directly APPROVED (2026-11-03), per planning-docs conventions.
 Implementation is TDD red-green-refactor, behind the repo ask-before-coding

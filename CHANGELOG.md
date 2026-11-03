@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-03
+
+### Changed
+
+- feat: construct plan 055-consumer-onboarding-init-doctor.md (agent dev loop)
+- Per-step config
+- test: register plan 054 and 055 consumer-adoption slugs in publish.py
+- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml,
+  planning-docs/055-consumer-onboarding-init-doctor.md
+
+### Consumer adoption
+
+Plan 055 (consumer onboarding: init + doctor) requires consumer repos to make
+these edits (human commits; see planning-docs/055, Task 10). Fresh repos
+should run `agentic-dev-loop init --profile dotnet-node` instead of
+hand-writing the harness.
+
+- Rewrite the trigger script to the new template shape: an
+  `agentic-dev-loop/.engine-version` pin gate running `doctor --fast`, a
+  one-time `pipx install --force` repair, and no `pipx upgrade`; keep the
+  existing `AGENTIC_DEV_LOOP_ENV_FILE` sourcing.
+- Add `profile: dotnet-node` to `agentic-dev-loop/pipeline.yaml` and delete
+  the isolation and caches entries the profile now supplies.
+- Add `agentic-dev-loop/.engine-version` pinned to the engine version in use.
+
 ## [0.10.0] - 2026-11-03
 
 ### Changed

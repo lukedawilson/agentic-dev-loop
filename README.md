@@ -231,6 +231,7 @@ steps:
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` runs fresh at every step boundary in a one-shot provision container targeting the export (command or agent steps; network ON; no stamping); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
 | `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [Secrets](#secrets--refs-only-never-values). |
+| `profile:` (top-level) | Names a bundled toolchain profile (`python`, `dotnet-node`) or a consumer profile file path. `load_config` merges the profile at load time: isolation key-wise with the pipeline winning, caches unioned profile-first. Absent = today's behavior. |
 | `isolation:` (optional) | Configures the sandbox - image override, resource caps, `allow_git_mutations`, `seccomp_profile`. It can never disable it. See [browser sandbox](docs/browser-sandbox.md). |
 | `state_dir` | Defaults to `~/.agentic-dev-loop/runs/<pipeline-hash>/` - artifacts and checkpoints live outside the sandbox mount. |
 | `extensions_dir` | Where consumer `extensions:` modules resolve - defaults to `~/.agentic-dev-loop/extensions`, **outside** the workspace. Workspace-resident extension/tool modules are refused at load. |
@@ -402,12 +403,39 @@ console.
 
 ## Authoring a loop for your own repo
 
-A consumer repo needs two things written by hand - a pipeline file and the
-agent files it names - both committed before the first run (the host-boundary
-check refuses dirty tooling, and the `commit` step never commits it). Two
-reference layouts ship today: this repo dogfoods the engine on itself
-(python + pytest, no frontend, CLI-only qa), and the consumer repo carries
-the wider shape (.NET + npm frontend + a networked browser-probing qa step).
+### Start with `agentic-dev-loop init`
+
+`init` writes the onboarding surface from a bundled toolchain profile:
+
+```bash
+agentic-dev-loop init --profile python        # or: --profile dotnet-node
+```
+
+It detects solution files, `package.json` directories, lockfiles, README, and
+AGENTS.md, asks only what detection cannot answer, and writes
+`agentic-dev-loop/pipeline.yaml`, the three agent files, an executable
+`trigger-agentic-dev-loop.sh`, `agentic-dev-loop/.engine-version` (the exact
+installed engine version), any missing premise files, gitignore additions, and
+an env-file template. It refuses to overwrite an existing
+`agentic-dev-loop/` directory. A consumer-authored profile file can be passed
+by path instead of a bundled name.
+
+Profiles carry the environment facts every app on a toolchain shares (image,
+cpus, caches, premise files, gitignore lines); recipes carry the gate shape and
+command vocabulary. The pipeline references a profile with the top-level
+`profile:` key, and `load_config` merges it at load time: the pipeline wins on
+scalars, caches union profile-first, and absence of the key behaves exactly as
+before.
+
+`agentic-dev-loop doctor --fast` is the per-run gate the trigger runs first.
+Hard failures abort the run (engine pin mismatch, engine runtime availability,
+API version, git repo, `.env*` files); warnings print and continue. `doctor
+--json` emits the same results mechanically. The trigger repairs a pin/install
+mismatch exactly once, then fails hard.
+
+A consumer repo needs a pipeline file and the agent files it names, both
+committed before the first run (the host-boundary check refuses dirty tooling,
+and the `commit` step never commits it). `init` writes them; the layout is:
 
 ```
 <repo>/agentic-dev-loop/pipeline.yaml
@@ -493,12 +521,11 @@ Adaptation checklist for a new repo:
 
 1. `llm:` - model, `base_url`, `api_key_env`.
 2. `llms:` (optional) - named profiles for multi-provider lanes (keep review on the strongest model); a step opts in with `llm: <name>`.
-3. `isolation:` - toolchain image override (the consumer repo pins a
-   toolchain image by digest) and `seccomp_profile: bundled:chromium-userns`
-   only if a stage runs Chromium.
-4. `caches:` - toolchain cache dirs as rw bind-mounts shared across runs
-   (`.nuget-packages`, `qa/node_modules`, `qa/.browsers`,
-   `frontend-editor/node_modules`); caches are never synced back, and a
+3. `profile:` - name a bundled profile (`python`, `dotnet-node`) or a
+   consumer profile path. The profile supplies `isolation:` (image,
+   `seccomp_profile`, cpus) and `caches:`; pipeline keys override its scalars.
+4. `caches:` - profile-supplied toolchain caches plus any run-specific dirs
+   (`.nuget-packages`, `qa/.browsers`); caches are never synced back, and a
    step's `setup:` hook runs with them mounted so it can warm them.
 5. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
 6. `secrets:` - refs only, resolved from host env; each step opts in to the

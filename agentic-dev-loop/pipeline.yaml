@@ -1,4 +1,5 @@
 name: agentic-dev-loop-construction
+profile: python   # 055: toolchain facts (image, cpus, gitignore) merge at load
 
 extensions:
   - agentic_dev_loop.engine.extensions.aidlc:AidlcExtension   # bundled; loading IS choosing
@@ -45,12 +46,6 @@ deps_policy: open
 # both the loop (AI-DLC mandates audit.md logging) and the operator - union-merge
 # those edits instead of raising a sync-back conflict.
 merge_on_conflict: [aidlc-docs/audit.md]
-# 052: per-run setup at the step boundary, fresh every entry, targeting the
-# export. The sandbox venv is a gitignored dir built by the dev step's setup
-# hook (no engine-level venv special case).
-isolation:
-  cpus: 2
-
 steps:
   - name: brief
     llm: flash
@@ -80,6 +75,16 @@ steps:
       - '\btwine\s+upload\b'
       - '\bgh\s+release\s+create\b'
       - '\bgh\s+pr\s+(create|merge|close)\b'
+    on_pass: deps
+
+  - name: deps
+    command: python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"
+    timeout: 600
+    mounts: [{ path: ".", mode: rw }]   # .venv-sandbox is a gitignored dir in the export
+    network: true                    # one-time bootstrap fetch: PyPI
+    egress: { presets: [package-registries] }
+    # No on_fail: a committed manifest that cannot install is an operator
+    # problem, so a failure here halts the run loudly.
     on_pass: dev
 
   - name: dev
@@ -90,10 +95,8 @@ steps:
     finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
     produces: implementation-summary.md   # hygiene-tracked, no verdict
     mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
-    # 052: build the sandbox venv fresh at every dev entry (per-run, export
-    # target; network-on in the provision container). Dev agents run python
-    # in-sandbox and restore/test both need .venv-sandbox/bin/python.
-    setup: python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"
+    # No setup hook: the deps step (pre-dev) builds .venv-sandbox once per
+    # run; goto dev retries re-enter clean, nothing re-installs at step entry.
     # Banned-command deny-list: custom entries append after the engine
     # defaults (git mutations, package installs, playwright, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
