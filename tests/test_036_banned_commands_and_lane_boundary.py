@@ -48,34 +48,21 @@ def _export(tmp_path: Path, ws: Path) -> Path:
 
 class TestForbiddenCommandRules:
     def test_defaults_cover_deny_list(self):
-        rules = resolve_forbidden_rules([], network=False)
+        rules = resolve_forbidden_rules([])
         labels = [r.label for r in rules]
-        for expected in ("git commit", "git push", "git rebase", "git checkout",
-                         "git reset", "git tag", "npm install", "npm ci",
-                         "pip install", "uv add", "pip-compile",
-                         "dotnet add package", "npx playwright", "playwright",
-                         "docker", "dotnet restore", "dotnet add"):
-            assert expected in labels
-
-    def test_network_on_drops_network_gated_dotnet(self):
-        offline = resolve_forbidden_rules([], network=False)
-        online = resolve_forbidden_rules([], network=True)
-        assert "dotnet restore" in [r.label for r in offline]
-        assert "dotnet add" in [r.label for r in offline]
-        assert "dotnet restore" not in [r.label for r in online]
-        assert "dotnet add" not in [r.label for r in online]
+        assert labels == ['git commit', 'git push', 'git rebase', 'git checkout', 'git reset', 'git tag', 'docker']
 
     def test_custom_rules_append_with_pattern_label(self):
-        rules = resolve_forbidden_rules([r"rm\s+-rf"], network=False)
+        rules = resolve_forbidden_rules([r"rm\s+-rf"])
         assert rules[-1].label == r"rm\s+-rf"
 
     def test_shell_wrapped_argv_matches(self):
         argv = ["/bin/sh", "-c", "git push origin main"]
         assert match_forbidden_command(
-            argv, resolve_forbidden_rules([], network=False)) == "git push"
+            argv, resolve_forbidden_rules([])) == "git push"
 
     def test_empty_argv_never_matches(self):
-        assert match_forbidden_command([], resolve_forbidden_rules([], False)) is None
+        assert match_forbidden_command([], resolve_forbidden_rules([])) is None
 
 
 class TestSandboxTerminalDenyList:
@@ -86,7 +73,7 @@ class TestSandboxTerminalDenyList:
         from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
         ex = SandboxTerminalExecutor(
             fake_sandbox, workspace=str(tmp_path), env={},
-            forbidden_commands=resolve_forbidden_rules([], network=False))
+            forbidden_commands=resolve_forbidden_rules([]))
         obs = ex(TerminalAction(command="git commit -m x"), None)
         assert "[forbidden: git commit]" in obs.text
         assert obs.exit_code is None
@@ -98,33 +85,10 @@ class TestSandboxTerminalDenyList:
         from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
         ex = SandboxTerminalExecutor(
             fake_sandbox, workspace=str(tmp_path), env={},
-            forbidden_commands=resolve_forbidden_rules([r"rm\s+-rf"], False))
+            forbidden_commands=resolve_forbidden_rules([r"rm\s+-rf"]))
         obs = ex(TerminalAction(command="rm -rf /tmp/x"), None)
         assert "[forbidden: rm\\s+-rf]" in obs.text
         assert fake_sandbox.requests == []
-
-    def test_dotnet_restore_denied_offline(self, fake_sandbox, tmp_path):
-        from openhands.tools.terminal import TerminalAction
-
-        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
-        ex = SandboxTerminalExecutor(
-            fake_sandbox, workspace=str(tmp_path), env={},
-            forbidden_commands=resolve_forbidden_rules([], network=False))
-        obs = ex(TerminalAction(command="dotnet restore"), None)
-        assert "[forbidden: dotnet restore]" in obs.text
-        assert fake_sandbox.requests == []
-
-    def test_dotnet_restore_allowed_online(self, fake_sandbox, tmp_path):
-        from openhands.tools.terminal import TerminalAction
-
-        from agentic_dev_loop.engine.agents import SandboxTerminalExecutor
-        ex = SandboxTerminalExecutor(
-            fake_sandbox, workspace=str(tmp_path), env={}, network=True,
-            forbidden_commands=resolve_forbidden_rules([], network=True))
-        fake_sandbox.script(lambda req: (0, "restored", False))
-        obs = ex(TerminalAction(command="dotnet restore"), None)
-        assert obs.exit_code == 0
-        assert fake_sandbox.requests[0].argv == ["dotnet", "restore"]
 
 
 class TestPathAllowed:

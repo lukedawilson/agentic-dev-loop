@@ -98,3 +98,9 @@ README.md. Human commits required.
 - Post-deploy observation: forbidden commands fail instantly with the
   structured message; lane violations fail at sync_back instead of
   reaching review.
+
+> **Amendment (056):** the engine default list is trimmed to run
+> invariants (git mutations, docker), the network gating mechanism is
+> removed (the deny-list is network-independent by design), tool-specific
+> rules moved to the bundled onboarding recipes and per-step
+> `forbidden_commands`, and README deliverable #4 landed there.

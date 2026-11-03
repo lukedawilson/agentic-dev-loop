@@ -14,7 +14,18 @@ dev_impossible_set:
   - "database-category tests"
   - "commands that boot servers or need external services"
 steps:
-  - {name: brief, kind: brief, brief_inputs: {include: [AGENTS.md]}, on_pass: dev}
+  - name: brief
+    kind: brief
+    brief_inputs: {include: [AGENTS.md]}
+    forbidden_commands:
+      - npm install
+      - npm ci
+      - dotnet add package
+      - dotnet restore
+      - dotnet add
+      - npx playwright
+      - playwright
+    on_pass: dev
   - name: dev
     kind: agent
     agent: dev
@@ -22,6 +33,14 @@ steps:
     max_iterations: 100
     finalize_nudge_turns: 10
     produces: implementation-summary.md
+    forbidden_commands:
+      - npm install
+      - npm ci
+      - dotnet add package
+      - dotnet restore
+      - dotnet add
+      - npx playwright
+      - playwright
     setup: 'cd __FRONTEND_DIR__ && npm ci && cd .. && dotnet restore __SOLUTION__'
     mounts: [{path: ".", mode: rw}]
     on_pass: restore
@@ -62,9 +81,23 @@ steps:
     optional: {detect: tools/run-conformance.sh}
     on_pass: review
     on_fail: {goto: dev, retry: true}
-  - {name: review, kind: agent, agent: review, reasoning_effort: xhigh,
-     artifact: review-findings.md, verdicts: {pass: APPROVED, fail: NEEDS CHANGES},
-     mounts: [{path: ".", mode: ro}], on_pass: qa, on_fail: {goto: dev, retry: true}}
+  - name: review
+    kind: agent
+    agent: review
+    reasoning_effort: xhigh
+    artifact: review-findings.md
+    verdicts: {pass: APPROVED, fail: NEEDS CHANGES}
+    mounts: [{path: ".", mode: ro}]
+    forbidden_commands:
+      - npm install
+      - npm ci
+      - dotnet add package
+      - dotnet restore
+      - dotnet add
+      - npx playwright
+      - playwright
+    on_pass: qa
+    on_fail: {goto: dev, retry: true}
   - name: qa
     kind: agent
     agent: qa

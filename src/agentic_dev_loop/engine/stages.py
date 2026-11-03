@@ -158,8 +158,7 @@ class Runtime:
                 else:
                     cwd, mount_set, egress_policy = (self.workspace, None, None)
                 forbidden_commands = (
-                    resolve_forbidden_rules(step.forbidden_commands,
-                                            step.network)
+                    resolve_forbidden_rules(step.forbidden_commands)
                     if step is not None else None)
                 allowlist = (
                     tuple(self.engine_allowlist)

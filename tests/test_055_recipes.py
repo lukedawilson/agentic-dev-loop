@@ -47,6 +47,9 @@ def test_python_recipe_gate_set_and_commands():
     assert steps["qa"]["finalize_nudge_turns"] == 10
     assert "env" in steps["qa"]["verdicts"]
     assert "on_env" not in steps["qa"]
+    for name in ("brief", "dev", "review"):
+        assert steps[name]["forbidden_commands"] == ['pip install', 'uv add', 'pip-compile']
+    assert "forbidden_commands" not in steps["qa"]
 
 
 def test_dotnet_node_recipe_gate_set_and_commands():
@@ -69,6 +72,9 @@ def test_dotnet_node_recipe_gate_set_and_commands():
     assert steps["qa"]["env"] == {"PLAYWRIGHT_BROWSERS_PATH": "qa/.browsers"}
     assert steps["qa"]["mounts"] == [{"path": ".", "mode": "rw"}]
     assert len(doc["dev_impossible_set"]) == 4
+    for name in ("brief", "dev", "review"):
+        assert steps[name]["forbidden_commands"] == ['npm install', 'npm ci', 'dotnet add package', 'dotnet restore', 'dotnet add', 'npx playwright', 'playwright']
+    assert "forbidden_commands" not in steps["qa"]
 
 
 def test_unknown_recipe_raises():

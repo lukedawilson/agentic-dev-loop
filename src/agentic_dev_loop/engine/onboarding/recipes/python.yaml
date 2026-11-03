@@ -11,7 +11,14 @@ brief_env_facts:
 dev_impossible_set:
   - "package-manager fetches after a new pin run only in the network-on restore step"
 steps:
-  - {name: brief, kind: brief, brief_inputs: {include: [AGENTS.md]}, on_pass: dev}
+  - name: brief
+    kind: brief
+    brief_inputs: {include: [AGENTS.md]}
+    forbidden_commands:
+      - pip install
+      - uv add
+      - pip-compile
+    on_pass: dev
   - name: dev
     kind: agent
     agent: dev
@@ -19,6 +26,10 @@ steps:
     max_iterations: 150
     finalize_nudge_turns: 10
     produces: implementation-summary.md
+    forbidden_commands:
+      - pip install
+      - uv add
+      - pip-compile
     setup: 'python -m venv __VENV__ && __VENV__/bin/pip install -e "__DEV_EXTRAS__"'
     mounts: [{path: ".", mode: rw}]
     on_pass: restore
@@ -38,9 +49,19 @@ steps:
     mounts: [{path: ".", mode: rw}]
     on_pass: review
     on_fail: {goto: dev, retry: true}
-  - {name: review, kind: agent, agent: review, reasoning_effort: xhigh,
-     artifact: review-findings.md, verdicts: {pass: APPROVED, fail: NEEDS CHANGES},
-     mounts: [{path: ".", mode: ro}], on_pass: qa, on_fail: {goto: dev, retry: true}}
+  - name: review
+    kind: agent
+    agent: review
+    reasoning_effort: xhigh
+    artifact: review-findings.md
+    verdicts: {pass: APPROVED, fail: NEEDS CHANGES}
+    mounts: [{path: ".", mode: ro}]
+    forbidden_commands:
+      - pip install
+      - uv add
+      - pip-compile
+    on_pass: qa
+    on_fail: {goto: dev, retry: true}
   - name: qa
     kind: agent
     agent: qa
