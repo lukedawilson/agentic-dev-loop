@@ -74,15 +74,22 @@ from it the way docs did.
 
 ## Architecture
 
+Profiles are a subpackage of core: `src/agentic_dev_loop/core/profiles/`
+(bundled data, loader, merge, engine_min compare). They live in core because
+the profile merge happens inside `load_config` (the schema layer), and
+`viz/__main__.py` calls `load_config` directly while being forbidden from
+importing engine. Folding into core adds no new dependency edge: the existing
+core guard (FORBIDDEN scan) is extended to cover the subpackage recursively.
+
 New module `src/agentic_dev_loop/engine/onboarding/`:
 
-- `profiles/python.yaml`, `profiles/dotnet-node.yaml` (bundled data)
 - `recipes/python.yaml`, `recipes/dotnet-node.yaml` (bundled data: gate sets,
   gate shapes, command vocabulary with placeholders)
 - `templates/` (agent files, trigger script, env-file template)
-- thin readers `profiles.py`, `recipes.py`, `checks.py`, `init.py`,
-  `doctor.py`, following the repo's existing data-file pattern
-- pyproject package-data gains the onboarding entries
+- thin readers `recipes.py`, `checks.py`, `init.py`, `doctor.py`, following
+  the repo's existing data-file pattern; they import `core.profiles` (engine
+  to core is the allowed direction)
+- pyproject package-data gains the onboarding and core.profiles entries
 
 CLI dispatch in `engine/cli.py` `main()`, same slot as `containers`, before
 the pipeline parser; no extension loading; deferred imports:
@@ -153,9 +160,20 @@ doctor_checks: []
   fixture repo and asserts the existing pipeline validator accepts the
   result. Schema changes break bundled profiles in CI; consumer profiles fail
   loudly at init with the validator's own message.
-- The engine config gains an optional top-level `profile:` key; when present,
-  the named (or pathed) profile is loaded and merged at config load. Pipelines
-  without it behave exactly as today.
+- The engine config gains an optional top-level `profile:` field
+  (`PipelineConfig.profile: str | None = None`); when present, the named (or
+  pathed) profile is loaded from `core.profiles` and merged in `load_config`
+  before validation. Pipelines without it behave exactly as today.
+
+## Profile placement
+
+- `src/agentic_dev_loop/core/profiles/` subpackage: `__init__.py` (loader,
+  merge, `engine_min` compare), `data/python.yaml`, `data/dotnet-node.yaml`.
+  Light by contract: stdlib + PyYAML only, same as core.
+- `test_module_contract.py`: the core AST scan becomes recursive (rglob) so
+  `core/profiles/*.py` is covered by the existing FORBIDDEN list, and a
+  fresh-import assertion is added for the subpackage. No new top-level
+  package, no new unguarded edge.
 
 ## Recipes (engine data, not user-facing)
 
