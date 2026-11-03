@@ -1,6 +1,6 @@
 # 053: Viz page stream watchdog (zombie EventSource recovery)
 
-Status: approved design (2026-11-02). Implementation is TDD red-green-refactor,
+> **Status: COMPLETED**
 behind the repo ask-before-coding gate.
 
 ## Problem
