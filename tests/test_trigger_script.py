@@ -1,10 +1,12 @@
 """Trigger-script contract tests.
 
-The trigger script must keep the pipx-managed engine install current:
-a stale install rejects newer pipeline configs at load time (e.g.
-`deps_policy` in a11 rejected by an a10 install), so an existing install
-is upgraded on every run. Tests drive the real script with stub
-executables on PATH - no network, no mocks of the script's logic.
+The trigger script owns the per-run engine gate (055): it reads
+`agentic-dev-loop/.engine-version`, runs `agentic-dev-loop doctor --fast`
+before every run, repairs a pin/install mismatch exactly once with
+`pipx install --force "agentic-dev-loop==<pin>"`, and never runs
+`pipx upgrade` (the old upgrade-on-every-run contract is gone). Tests
+drive the real script with stub executables on PATH - no network, no
+mocks of the script's logic.
 
 The script is bash, so it is executed through `bash`.
 """
@@ -51,40 +53,98 @@ def _env_with(bin_dir: Path | None = None) -> dict:
     return {**os.environ, "PATH": ":".join(entries)}
 
 
-def test_trigger_upgrades_existing_install(tmp_path):
+def _pin() -> str:
+    return (REPO_ROOT / "agentic-dev-loop/.engine-version").read_text().strip()
+
+
+def _cli_stub_body(tmp_path: Path, doctor_fail_count: int) -> str:
+    """A doctor-aware agentic-dev-loop stub.
+
+    `doctor --fast` invocations (first arg `doctor`) fail the first
+    `doctor_fail_count` times, then succeed; anything else is the real run
+    and echoes `cli-ran: <args>`.
+    """
+    counter = tmp_path / "doctor.calls"
+    return f'''if [[ "$1" == doctor ]]; then
+  echo x >> "{str(counter)}"
+  n=$(wc -l < "{str(counter)}" | tr -d ' ')
+  if [[ "$n" -le {doctor_fail_count} ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+echo "cli-ran: $*"'''
+
+
+def _stub_env(tmp_path, *, doctor_fail_count=0, pipx_body="exit 0"):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
+    _make_stub(bin_dir, "agentic-dev-loop",
+               _cli_stub_body(tmp_path, doctor_fail_count))
+    _make_stub(bin_dir, "pipx", pipx_body)
+    return bin_dir
+
+
+def test_trigger_doctor_pass_skips_pipx(tmp_path):
+    """A clean doctor gate never touches pipx; the run proceeds directly."""
     pipx_log = tmp_path / "pipx.log"
-    _make_stub(
-        bin_dir,
-        "agentic-dev-loop",
-        'echo "cli-ran: $*"',
-    )
-    _make_stub(
-        bin_dir,
-        "pipx",
-        f'echo "$*" >> "{str(pipx_log)}"',
+    bin_dir = _stub_env(
+        tmp_path,
+        pipx_body=f'echo "$*" >> "{str(pipx_log)}"',
     )
 
     result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
 
     assert result.returncode == 0, result.stderr
-    assert pipx_log.read_text().strip() == "upgrade --cooldown 0 --pip-args=--prerelease=allow agentic-dev-loop"
-    # The upgrade happens before the loop is launched.
+    assert not pipx_log.exists()
     assert "cli-ran:" in result.stdout
 
 
-def test_trigger_fails_fast_when_upgrade_fails(tmp_path):
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    _make_stub(bin_dir, "agentic-dev-loop", "echo should-not-run")
-    _make_stub(bin_dir, "pipx", "echo upgrade-broken >&2; exit 1")
+def test_trigger_repairs_pin_mismatch_once(tmp_path):
+    """A failing doctor gate triggers exactly one pinned pipx repair."""
+    pipx_log = tmp_path / "pipx.log"
+    counter = tmp_path / "doctor.calls"
+    bin_dir = _stub_env(
+        tmp_path,
+        doctor_fail_count=1,
+        pipx_body=f'echo "$*" >> "{str(pipx_log)}"',
+    )
 
-    result = _run_script(env=_env_with(bin_dir))
+    result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
+
+    assert result.returncode == 0, result.stderr
+    assert pipx_log.read_text().strip() == f"install --force agentic-dev-loop=={_pin()}"
+    # Doctor runs before the repair and once more after it, so two calls.
+    assert counter.read_text().count("\n") == 2
+    assert "cli-ran:" in result.stdout
+
+
+def test_trigger_repair_failure_fails_hard(tmp_path):
+    bin_dir = _stub_env(
+        tmp_path,
+        doctor_fail_count=99,
+        pipx_body="echo repair-broken >&2; exit 1",
+    )
+
+    result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert "pipx upgrade" in result.stderr
-    assert "should-not-run" not in result.stdout
+    assert "could not install agentic-dev-loop==" in result.stderr
+    assert "cli-ran:" not in result.stdout
+
+
+def test_trigger_doctor_still_failing_after_repair(tmp_path):
+    bin_dir = _stub_env(
+        tmp_path,
+        doctor_fail_count=2,
+        pipx_body="exit 0",
+    )
+
+    result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
+
+    assert result.returncode != 0
+    assert "still fails after repairing the engine pin" in result.stderr
+    assert "cli-ran:" not in result.stdout
 
 
 def test_trigger_errors_when_cli_absent():
@@ -92,14 +152,6 @@ def test_trigger_errors_when_cli_absent():
 
     assert result.returncode != 0
     assert "pipx install" in result.stderr
-
-
-def _stub_env(tmp_path, *, cli_body='echo "cli-ran: $*"', pipx_body="exit 0"):
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    _make_stub(bin_dir, "agentic-dev-loop", cli_body)
-    _make_stub(bin_dir, "pipx", pipx_body)
-    return bin_dir
 
 
 def test_trigger_rejects_both_flags(tmp_path):
