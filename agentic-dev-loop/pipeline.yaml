@@ -67,7 +67,7 @@ steps:
         - the sandbox is network-off by default; never run package-manager fetches
         - Python packages resolve from .venv-sandbox; run .venv-sandbox/bin/python
     # Banned-command deny-list: custom entries append after the engine
-    # defaults (git mutations, package installs, playwright, docker).
+    # defaults (git mutations, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
     # publishes itself.
     forbidden_commands:
@@ -75,6 +75,9 @@ steps:
       - '\btwine\s+upload\b'
       - '\bgh\s+release\s+create\b'
       - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
     on_pass: deps
 
   - name: deps
@@ -98,7 +101,7 @@ steps:
     # No setup hook: the deps step (pre-dev) builds .venv-sandbox once per
     # run; goto dev retries re-enter clean, nothing re-installs at step entry.
     # Banned-command deny-list: custom entries append after the engine
-    # defaults (git mutations, package installs, playwright, docker).
+    # defaults (git mutations, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
     # publishes itself.
     forbidden_commands:
@@ -106,6 +109,9 @@ steps:
       - '\btwine\s+upload\b'
       - '\bgh\s+release\s+create\b'
       - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
     on_pass: restore
 
   - name: restore
@@ -139,7 +145,7 @@ steps:
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     mounts: [{path: ".", mode: ro}]
     # Banned-command deny-list: custom entries append after the engine
-    # defaults (git mutations, package installs, playwright, docker).
+    # defaults (git mutations, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
     # publishes itself.
     forbidden_commands:
@@ -147,6 +153,9 @@ steps:
       - '\btwine\s+upload\b'
       - '\bgh\s+release\s+create\b'
       - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -159,7 +168,7 @@ steps:
     finalize_nudge_turns: 10           # Provisional: one final-response nudge
     mounts: [{path: ".", mode: ro}]
     # Banned-command deny-list: custom entries append after the engine
-    # defaults (git mutations, package installs, playwright, docker).
+    # defaults (git mutations, docker).
     # Releases and GitHub mutations stay operator-only: the loop never
     # publishes itself.
     forbidden_commands:

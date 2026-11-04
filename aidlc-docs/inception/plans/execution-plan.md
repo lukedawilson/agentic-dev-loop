@@ -1,86 +1,85 @@
-# Execution Plan
+# Execution Plan - Unit 9 (Viz Redesign)
 
 ## Detailed Analysis Summary
 
 ### Transformation Scope (Brownfield)
 
-- **Transformation Type**: Architectural enhancement - hardening + new optional isolation subsystem (no deployment-model change; library + CLI remain the product)
-- **Primary Changes**: (1) findings/verdict-passing mechanism reworked to pipeline-captured final responses; (2) SDK tooling-injection hardening; (3) opt-in container isolation for terminal tool + command steps
-- **Related Components**: single package (`agent-engine`) + shipped consumer example (`agent-engine/pipeline.yaml`, `sdk_agents/*`); no infra code, no CDK, no shared models
+- **Transformation Type**: Single component change (UI restyle) + additive backend extension + new build/test tooling
+- **Primary Changes**: `src/agentic_dev_loop/viz/server.py` (PAGE string replaced per normative spec; `/topology` gains `flow`/`edges`); new viz frontend asset files wired to `frontend/scripts/lint-figma-primitives.mjs`; build step inlining assets into PAGE
+- **Related Components**: `tests/test_viz.py` (contract tests updated for new DOM ids); `.opencode/skills/frontend-development/SKILL.md` (scope note); viz class register (new, unit-owned, linter-consumable)
 
 ### Change Impact Assessment
 
-- **User-facing changes**: Yes - pipeline authors' YAML/agent files change (verdict protocol semantics, `file_editor` removal, optional isolation config)
-- **Structural changes**: Yes - new isolation subsystem (Unit 3); stages/verdicts flow reworked (Unit 1)
-- **Data model changes**: Minor - state_dir artifact semantics; no DB schema
-- **API changes**: Yes - `run_agent` capture path, verdict parsing interface, new config fields
-- **NFR impact**: Yes - security (isolation, least privilege), resiliency (scoped: container lifecycle retries)
+- **User-facing changes**: Yes - complete visual restyle of the viz page; behaviour frozen (rule zero, spec section 10)
+- **Structural changes**: No - same module, same server, same endpoints (`/events` contract unchanged)
+- **Data model changes**: No - `flow`/`edges` are derived DTO fields from existing `chain`/`back_edges`
+- **API changes**: Additive only - `/topology` gains two keys; `mermaid` retained
+- **NFR impact**: Yes - supply chain (pinned CDN, SRI evaluation), resiliency (CDN-unreachable fallback), repo ASCII policy on shipped assets
 
 ### Component Relationships
 
-- **Primary Component**: `src/agent_engine/` (stages, verdicts, agents, registry, config, graph)
-- **Dependent Components**: shipped consumer (`agent-engine/` example), `tests/` (e2e fixtures replay historical verdict failures - will need updating for the new capture mechanism)
-- **Supporting Components**: `viz.py` (observes state), `extensions/aidlc.py` (loader layout)
+- **Primary Component**: `agentic_dev_loop.viz` (server.py, PAGE, topology_mermaid)
+- **Shared Components**: none new (flow/edges derived in place)
+- **Dependent Components**: tests/test_viz.py; frontend lint tooling; SKILL.md docs
+- **Supporting Components**: none (no infra, no deployment change; stdlib-only runtime preserved)
 
 ### Risk Assessment
 
-- **Risk Level**: Medium - multiple components; Unit 3 (kernel isolation) carries the most risk (cross-platform container behavior), but is opt-in and separable; Unit 1 first per user directive
-- **Rollback Complexity**: Easy - git-versioned single package, no schema/data migration
-- **Testing Complexity**: Moderate - e2e fixture suite replays historical parsing edge cases; container tests need a fake-runtime seam
+- **Risk Level**: Low-Medium (behaviour-preservation is the risk axis; mitigated by existing viz contract tests + spec section 12 checklist; new build step is build-time only)
+- **Rollback Complexity**: Easy (single-module diff; old PAGE restorable from git)
+- **Testing Complexity**: Moderate (DOM contract tests + pure-function layout invariants incl. PBT targets per NFR-6)
 
 ## Workflow Visualization
 
 ```mermaid
 flowchart TD
-    Start(["User Request"])
+    Start(["User Request: unit-9 viz redesign"])
 
-    subgraph INCEPTION["🔵 INCEPTION PHASE"]
+    subgraph INCEPTION["INCEPTION PHASE"]
         WD["Workspace Detection<br/><b>COMPLETED</b>"]
-        RE["Reverse Engineering<br/><b>COMPLETED</b>"]
-        RA["Requirements Analysis<br/><b>COMPLETED</b>"]
-        US["User Stories<br/><b>SKIP</b>"]
+        RE["Reverse Engineering<br/><b>SKIPPED - RE artifacts exist 2026-10-17</b>"]
+        RA["Requirements Analysis<br/><b>COMPLETED 2026-11-03</b>"]
+        US["User Stories<br/><b>SKIPPED - user decision</b>"]
         WP["Workflow Planning<br/><b>IN PROGRESS</b>"]
-        AD["Application Design<br/><b>EXECUTE</b>"]
-        UG["Units Generation<br/>(Planning + Generation)<br/><b>EXECUTE</b>"]
+        AD["Application Design<br/><b>SKIP</b>"]
+        UG["Units Generation<br/><b>SKIP</b>"]
     end
 
-    subgraph CONSTRUCTION["🟢 CONSTRUCTION PHASE"]
+    subgraph CONSTRUCTION["CONSTRUCTION PHASE"]
         FD["Functional Design<br/><b>EXECUTE</b>"]
-        NFRA["NFR Requirements<br/><b>EXECUTE</b>"]
+        NFRA["NFR Requirements<br/><b>SKIP</b>"]
         NFRD["NFR Design<br/><b>SKIP</b>"]
-        ID["Infrastructure Design<br/><b>EXECUTE</b>"]
-        CG["Code Generation<br/>(Planning + Generation)<br/><b>EXECUTE</b>"]
+        ID["Infrastructure Design<br/><b>SKIP</b>"]
+        CG["Code Generation<br/><b>EXECUTE</b>"]
         BT["Build and Test<br/><b>EXECUTE</b>"]
     end
 
-    subgraph OPERATIONS["🟡 OPERATIONS PHASE"]
+    subgraph OPERATIONS["OPERATIONS PHASE"]
         OPS["Operations<br/><b>PLACEHOLDER</b>"]
     end
 
     Start --> WD
-    WD --> RE
-    RE --> RA
+    WD --> RA
     RA --> US
     US --> WP
-    WP --> AD
-    AD --> UG
-    UG --> CG
+    WP --> FD
+    FD --> CG
     CG --> BT
     BT --> End(["Complete"])
 
     style WD fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style RE fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style RA fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style US fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
-    style WP fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style AD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style UG fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style FD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style NFRA fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
-    style NFRD fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
-    style ID fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style WP fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style CG fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
     style BT fill:#4CAF50,stroke:#1B5E20,stroke-width:3px,color:#fff
+    style FD fill:#FFA726,stroke:#E65100,stroke-width:3px,stroke-dasharray: 5 5,color:#000
+    style RE fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style US fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style AD fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style UG fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style NFRA fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style NFRD fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
+    style ID fill:#BDBDBD,stroke:#424242,stroke-width:2px,stroke-dasharray: 5 5,color:#000
     style Start fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
     style End fill:#CE93D8,stroke:#6A1B9A,stroke-width:3px,color:#000
 
@@ -89,50 +88,43 @@ flowchart TD
 
 ## Phases to Execute
 
-### 🔵 INCEPTION PHASE
+### INCEPTION PHASE
+- [x] Workspace Detection (COMPLETED - resumed existing project)
+- [x] Reverse Engineering (SKIPPED - artifacts exist, viz module read directly)
+- [x] Requirements Analysis (COMPLETED 2026-11-03 - FR-9.1..9.9, NFR-9.1..9.5)
+- [x] User Stories (SKIPPED - user decision; spec sections 10-12 carry acceptance criteria)
+- [x] Execution Plan (THIS DOCUMENT)
+- [ ] Application Design - SKIP
+  - **Rationale**: No new components/services; the normative design spec already is the application design (layout algorithm, component inventory, tokens, DOM contract). Changes stay within the viz component boundary.
+- [ ] Units Generation - SKIP
+  - **Rationale**: This request IS a single unit (unit-9); no decomposition needed.
 
-- [x] Workspace Detection (COMPLETED)
-- [x] Reverse Engineering (COMPLETED)
-- [x] Requirements Analysis (COMPLETED)
-- [x] User Stories (SKIPPED)
-  - **Rationale**: Internal dev-tool hardening - user confirmed "No need for user stories"
-- [x] Execution Plan (IN PROGRESS)
-- [ ] Application Design - EXECUTE
-  - **Rationale**: New isolation component (Unit 3) needs component definition; Domain Standards extension demands domain exposition before any model proposal
-- [ ] Units Generation - EXECUTE
-  - **Rationale**: Three units, complex changes; user directive: units are vertical slices
-
-### 🟢 CONSTRUCTION PHASE
-
+### CONSTRUCTION PHASE
 - [ ] Functional Design - EXECUTE
-  - **Rationale**: Unit 1 parsing-logic redesign explicitly flagged by user ("we've had bugs in this area"); domain exposition + validation per Domain Standards
-- [ ] NFR Requirements - EXECUTE
-  - **Rationale**: Security baseline is blocking; isolation/least-privilege/credential NFRs must be pinned before code
+  - **Rationale**: Resolves the open design decisions: viz register location + linter wiring (FR-9.8), build-step mechanism for inlining assets into PAGE (NFR-9.1), SRI evaluation (NFR-9.2), class register content with mappings/justifications (FR-9.7), layout-invariant test harness and PBT targets (FR-9.9), ASCII treatment of prototype glyphs (NFR-9.5).
+- [ ] NFR Requirements - SKIP
+  - **Rationale**: NFRs already enumerated (NFR-9.1..9.5) with extension mapping; tech stack fixed by spec TS-4 (stdlib runtime, pinned Carbon CDN).
 - [ ] NFR Design - SKIP
-  - **Rationale**: No performance/scaling/HA design work; desktop tool; container infra handled by Infrastructure Design
-- [ ] Infrastructure Design - EXECUTE
-  - **Rationale**: Unit 3 introduces container-runtime infrastructure (daemon detection, mounts, images) needing design
+  - **Rationale**: No NFR patterns beyond spec'd behaviour (fallback, watchdog, reduced-motion); the one open item (SRI) is a Functional Design decision.
+- [ ] Infrastructure Design - SKIP
+  - **Rationale**: No infrastructure changes; stdlib-only runtime preserved.
 - [ ] Code Generation - EXECUTE (ALWAYS)
+  - **Rationale**: Implementation planning and code generation needed.
 - [ ] Build and Test - EXECUTE (ALWAYS)
+  - **Rationale**: Build, test, and verification needed.
 
-### 🟡 OPERATIONS PHASE
-
+### OPERATIONS PHASE
 - [ ] Operations - PLACEHOLDER
-
-## Package Change Sequence (Brownfield Only)
-
-Single package (`agent-engine`) - no multi-package coordination. Unit order is the critical path: **Unit 1 (findings/verdict passing) → Unit 2 (tool hardening) → Unit 3 (kernel isolation)**; each is a vertical slice with its own build-and-test checkpoint.
+  - **Rationale**: Future deployment and monitoring workflows.
 
 ## Estimated Timeline
 
-- **Total Phases**: 12 planned stages (incl. per-unit construction loop for 3 units)
-- **Estimated Duration**: Unit 1 (small, well-understood) < Unit 2 (medium) < Unit 3 (large, cross-platform unknowns)
+- **Total Stages**: 3 to execute (Functional Design, Code Generation, Build and Test)
+- **Estimated Duration**: FD: one focused session; CG: one to two sessions (page rebuild + topology + tests + lint wiring); BT: short
 
 ## Success Criteria
 
-- **Primary Goal**: agent-engine runs guardrailed by design - reliable findings/verdict passing, hardened tool injection, opt-in kernel isolation
-- **Key Deliverables**: response-capture mechanism + parsing redesign (Unit 1); SDK restriction exposure + extension registration validation (Unit 2); container isolation backend with fail-fast semantics (Unit 3)
-- **Quality Gates**: full test suite green per unit; e2e fixtures updated for new capture path; PBT on parsing/serialization; security NFRs verified
-
-- **Integration Testing**: All components working together - pipeline self-run (dev→test→review→qa→commit) under hardened + isolated modes
-- **Operational Readiness**: N/A (library; container lifecycle retries + observability of sandboxed execution per Resiliency scoped)
+- **Primary Goal**: The viz page matches the normative design (spec + prototype oracle) with zero behaviour change
+- **Key Deliverables**: restyled PAGE; `/topology` flow/edges; viz asset files + build step; viz class register; updated tests incl. layout invariants; SKILL.md scope note
+- **Quality Gates**: full pytest suite green (incl. updated viz contract tests and em dash guard); viz assets pass lint-figma-primitives; spec section 12 acceptance checklist verified
+- **Integration Testing**: viz contract tests against the live server; manual acceptance pass against the prototype oracle

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-04
+
+### Changed
+
+- feat: construct plan 056-tool-rules-to-profiles.md (agent dev loop)
+- viz refresh docs
+- feat: construct plan 056-tool-rules-to-profiles.md (agent dev loop)
+- Frontend rules
+- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, aidlc-docs/aidlc-state.md, aidlc-docs/audit.md, aidlc-docs/inception/plans/execution-plan.md, aidlc-docs/inception/plans/user-stories-assessment.md, planning-docs/056-tool-rules-to-profiles.md
+
 ## [0.10.2] - 2026-11-03
 
 ### Changed

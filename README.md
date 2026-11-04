@@ -185,6 +185,7 @@ steps:
     agent: dev
     produces: implementation-summary.md
     terminal_timeout: 900
+    # forbidden_commands: ["npm install", "npm ci"]      # per-step tool deny-list; engine defaults are git mutations + docker
     on_pass: test
 
   - name: test
@@ -224,6 +225,7 @@ steps:
 | `brief_inputs:` | The discriminator for a native brief step: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. There is no `agent:`, `produces:`, or `max_iterations:` - the prompt is engine-embedded, the capture file is `attempt-brief.md`, and the iteration cap is 12, all engine-owned. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as the step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). `name` stays free-form, so multiple brief steps are allowed. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
+| `forbidden_commands:` | Optional per-step list of regex patterns. The sandbox terminal matches them against each agent command before any shell spawn; a match returns a structured `[forbidden: <label>]` observation instead of running. A single string is coerced to a one-item list; an invalid regex fails at load. Defaults are run invariants only (git mutations, docker); tool-specific rules belong to the toolchain profile/recipe or the pipeline author. Command steps are unaffected. See [Banned commands](#banned-commands-forbidden_commands). |
 | `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
 | `llms:` (top-level) / step `llm:` | Named LLM profiles, each a full `LlmConfig` (`model`, `base_url`, `api_key_env`, `timeout`, `reasoning_effort`). A step names one with `llm: <profile-name>`; the whole profile moves together (no partial merges). Allowed only on agent and brief steps. The top-level `llm:` block remains the default. Profile keys are host-side - sandbox access still goes through `secrets:`. |
 | `reasoning_effort:` | Optional `low` / `medium` / `high` / `xhigh` / `none`. Set on the `llm` block, a `llms:` profile, or per-step (a step value overrides the effective profile's). Unset anywhere = reasoning off: nothing is forwarded and reasoning is stripped from requests. A thinking model without an effort level is invalid config and fails at the first request (crap in, crap out). See [Reasoning effort](#reasoning-effort-opt-in). |
@@ -239,6 +241,22 @@ steps:
 | `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
 | `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from host-side stores under `{state_dir}/caches/<name>` (auto-created); a `setup:` hook can warm them (the provision container carries the same cache mounts); `sync_excludes:` names non-gitignored scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
 | `merge_on_conflict:` | Top-level run-wide list of append-style logs (same path vocabulary as `sync_excludes:`, default `[]`). A concurrent host edit to a listed path is union-merged instead of raising: the host file wins and the sandbox's export-only lines are appended in order; both sides converge and the run continues. See [docs/setup.md](docs/setup.md). |
+
+### Banned commands (`forbidden_commands:`)
+
+`forbidden_commands:` is a per-step list of regex patterns. The sandbox
+terminal checks them against every command the agent runs, before any shell
+spawn: a match returns a structured `[forbidden: <label>]` observation instead
+of executing. The engine defaults are run invariants only - git mutations and
+docker - so the deny-list is network-independent by design: `network:` stays a
+docker/egress concern. A single string is coerced to a one-item list; an
+invalid regex is a load error. Command steps bypass the filter by design.
+
+Tool-specific rules are not engine defaults. A toolchain profile or bundled
+recipe declares them per step (for example the `python` recipe denies
+`pip install`, `uv add`, and `pip-compile` on its agent steps), and a
+consumer pipeline authors its own for its toolchain. There is no disable
+escape hatch for the engine defaults.
 
 ### Reasoning effort (opt-in)
 

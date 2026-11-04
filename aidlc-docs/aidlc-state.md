@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: INCEPTION - Unit 9 (viz redesign) Requirements Analysis in progress; Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 COMPLETE (2026-10-25); Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection); Unit 8 intent recorded (parallel fan-out driver)
+- **Current Stage**: INCEPTION - Unit 9 (viz redesign) Workflow Planning pending approval (2026-11-03); User Stories SKIPPED (user decision); Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 COMPLETE (2026-10-25); Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection); Unit 8 intent recorded (parallel fan-out driver)
 
 ## Workspace State
 - **Existing Code**: Yes

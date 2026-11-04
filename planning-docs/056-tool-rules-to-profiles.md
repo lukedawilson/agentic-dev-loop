@@ -1,6 +1,6 @@
 # 056: Tool rules to profiles; deny-list defaults to invariants only
 
-> **Status: PLANNED**
+> **Status: COMPLETED**
 
 Supersedes 036's default-list and network-gating decisions in part; absorbs
 036's missing README deliverable (#4).
