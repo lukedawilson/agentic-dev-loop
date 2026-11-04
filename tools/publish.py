@@ -16,6 +16,8 @@ Invariants (enforced here, not by convention):
   `### Consumer adoption` subsection (registry CONSUMER_ADOPTION_PLANS
   below); without it the release is refused. The dry run runs the same
   refusal checks, so the pre-cut gate fails before anything is written
+- the rendered release notes are shown and must be confirmed before
+  anything is written, committed, or tagged; pass --yes to skip the prompt
 - any failure leaves the repository unchanged and exits non-zero, loudly
 """
 
@@ -38,9 +40,11 @@ class PublishError(Exception):
 
 # Plan slugs whose completion obligates consumer repos to edit their own
 # pipeline.yaml or agent prompt copies (verdict vocabulary, step caps,
-# banned commands, qa prompt sections). A release entry that references
-# one of these must carry a `### Consumer adoption` subsection. When a new
-# plan adds consumer obligations, add its slug here.
+# banned commands, qa prompt sections). A release entry containing one of
+# these slugs must carry a `### Consumer adoption` subsection listing the
+# concrete consumer edits; plan-number-only mentions do not trigger the
+# gate (consumers need the list of changes, not plan references). When a
+# new plan adds consumer obligations, add its slug here.
 CONSUMER_ADOPTION_PLANS = {
     "-qa-unverifiable-verdict": "plan 024",
     "-qa-environmental-verdict": "plan 031",
@@ -57,8 +61,9 @@ CONSUMER_ADOPTION_PLANS = {
 
 
 def enforce_consumer_adoption(section: str) -> None:
-    """Refuse a release section that references a consumer-adoption plan
-    without a `### Consumer adoption` note."""
+    """Refuse a release section containing a registered plan slug without a
+    `### Consumer adoption` note (the note lists what consumer repos must
+    change; plan-number-only mentions do not trigger the gate)."""
     if "### Consumer adoption" in section:
         return
     for marker, plan in CONSUMER_ADOPTION_PLANS.items():
@@ -203,26 +208,60 @@ def render_changelog(
 
 
 def git_bullets(root: Path) -> list[str]:
-    """Commit subjects since the last tag, plus a summary of uncommitted work."""
+    """Commit subjects since the last tag. Uncommitted work is never part of
+    the release notes: a note saying work is uncommitted becomes false the
+    moment the release commit sweeps it in."""
     describe = subprocess.run(
         ["git", "-C", str(root), "describe", "--tags", "--abbrev=0"],
         capture_output=True, text=True,
     )
     commit_range = f"{describe.stdout.strip()}..HEAD" if describe.returncode == 0 \
         else "HEAD"
-    bullets = [
+    return [
         line for line in git(root, "log", commit_range, "--pretty=format:%s")
         .splitlines() if line.strip()
     ]
+
+
+def dirty_note(root: Path) -> str:
+    """The uncommitted files the release commit will sweep in, for the cut
+    report only (the release commit includes them, so release notes must not
+    describe them as uncommitted)."""
     dirty = sorted({
         line[3:].strip().split(" -> ")[-1]
         for line in git(root, "status", "--porcelain").splitlines()
         if line
     })
-    if dirty:
-        shown = ", ".join(dirty[:10]) + (", …" if len(dirty) > 10 else "")
-        bullets.append(f"Uncommitted changes: {shown}")
-    return bullets
+    shown = ", ".join(dirty[:10])
+    if len(dirty) > 10:
+        shown += ", ..."
+    return shown
+
+
+def extract_section(changelog: str, version: str, date: str) -> str:
+    """The rendered release section (heading included), for the
+    confirmation display."""
+    body = changelog.split(f"## [{version}] - {date}\n\n", 1)[1]
+    cut = re.search(r"\n## \[", body)
+    if cut is not None:
+        body = body[: cut.start()] + "\n"
+    return f"## [{version}] - {date}\n\n{body}"
+
+
+def confirm_release(yes: bool) -> None:
+    """The rendered release notes are shown before this runs; the cut
+    proceeds only on explicit confirmation (or --yes for automation)."""
+    if yes:
+        return
+    try:
+        answer = input("Proceed with release? [y/N] ")
+    except EOFError:
+        raise PublishError(
+            "no confirmation given and stdin is closed; review the notes "
+            "above and re-run with --yes to skip the prompt"
+        )
+    if answer.strip().lower() not in ("y", "yes"):
+        raise PublishError("release aborted: notes not confirmed")
 
 
 def changelog_source(
@@ -262,6 +301,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("-m", "--description",
                         help="release-note text for the changelog entry")
+    parser.add_argument("--yes", action="store_true",
+                        help="skip the release-note confirmation prompt")
     parser.add_argument("--cwd", type=Path,
                         help="repository root (default: current directory)")
     parser.add_argument("--dry-run", action="store_true",
@@ -294,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         branch = git(root, "rev-parse", "--abbrev-ref", "HEAD").strip()
         if branch == "HEAD":
             raise PublishError("HEAD is detached; check out a branch first")
+        dirty = dirty_note(root)
 
         if args.dry_run:
             # The dry run is the pre-cut gate: render (and thereby refuse)
@@ -304,6 +346,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Current version: {current}")
             print(f"Target version:  {target} (tag {tag})")
             print(f"Changelog entry: {source}")
+            if dirty:
+                print("Uncommitted files (included in the release commit): "
+                      f"{dirty}")
             print(f"Commit:          release: {tag}")
             print(f"Push:            origin {branch}, origin {tag}")
             print("(dry run - nothing changed)")
@@ -311,6 +356,13 @@ def main(argv: list[str] | None = None) -> int:
 
         new_changelog = render_changelog(
             old_changelog, str(target), date, args.description, bullets)
+        print("Release notes to be written:")
+        print(extract_section(new_changelog, str(target), date))
+        if dirty:
+            print("Uncommitted files will be included in the release commit: "
+                  f"{dirty}")
+        confirm_release(args.yes)
+
         (pyproject).write_text(
             bump_pyproject_text(pyproject.read_text(), str(target)))
         changelog_path.write_text(new_changelog)

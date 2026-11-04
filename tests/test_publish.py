@@ -73,11 +73,21 @@ def make_repo(tmp_path: Path, version: str = "0.2.0", unreleased: str = "",
     return repo, bare
 
 
-def run_publish(repo: Path, *args: str) -> subprocess.CompletedProcess:
+def run_publish(repo: Path, *args: str, yes: bool = True,
+                stdin=None, input=None) -> subprocess.CompletedProcess:
+    """Drive the CLI. Real cuts pass --yes by default so they skip the
+    release-note confirmation prompt; pass yes=False with stdin=DEVNULL
+    (closed) or input='y\\n' (typed answer) to test the prompt."""
+    cmd = [sys.executable, str(PUBLISH), "--cwd", str(repo)]
+    if yes:
+        cmd.append("--yes")
+    cmd.extend(args)
     return subprocess.run(
-        [sys.executable, str(PUBLISH), "--cwd", str(repo), *args],
+        cmd,
         capture_output=True,
         text=True,
+        stdin=stdin,
+        input=input,
         env={**os.environ,
              "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
              "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"},
@@ -207,13 +217,17 @@ class TestChangelog:
         assert "feat: alpha" in section
         assert "fix: beta" in section
 
-    def test_inferred_includes_uncommitted_work(self, tmp_path):
+    def test_dirty_tree_reported_but_not_in_changelog(self, tmp_path):
         repo, _ = make_repo(tmp_path)
         (repo / "extra.txt").write_text("uncommitted")
         proc = run_publish(repo, "--patch")
         assert proc.returncode == 0, proc.stderr
         text = read_changelog(repo)
-        assert "extra.txt" in text[text.index("## [0.2.1]"):]
+        assert "extra.txt" not in text[text.index("## [0.2.1]"):]
+        assert "extra.txt" in proc.stdout  # reported in the cut report only
+        assert _git(repo, "status", "--porcelain").stdout == ""
+        assert "extra.txt" in _git(repo, "show", "--stat", "--oneline",
+                                   "HEAD").stdout
 
     def test_missing_unreleased_heading_fails(self, tmp_path):
         repo, _ = make_repo(tmp_path)
@@ -224,6 +238,54 @@ class TestChangelog:
         assert proc.returncode != 0
         assert "Unreleased" in proc.stderr
         assert read_version(repo) == "0.2.0"
+
+
+class TestReleaseConfirmation:
+    def test_closed_stdin_without_yes_fails(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        proc = run_publish(repo, "--patch", yes=False, stdin=subprocess.DEVNULL)
+        assert proc.returncode != 0
+        assert "--yes" in proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+        assert last_subject(repo) == "chore: initial"
+
+    def test_declined_confirmation_aborts(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        proc = run_publish(repo, "--patch", yes=False, input="n\n")
+        assert proc.returncode != 0
+        assert "aborted" in proc.stderr.lower()
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
+        assert last_subject(repo) == "chore: initial"
+
+    def test_confirmed_cut_proceeds(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        proc = run_publish(repo, "--patch", yes=False, input="y\n")
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.1"
+        assert tags(repo) == ["v0.2.1"]
+
+    def test_prompt_shows_rendered_entry(self, tmp_path):
+        repo, _ = make_repo(tmp_path, commits=(("a.txt", "a", "feat: alpha"),))
+        proc = run_publish(repo, "--patch", yes=False, input="y\n")
+        assert proc.returncode == 0, proc.stderr
+        assert "## [0.2.1]" in proc.stdout
+        assert "feat: alpha" in proc.stdout
+
+    def test_yes_flag_skips_prompt(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        proc = run_publish(repo, "--patch", yes=True, stdin=subprocess.DEVNULL)
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.1"
+
+    def test_dry_run_needs_no_confirmation(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        proc = run_publish(repo, "--patch", "--dry-run", yes=False,
+                           stdin=subprocess.DEVNULL)
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.0"
+        assert tags(repo) == []
 
 
 class TestConsumerAdoption:
@@ -254,6 +316,16 @@ class TestConsumerAdoption:
         proc = run_publish(repo, "--patch")
         assert proc.returncode == 0, proc.stderr
         assert read_version(repo) == "0.2.1"
+
+    def test_plan_number_reference_without_marker_passes(self, tmp_path):
+        """Number-only plan mentions do not trigger the gate: consumers need
+        the concrete list of changes in the subsection, not plan references."""
+        repo, _ = make_repo(
+            tmp_path,
+            unreleased="### Changed\n\n- fix: 056 slug matching in the loader\n",
+        )
+        proc = run_publish(repo, "--patch", "--dry-run")
+        assert proc.returncode == 0, proc.stderr
 
     def test_no_marker_passes_without_section(self, tmp_path):
         repo, _ = make_repo(
