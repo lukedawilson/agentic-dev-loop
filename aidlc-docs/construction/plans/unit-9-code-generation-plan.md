@@ -30,33 +30,35 @@ per repo policy: failing tests define behaviour before implementation.
 
 ## Execution Steps
 
-- [ ] Step 1: Load unit design artifacts and normative sources; verify FD decisions Q1-Q4 and rules R1-R70 are the operative constraints.
+- [x] Step 1: Load unit design artifacts and normative sources; verify FD decisions Q1-Q4 and rules R1-R70 are the operative constraints.
 
-- [ ] Step 2: Create `src/agentic_dev_loop/viz/layout.py` - pure-Python port of the layout algorithm (contract and orderings per FD business-logic-model.md section 1; constants NW/NH/GAP/STEP/LANE/LANE_TOP/LANE_PAD/CH; no DOM, no I/O). (FR-9.9, NFR-9.4)
+- [x] Step 2: Create `src/agentic_dev_loop/viz/layout.py` - pure-Python port of the layout algorithm (contract and orderings per FD business-logic-model.md section 1; constants NW/NH/GAP/STEP/LANE/LANE_TOP/LANE_PAD/CH; no DOM, no I/O). (FR-9.9, NFR-9.4)
 
-- [ ] Step 3: Create `tests/test_viz_layout.py` (TDD RED, written before layout.py is complete): invariants (stations always 112x76, never scaled; perRow >= 2 when multi-row; gutter height formula; single-node degenerate result 112x76; determinism) + Hypothesis PBT (random node counts/flow chains/back-edge sets: no U/C crossings via pairwise segment-intersection, all geometry within bounds, arrows/labels on non-degenerate segments) + fewest-rows minimality property. (FR-9.9; extension: PBT partial scope)
+- [x] Step 3: Create `tests/test_viz_layout.py` (TDD RED, written before layout.py is complete): invariants (stations always 112x76, never scaled; perRow >= 2 when multi-row; gutter height formula; single-node degenerate result 112x76; determinism) + Hypothesis PBT (random node counts/flow chains/back-edge sets: no U/C crossings via pairwise segment-intersection, all geometry within bounds, arrows/labels on non-degenerate segments) + fewest-rows minimality property. (FR-9.9; extension: PBT partial scope)
 
-- [ ] Step 4: Golden verification (dev-only): run the reference `pipeline-layout.js` (node) over the spec's scenarios (N=10 @ 1336px, 1100px, 700px + short topologies) and a property sweep; commit the outputs as JSON fixtures; assert the Python port reproduces them exactly (row counts, perRow, positions, lane counts). No node in CI.
+- [x] Step 4: Golden verification (dev-only): run the reference `pipeline-layout.js` (node) over the spec's scenarios (N=10 @ 1336px, 1100px, 700px + short topologies) and a property sweep; commit the outputs as JSON fixtures; assert the Python port reproduces them exactly (row counts, perRow, positions, lane counts). No node in CI.
 
-- [ ] Step 5: Create `src/agentic_dev_loop/viz/assets/` - `page.html`, `styles.css`, `page.js` per FD frontend-components.md and business-rules.md: Carbon WC v2 exact pinned CDN (R60), region mapping (FD section 1), tokens.css values inline as CSS custom properties (both themes, data-theme), custom graph box + divider + consoles, no-CDN fallback baseline (R30), keep old ids where cheap (#subject #attempt #thread-id #total #verdicts #stages stage-<node> #run-log #stream-banner #run-banner), a11y (R40-R47), ASCII-only (R70), static inline styles converted to classes (R52); data-testid attributes on interactive elements (`theme-toggle`, `copy-console-<node>`, `divider`, `stage-<node>`, `run-log`, `stream-banner`, `run-banner`). (FR-9.1, FR-9.3, FR-9.4, FR-9.5, FR-9.6, FR-9.7, NFR-9.2, NFR-9.3, NFR-9.5)
+- [x] Step 5: Create `src/agentic_dev_loop/viz/assets/` - `page.html`, `styles.css`, `page.js` per FD frontend-components.md and business-rules.md: Carbon WC v2 exact pinned CDN (R60), region mapping (FD section 1), tokens.css values inline as CSS custom properties (both themes, data-theme), custom graph box + divider + consoles, no-CDN fallback baseline (R30), keep old ids where cheap (#subject #attempt #thread-id #total #verdicts #stages stage-<node> #run-log #stream-banner #run-banner), a11y (R40-R47), ASCII-only (R70), static inline styles converted to classes (R52); data-testid attributes on interactive elements (`theme-toggle`, `copy-console-<node>`, `divider`, `stage-<node>`, `run-log`, `stream-banner`, `run-banner`). (FR-9.1, FR-9.3, FR-9.4, FR-9.5, FR-9.6, FR-9.7, NFR-9.2, NFR-9.3, NFR-9.5)
 
-- [ ] Step 6: Create `frontend/viz-register.md` - viz class register in the SKILL.md mapping-table conventions, from the FD section 3 draft (honest Figma mappings for token-mapped classes; written justifications for component-class behaviours, keyframes, product tokens; sanctioned dynamic inline positioning note). (FR-9.7, FR-9.8)
+- [x] Step 6: Create `frontend/viz-register.md` - viz class register in the SKILL.md mapping-table conventions, from the FD section 3 draft (honest Figma mappings for token-mapped classes; written justifications for component-class behaviours, keyframes, product tokens; sanctioned dynamic inline positioning note). (FR-9.7, FR-9.8)
 
-- [ ] Step 7: Modify `.opencode/skills/frontend-development/SKILL.md` - add scope note: viz assets live at `src/agentic_dev_loop/viz/assets/` with register at `frontend/viz-register.md` (FR-9.7).
+- [x] Step 7: Modify `.opencode/skills/frontend-development/SKILL.md` - add scope note: viz assets live at `src/agentic_dev_loop/viz/assets/` with register at `frontend/viz-register.md` (FR-9.7).
 
-- [ ] Step 8: Modify `frontend/scripts/lint-figma-primitives.mjs` - add optional `--assets <dir>` and `--register <file>` flags; defaults preserve current behaviour exactly (walks frontend/src, reads the SKILL.md tables). (FR-9.8)
+- [x] Step 8: Modify `frontend/scripts/lint-figma-primitives.mjs` - add optional `--assets <dir>` and `--register <file>` flags; defaults preserve current behaviour exactly (walks frontend/src, reads the SKILL.md tables). (FR-9.8)
 
-- [ ] Step 9: Create `tools/build_viz_page.py` - Python build tool: reads `src/agentic_dev_loop/viz/assets/*`, inlines into generated `src/agentic_dev_loop/viz/page.py`; emits the shipped `pipeline-layout.js` (path in assets) from the Python port; ASCII validation pass over output; exits non-zero on drift between generated and committed files (no silent divergence). (FR-9.8, NFR-9.1, NFR-9.5)
+- [x] Step 9: Create `tools/build_viz_page.py` - Python build tool: reads `src/agentic_dev_loop/viz/assets/*`, inlines into generated `src/agentic_dev_loop/viz/page.py`; emits the shipped `pipeline-layout.js` (path in assets) from the Python port; ASCII validation pass over output; exits non-zero on drift between generated and committed files (no silent divergence). (FR-9.8, NFR-9.1, NFR-9.5)
 
-- [ ] Step 10: Create `src/agentic_dev_loop/viz/page.py` and the committed `pipeline-layout.js` - generated by Step 9's tool, committed as output artifacts. (FR-9.8, NFR-9.1)
+- [x] Step 10: Create `src/agentic_dev_loop/viz/page.py` and the committed `pipeline-layout.js` - generated by Step 9's tool, committed as output artifacts. (FR-9.8, NFR-9.1)
 
-- [ ] Step 11: Modify `src/agentic_dev_loop/viz/server.py` in place: replace the inline `PAGE` string with an import of the generated page module; extend `topology_mermaid()` (or add a derived function next to it) to also return `flow` (consecutive chain pairs) and `edges` ({src,dst,label|null} from back_edges, label null when unlabelled); handler serves `flow`/`edges` alongside `mermaid` (mermaid byte-identical). (FR-9.1, FR-9.2, NFR-9.1)
+- [x] Step 11: Modify `src/agentic_dev_loop/viz/server.py` in place: replace the inline `PAGE` string with an import of the generated page module; extend `topology_mermaid()` (or add a derived function next to it) to also return `flow` (consecutive chain pairs) and `edges` ({src,dst,label|null} from back_edges, label null when unlabelled); handler serves `flow`/`edges` alongside `mermaid` (mermaid byte-identical). (FR-9.1, FR-9.2, NFR-9.1)
 
-- [ ] Step 12: Modify `tests/test_viz.py` in place: extend topology contract tests for `flow`/`edges` with `mermaid` unchanged; page-serving test asserts the new page is served with old ids where cheap; behaviour contract tests updated for the new DOM structure to keep R1-R13 green (acceptance A5). (FR-9.2, FR-9.3)
+- [x] Step 12: Modify `tests/test_viz.py` in place: extend topology contract tests for `flow`/`edges` with `mermaid` unchanged; page-serving test asserts the new page is served with old ids where cheap; behaviour contract tests updated for the new DOM structure to keep R1-R13 green (acceptance A5). (FR-9.2, FR-9.3)
 
-- [ ] Step 13: Verify: run `tools/build_viz_page.py` (drift check), run `node frontend/scripts/lint-figma-primitives.mjs --assets src/agentic_dev_loop/viz/assets --register frontend/viz-register.md` (dev), run the full pytest suite including `tests/test_repo_ascii.py`. (NFR-9.1, NFR-9.5)
+- [x] Step 13: Verify: run `tools/build_viz_page.py` (drift check), run `node frontend/scripts/lint-figma-primitives.mjs --assets src/agentic_dev_loop/viz/assets --register frontend/viz-register.md` (dev), run the full pytest suite including `tests/test_repo_ascii.py`. (NFR-9.1, NFR-9.5)
 
-- [ ] Step 14: Write code summaries to `aidlc-docs/construction/unit-9/code/` (markdown only; modified vs created file lists, contract notes).
+- [x] Step 14: Write code summaries to `aidlc-docs/construction/unit-9/code/` (markdown only; modified vs created file lists, contract notes).
+
+- Note (2026-11-04, at completion): Step 5's pinned Carbon CDN (R60) was superseded by user directive - the Carbon runtime was removed entirely (the CDN module threw bare-specifier resolution errors and the cds-tile elements were purely presentational). The hand-written skin is the authoritative styling; R30/R60 restated in the viz register. Also user-directed deviations landed after the original 14 steps: resize divider dropped (sections scroll instead), auto expand/collapse dropped, fail edges light amber when used, thread-id click-to-copy with feedback. Recorded in aidlc-state.md.
 
 ## FR/NFR Traceability
 

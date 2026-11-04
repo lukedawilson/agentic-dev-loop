@@ -5,9 +5,9 @@
 | File | Purpose |
 | --- | --- |
 | `src/agentic_dev_loop/viz/layout.py` | Pure-Python 1:1 port of `pipeline-layout.js`; the tested source of truth. |
-| `src/agentic_dev_loop/viz/assets/page.html` | Page shell, kept ids, a11y landmarks, pinned Carbon module. |
+| `src/agentic_dev_loop/viz/assets/page.html` | Page shell, kept ids, a11y landmarks (no Carbon runtime; hand-written skin). |
 | `src/agentic_dev_loop/viz/assets/styles.css` | Exact token values (both themes), status skins, station/rail geometry, consoles. |
-| `src/agentic_dev_loop/viz/assets/page.js` | Page behaviour: status precedence, graph rendering, accordion, consoles, watchdog, divider, theme. |
+| `src/agentic_dev_loop/viz/assets/page.js` | Page behaviour: status precedence, graph rendering, accordion, consoles, watchdog, theme, thread-id copy. |
 | `src/agentic_dev_loop/viz/assets/pipeline-layout.js` | Shipped browser layout (emitted from the normative reference). |
 | `src/agentic_dev_loop/viz/page.py` | Generated PAGE module imported by the stdlib-only server. |
 | `tools/build_viz_page.py` | Builds `page.py`, emits the shipped layout JS, `--check` drift gate. |
@@ -35,3 +35,17 @@
   including row counts: 1 row at 1336px, 2 rows at 1100px, 3 rows at 700px for
   the 10-station topology.
 - The server runtime stays stdlib-only; Node is build/test-time only.
+
+## Post-plan fixes (2026-11-04, user-driven, TDD)
+
+- Resize divider dropped; sections scroll internally (desktop) and the page
+  scrolls on narrow screens; auto expand/collapse of the current step dropped.
+- Fail edges (dashed) light amber when the route is used; arrowhead status
+  classes fixed (`arr-<kind>` so the success/warning skins match).
+- `build_viz_page.py` embeds the normative reference layout, so a single build
+  run always leaves `page.py` and the shipped asset consistent.
+- Carbon runtime removed (bare-specifier module errors); cds-tile wrappers
+  unwrapped to plain `.tile` divs; summary tiles stack 2x2 on mobile with
+  natural word breaks.
+- Thread id: click (or Enter/Space) copies to the clipboard with transient
+  "Copied" feedback; selection fallback when the clipboard API is unavailable.
