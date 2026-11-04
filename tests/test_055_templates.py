@@ -63,9 +63,9 @@ def test_dev_template_missing_heading_reports_actual_headings():
 
 def test_trigger_template_contract():
     text = load_template("trigger-agentic-dev-loop.sh")
-    assert ".engine-version" in text
     assert "doctor --fast" in text
-    assert "pipx install --force" in text
+    assert "agentic-dev-loop upgrade" in text
+    assert "pipx install --force" not in text
     assert "pipx upgrade" not in text
     assert "AGENTIC_DEV_LOOP_ENV_FILE" in text
     assert "exec agentic-dev-loop" in text

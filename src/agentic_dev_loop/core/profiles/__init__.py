@@ -81,18 +81,16 @@ def parse_version(text: str) -> tuple[int, int, int, int, int]:
     return (int(major), int(minor), int(patch), _RANK[pre], int(num))
 
 
-def check_engine_min(engine_min: str, installed: str,
-                     latest: str | None = None) -> None:
+def check_engine_min(engine_min: str, installed: str) -> None:
     """Raise unless ``installed`` satisfies ``engine_min``.
 
-    ``latest`` is substituted into the fix line by the caller (doctor); when
-    omitted the floor itself is used.
+    The fix line names the upgrade command: it installs the latest release,
+    which always satisfies the floor.
     """
     if parse_version(installed) < parse_version(engine_min):
-        target = latest or engine_min
         raise ProfileError(
             f"profile requires engine >= {engine_min}; installed {installed}. "
-            f'Upgrade: pipx install --force "agentic-dev-loop=={target}"')
+            "Upgrade: run agentic-dev-loop upgrade")
 
 
 def _data_dir():

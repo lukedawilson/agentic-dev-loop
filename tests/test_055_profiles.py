@@ -41,7 +41,7 @@ def test_check_engine_min_blocks_with_exact_message():
         check_engine_min("0.10.0", "0.9.2")
     assert str(exc.value) == (
         'profile requires engine >= 0.10.0; installed 0.9.2. '
-        'Upgrade: pipx install --force "agentic-dev-loop==0.10.0"'
+        'Upgrade: run agentic-dev-loop upgrade'
     )
 
 

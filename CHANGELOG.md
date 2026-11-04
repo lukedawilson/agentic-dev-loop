@@ -7,14 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Add `agentic-dev-loop upgrade`: installs the latest release with pipx and
+  rewrites `agentic-dev-loop/.engine-version` to the installed version, so
+  the host install and the committed pin converge in one action.
+- Trigger scripts (template and this repo's copy) no longer read the pin or
+  downgrade the install to it; a failing `doctor --fast` gate now runs
+  `agentic-dev-loop upgrade` exactly once, then fails hard if doctor still
+  fails.
+- doctor pin fix lines (`pin`, `pin-latest`) and the profile engine-min
+  message now point at `run agentic-dev-loop upgrade`.
+
+### Consumer adoption
+
+Existing repos must refresh `trigger-agentic-dev-loop.sh` from the new
+template (or copy it from this repo): the old script pins the install to a
+stale `.engine-version` and deadlocks when the pin is behind the latest
+release. Install an engine release that has the upgrade command first, then
+replace the script.
+
 ## [0.10.4] - 2026-11-04
 
 ### Changed
 
-- aidlc-docs
-- docs: add unit-9 viz functional design artifacts (aidlc)
-- fix: 056 slug + pre-cut adoption gate
-- Uncommitted changes: aidlc-docs/aidlc-state.md, aidlc-docs/audit.md, aidlc-docs/construction/unit-9/reference/, src/agentic_dev_loop/engine/extensions/aidlc.py, tests/test_aidlc.py
+- publish: the release-cut dry run now enforces the consumer-adoption gate, refusing entries that reference a plan with consumer obligations without a `### Consumer adoption` subsection; the tool-rules-to-profiles plan is registered and the 0.10.3 entry was curated to match
+- aidlc: bare-slug code-generation plans (`unit-N-code-generation-plan.md`) now load into unit document bundles; the previous glob required an infix and never matched (latent since unit 3)
+- docs: unit-9 (viz redesign) functional design artifacts, code-generation plan, and the normative values reference (tokens, layout constants, kept ids)
 
 ## [0.10.3] - 2026-11-04
 

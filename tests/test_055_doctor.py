@@ -95,7 +95,7 @@ def test_installed_pin_mismatch_is_hard_with_fix_text(tmp_path: Path, capsys):
     out = capsys.readouterr().out
     assert code == 1
     assert "HARD" in out
-    assert 'pipx install --force "agentic-dev-loop==0.9.2"' in out
+    assert "run agentic-dev-loop upgrade" in out
 
 
 def test_missing_placeholder_on_path_is_hard(tmp_path: Path, capsys):

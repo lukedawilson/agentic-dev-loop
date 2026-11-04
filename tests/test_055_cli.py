@@ -1,4 +1,4 @@
-"""055 Task 8: CLI dispatch for init and doctor."""
+"""055 Task 8: CLI dispatch for init, doctor, and upgrade."""
 
 from __future__ import annotations
 
@@ -20,6 +20,13 @@ def test_doctor_help_exits_zero(capsys):
 def test_init_help_exits_zero(capsys):
     with pytest.raises(SystemExit) as exc:
         main(["init", "--help"])
+    assert exc.value.code == 0
+    assert "usage" in capsys.readouterr().out.lower()
+
+
+def test_upgrade_help_exits_zero(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["upgrade", "--help"])
     assert exc.value.code == 0
     assert "usage" in capsys.readouterr().out.lower()
 

@@ -25,6 +25,7 @@ __all__ = ["Check", "HostProbes", "collect_checks"]
 ENV_WHITELIST = frozenset({".env.example", ".env.template", ".env.sample"})
 MIN_API = (1, 43)
 PYPI_URL = "https://pypi.org/pypi/agentic-dev-loop/json"
+FIX_UPGRADE = "run agentic-dev-loop upgrade"
 
 
 @dataclass(frozen=True)
@@ -171,12 +172,12 @@ def collect_checks(profile: Profile | None, pipeline, installed: str,
     if pin is None:
         checks.append(_hard(
             "pin", False, f"no engine pin file at {pin_path}",
-            "run agentic-dev-loop init (or write agentic-dev-loop/.engine-version)"))
+            FIX_UPGRADE))
     else:
         checks.append(_hard(
             "pin", pin == installed,
             f"installed {installed}, pin {pin}",
-            f'pipx install --force "agentic-dev-loop=={pin}"'))
+            FIX_UPGRADE))
         latest = probes.latest_release()
         if latest is None:
             checks.append(_hard("pin-latest", True,
@@ -189,7 +190,7 @@ def collect_checks(profile: Profile | None, pipeline, installed: str,
             checks.append(_hard(
                 "pin-latest", not behind,
                 f"pin {pin} is behind latest release {latest}",
-                f'pipx install --force "agentic-dev-loop=={latest}"'))
+                FIX_UPGRADE))
 
     present = probes.docker_present()
     checks.append(_hard(

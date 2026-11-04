@@ -100,11 +100,15 @@ profiles and recipes, plus migration of both repos onto them.
    checks). `--json` emits machine-readable results.
 
 7. **Pin semantics.** `.engine-version` holds the exact installed engine
-   version at init time (currently 0.9.2). The trigger enforces installed ==
-   pin (repairing with `pipx install --force` once, then failing hard).
-   doctor hard-fails on installed != pin and on pin behind the latest PyPI
-   release (prereleases included in the comparison), with a fix line naming
-   the exact bump command.
+   version at init time (currently 0.9.2). doctor hard-fails on installed !=
+   pin and on pin behind the latest PyPI release (prereleases included in
+   the comparison), with a fix line naming `agentic-dev-loop upgrade`. The
+   trigger runs `doctor --fast` before every run and, on hard failure,
+   upgrades exactly once with `agentic-dev-loop upgrade` (pipx install the
+   latest release, then rewrite the pin to the installed version), then
+   fails hard if doctor still fails. The pin follows the install: one
+   action converges host install and committed pin, so a pipx install of
+   the latest engine updates the project reference on the next trigger run.
 
 ## Placement: profiles are a core subpackage
 

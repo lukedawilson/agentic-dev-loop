@@ -171,6 +171,9 @@ def main(argv: list[str] | None = None) -> int:
     if argv and argv[0] == "doctor":
         from .onboarding.doctor import run_doctor
         return run_doctor(argv[1:])
+    if argv and argv[0] == "upgrade":
+        from .onboarding.upgrade import run_upgrade
+        return run_upgrade(argv[1:])
     probe = argparse.ArgumentParser(add_help=False)
     probe.add_argument("pipeline", type=Path, nargs="?")
     _add_version_flag(probe)

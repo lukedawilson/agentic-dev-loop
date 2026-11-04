@@ -59,9 +59,12 @@ from it the way docs did.
 5. doctor runs at onboarding and as a per-run gate from trigger scripts; hard
    failures abort the run.
 6. Versioning: a committed pin file `agentic-dev-loop/.engine-version`. The
-   trigger enforces installed == pin. doctor hard-fails on installed != pin
-   and on pin behind PyPI latest (fix text prints the exact bump command).
-   The pipx `--cooldown 0` / `--prerelease=allow` lore is deleted.
+   trigger runs `doctor --fast` before every run and repairs a hard failure
+   exactly once with `agentic-dev-loop upgrade`, which installs the latest
+   release with pipx and rewrites the pin to the installed version. doctor
+   hard-fails on installed != pin and on pin behind PyPI latest (fix text
+   prints the upgrade command). The pipx `--cooldown 0` /
+   `--prerelease=allow` lore is deleted.
 7. Existing repos migrate as part of this effort: both trigger scripts, plus
    the two bundled profiles and recipes derived from the two real pipelines.
 8. init/doctor ship inside the engine package. A separate distribution
@@ -210,13 +213,15 @@ env var is set; services parsed from docker-compose.yml are reachable
 (skipped in --fast).
 
 Exit 1 only on hard failures. Trigger scripts run `doctor --fast` before
-every run and abort on hard failure.
+every run; on hard failure they run `agentic-dev-loop upgrade` once
+(install latest, rewrite the pin), re-run doctor, then abort on hard
+failure.
 
 ## Existing-repo migration
 
-- Both trigger scripts: delete the pipx upgrade lore; read .engine-version;
-  `pipx install --force agentic-dev-loop==$(cat .engine-version)` when
-  installed != pin; run `doctor --fast`; abort on hard failure.
+- Both trigger scripts: delete the pipx upgrade lore and the pin read; run
+  `doctor --fast`; on hard failure run `agentic-dev-loop upgrade` once
+  (install latest, rewrite the pin); re-run doctor; abort on hard failure.
 - This repo: derive the python profile and recipe from the dogfood pipeline.
 - Consumer repo: derive the dotnet-node profile and recipe from its pipeline
   (NuGet.Config premise, .nuget-packages cache, cpus 6, chromium seccomp).

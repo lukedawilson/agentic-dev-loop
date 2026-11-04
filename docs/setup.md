@@ -81,6 +81,12 @@ premise files, the LLM key env var, declared secret env vars, and
 compose-service reachability. `--fast` skips checks needing more than one
 quick network round trip; the pin-vs-latest check stays in.
 
+`agentic-dev-loop upgrade` installs the latest release with pipx and rewrites
+`.engine-version` to the installed version, so the host install and the
+committed pin converge in one action. The trigger script runs it
+automatically when doctor fails hard; upgrading the pipx install updates the
+project reference on the next run, with no separate pin edit.
+
 ## 3. Writing pipeline.yaml
 
 The `isolation:` section is optional (opinionated defaults apply when absent):

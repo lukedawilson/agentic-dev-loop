@@ -5,7 +5,6 @@ ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$ROOT"
 
 PIPELINE="$ROOT/agentic-dev-loop/pipeline.yaml"
-PIN_FILE="$ROOT/agentic-dev-loop/.engine-version"
 
 # Optional host environment file. The default lives outside the workspace so
 # secrets never enter the repo; set AGENTIC_DEV_LOOP_ENV_FILE to override.
@@ -25,24 +24,17 @@ if ! command -v agentic-dev-loop >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ ! -f "$PIN_FILE" ]]; then
-  echo "error: missing engine pin file: $PIN_FILE" >&2
-  echo "       run 'agentic-dev-loop init' in this repo to write it" >&2
-  exit 1
-fi
-PIN="$(cat "$PIN_FILE")"
-
 # doctor --fast is the per-run gate: hard failures abort, warnings continue.
-# A pin/install mismatch is repaired exactly once, then the run fails hard.
+# A failing gate is repaired exactly once by upgrading to the latest engine
+# release (which also rewrites the project pin), then the run fails hard.
 if ! agentic-dev-loop doctor --fast; then
-  echo "error: doctor --fast failed - repairing the engine pin $PIN once" >&2
-  if ! pipx install --force "agentic-dev-loop==$PIN"; then
-    echo "error: could not install agentic-dev-loop==$PIN" >&2
-    echo "       the install may not be pipx-managed, or the index is unreachable" >&2
+  echo "doctor --fast failed - upgrading to the latest engine release" >&2
+  if ! agentic-dev-loop upgrade; then
+    echo "error: agentic-dev-loop upgrade failed" >&2
     exit 1
   fi
   if ! agentic-dev-loop doctor --fast; then
-    echo "error: doctor --fast still fails after repairing the engine pin" >&2
+    echo "error: doctor --fast still fails after upgrading the engine" >&2
     exit 1
   fi
 fi

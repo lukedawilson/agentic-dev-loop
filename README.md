@@ -448,8 +448,10 @@ before.
 `agentic-dev-loop doctor --fast` is the per-run gate the trigger runs first.
 Hard failures abort the run (engine pin mismatch, engine runtime availability,
 API version, git repo, `.env*` files); warnings print and continue. `doctor
---json` emits the same results mechanically. The trigger repairs a pin/install
-mismatch exactly once, then fails hard.
+--json` emits the same results mechanically. On a hard failure the trigger
+runs `agentic-dev-loop upgrade` exactly once: it installs the latest release
+with pipx and rewrites `.engine-version` to match, then the run fails hard if
+doctor still fails.
 
 A consumer repo needs a pipeline file and the agent files it names, both
 committed before the first run (the host-boundary check refuses dirty tooling,
