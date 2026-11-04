@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Unit unit-9 (viz redesign) Functional Design COMPLETE (2026-11-04); Code Generation Part 1 (Planning) COMPLETE and approved; Part 2 (Generation) paused - user drives implementation outside AI-DLC sessions; plan = aidlc-docs/construction/plans/unit-9-code-generation-plan.md; user stories skipped (user decision); units 1-3 COMPLETE; unit 4 WONTSHIP; unit 5 COMPLETE (2026-10-25); units 6-8 intent recorded (unit-6 cloud deployment; unit-7 Linux-native sandboxing + egress protection; unit-8 parallel fan-out driver)
+- **Current Stage**: CONSTRUCTION - Unit unit-9 (viz redesign) COMPLETE (2026-11-04): Functional Design approved; Code Generation complete (Part 1 plan approved; Part 2 implemented user-driven outside AI-DLC sessions, TDD + browser-verified); user stories skipped (user decision); Carbon runtime removed by user directive - hand-written skin authoritative; units 1-3 COMPLETE; unit 4 WONTSHIP; unit 5 COMPLETE (2026-10-25); units 6-8 intent recorded (unit-6 cloud deployment; unit-7 Linux-native sandboxing + egress protection; unit-8 parallel fan-out driver)
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -67,7 +67,12 @@ Per-unit construction stages (5 stages per unit: Functional Design, NFR Requirem
 - Unit 5: workspace egress isolation - NFR Design [x] (global SKIP)
 - Unit 5: workspace egress isolation - Infrastructure Design [x] (approved 2026-10-25)
 - Unit 5: workspace egress isolation - Code Generation [x] (complete 2026-10-25, dogfood loop build f9231ba)
-- Build and Test: green at unit-3 close (2026-10-21, full suite incl. docker-marked tests); re-run at unit-5 close (2026-10-25): 80 unit-5 tests green locally, 244-test regression sweep green, docker-marked integration tests green on CI Linux
+- Unit 9: viz redesign - Functional Design [x] (approved 2026-11-04)
+- Unit 9: viz redesign - NFR Requirements - NOT RUN (execution plan approved as 3 stages: Functional Design, Code Generation, Build and Test; NFR-9.1..9.5 folded into Functional Design)
+- Unit 9: viz redesign - NFR Design [x] (global SKIP)
+- Unit 9: viz redesign - Infrastructure Design - NOT RUN (same 3-stage plan; viz is a Python-embedded page, no infra work)
+- Unit 9: viz redesign - Code Generation [x] (complete 2026-11-04, user-driven implementation, browser-verified)
+- Build and Test: green at unit-3 close (2026-10-21, full suite incl. docker-marked tests); re-run at unit-5 close (2026-10-25): 80 unit-5 tests green locally, 244-test regression sweep green, docker-marked integration tests green on CI Linux; re-run at unit-9 close (2026-11-04): 1292 passed, 1 skipped (full suite incl. test_repo_ascii.py); browser-verified (desktop + mobile emulation, theme toggle, fail-edge amber lighting, thread-id copy feedback)
 
 ## Unit Progress
 
@@ -123,3 +128,13 @@ Withdrawn by user directive 2026-10-22 ("Let's rip it out and mark unit 4 as won
 - Intent document: aidlc-docs/unit-7-intent-linux-native-sandboxing.md (split from the combined unit-6 intent by user directive 2026-10-25)
 - Scope (per user): Linux-native sandboxing (no Docker); Linux-native egress protection (the kernel-level enforcement deferred from unit-5)
 - Ordering rationale (user, 2026-10-25): after unit-6 - built and tested on the unit-6 cloud box
+
+### unit-9 (viz redesign) - COMPLETE (2026-11-04)
+
+- Intent document: aidlc-docs/unit-9-intent-viz-redesign.md (started 2026-11-03)
+- Scope: restyle the existing viz module against the normative design in planning-docs/design/ (viz-redesign-spec.md, tokens.css, pipeline-layout.js); additive /topology endpoint with flow/edges
+- Functional Design: plans/unit-9-functional-design-plan.md (Q1-Q4); artifacts in aidlc-docs/construction/unit-9/functional-design/ (business-logic-model.md, business-rules.md R1-R70 + A1-A7, domain-entities.md, frontend-components.md); reference/normative-values.md
+- Code Generation: plans/unit-9-code-generation-plan.md (14 steps, all complete); implemented user-driven outside AI-DLC sessions with TDD; summary in aidlc-docs/construction/unit-9/code/README.md
+- Key deviations (user directives): Carbon runtime removed entirely - hand-written skin authoritative (R30/R60 restated in the viz register); resize divider dropped (sections scroll); auto expand/collapse dropped; fail edges light amber when used; thread-id click-to-copy with feedback; build tool embeds the normative reference (single-run consistency)
+- Build and Test: full suite green at close: 1292 passed, 1 skipped; browser-verified (desktop + mobile emulation, theme toggle, fail-edge amber lighting, thread-id copy feedback)
+- Next: units 6-8 remain intent-only
