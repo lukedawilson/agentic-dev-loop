@@ -11,11 +11,24 @@ consumer-adoption plan without that subsection (registry:
 CONSUMER_ADOPTION_PLANS in tools/publish.py). When a new plan adds consumer
 obligations, add its slug to that registry.
 
-!`.venv/bin/python tools/publish.py $ARGUMENTS --dry-run`
+MANDATE: release notes describe what changed for CONSUMERS only. Never
+include test fixes, docs commits, or internal plumbing (build tooling, CI,
+lint, process bookkeeping, dependency pins) as bullets. If a release
+contains ONLY such internal changes, the entire entry is the single generic
+line "- Security and stability fixes." Always pass the notes to publish.py
+with --description; NEVER rely on its git-inferred bullets, which include
+internal commits.
+
+!`.venv/bin/python tools/publish.py $ARGUMENTS --dry-run --description "TBD"`
 
 The dry run output above shows the planned version, the rendered release
 notes publish.py would write, and any uncommitted files; it also applies the
 consumer-adoption gate. Do NOT cut the release yet. Run the flow below:
+
+0. Compose candidate notes from the commits since the last tag, dropping
+   everything consumer-irrelevant: test fixes, docs commits, internal
+   plumbing. If nothing remains, the candidate is the single generic line
+   "- Security and stability fixes."
 
 1. If the dry run reported uncommitted files, ask through the `question`
    tool: header "Unstaged files", question "Add these uncommitted files to
@@ -32,8 +45,11 @@ consumer-adoption gate. Do NOT cut the release yet. Run the flow below:
    are happy.
 
 3. Only when the user has confirmed the notes, run the real publish
-   yourself: `.venv/bin/python tools/publish.py $ARGUMENTS --yes` (append
-   --no-add if they declined in step 1) and report the result.
+   yourself: `.venv/bin/python tools/publish.py $ARGUMENTS --yes
+   --description "<confirmed text>"` (append --no-add if they declined in
+   step 1) and report the result. The --description MUST be passed to the
+   real run too; without it publish.py falls back to its git-inferred
+   bullets, which include internal commits.
 
 If any question cannot be answered, or the dry run reported an error, stop
 and report why. Never run the real publish without the user's confirmation.
