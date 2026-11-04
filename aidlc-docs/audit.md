@@ -472,3 +472,21 @@
 **User Input**: (approval prompt - no user input yet)
 **AI Response**: FD answers Q1=A, Q2=A, Q3=A, Q4=A written back to unit-9-functional-design-plan.md. Generated 4 artifacts under aidlc-docs/construction/unit-9/functional-design/: business-logic-model.md (layout contract + algorithm model, Python-port test model, status/theme/topology/degradation models), business-rules.md (R1-R13 rule zero, R20-R26 status/motion, R30-R33 fallback, R40-R47 a11y, R50-R53 conformance, R60-R62 supply chain, R70 ASCII, A1-A7 acceptance), domain-entities.md (events unchanged, topology DTO, layout entities, tokens, client state), frontend-components.md (region mapping, custom inventory, class register draft grounded in prototype classes, interaction flows, API points, fallback pairing). Presented standardized 2-option completion message; awaiting approval.
 **Context**: Functional Design Steps 5-7 (unit-9 viz redesign)
+
+## Functional Design
+**Timestamp**: 2026-11-04T07:58:30Z
+**User Input**: "approve"
+**AI Response**: Functional Design approved for unit-9. Stage marked COMPLETE. Proceeding to Code Generation stage (Part 1 - Planning).
+**Context**: Functional Design approval (unit-9 viz redesign)
+
+## Code Generation
+**Timestamp**: 2026-11-04T07:59:37Z
+**User Input**: (approval prompt - no user input yet)
+**AI Response**: Code Generation Part 1 (Planning): created aidlc-docs/construction/plans/unit-9-code-generation-plan.md - 14 numbered steps with checkboxes, FR/NFR traceability table, brownfield file map (created vs modified), approach summary (Python port as tested source of truth with dev-only golden capture from the reference ES5; assets as real files linted via new optional linter flags; build tool generates committed page.py + shipped JS; server modified in place). Approval prompt presented incl. inline-implementation question per repo ASK-BEFORE-CODING policy.
+**Context**: Code Generation Part 1 Steps 1-7 (unit-9 viz redesign) - awaiting plan approval
+
+## Code Generation
+**Timestamp**: 2026-11-04T08:03:03Z
+**User Input**: "Approve plan" (Q1); "You drive later" (Q2 - inline-implementation question)
+**AI Response**: Plan approved. Execution mode: user drives implementation later (outside AI-DLC sessions). Code Generation Part 1 (Planning) marked COMPLETE; Part 2 (Generation) paused awaiting external implementation; plan checkboxes to be marked [x] as steps land per the plan's single-source-of-truth rule.
+**Context**: Code Generation Part 1 approval (unit-9 viz redesign)
