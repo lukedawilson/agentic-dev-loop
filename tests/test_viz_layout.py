@@ -118,6 +118,48 @@ def test_per_row_never_below_two_when_multi_row():
             assert result["perRow"] >= 2
 
 
+def _back_layout(status):
+    """Two nodes, one fail edge: layout for a given source-node status."""
+    return layout_pipeline({
+        "nodes": ["dev", "test"],
+        "flow": [{"src": "dev", "dst": "test"}],
+        "edges": [{"src": "test", "dst": "dev", "label": "NEEDS CHANGES"}],
+        "status": status,
+        "availWidth": 800,
+    })
+
+
+def test_back_edges_light_when_source_failed():
+    # The dashed on_fail route from a failed node is the fail edge "being
+    # used" and must light, like a lit flow rail.
+    result = _back_layout({"dev": "pass", "test": "fail"})
+    back_lines = [l for l in result["lines"] if l["kind"] == "back"]
+    back_arrows = [a for a in result["arrows"] if a["kind"] == "back"]
+    assert back_lines, "no back lines drawn"
+    assert back_arrows, "no back arrows drawn"
+    assert all(l["on"] for l in back_lines)
+    assert all(a["on"] for a in back_arrows)
+
+
+def test_back_edges_light_when_source_fatal():
+    result = _back_layout({"dev": "pass", "test": "fatal"})
+    assert all(l["on"] for l in result["lines"] if l["kind"] == "back")
+    assert all(a["on"] for a in result["arrows"] if a["kind"] == "back")
+
+
+@pytest.mark.parametrize("source_status",
+                         ["pass", "running", "pending", "unverifiable"])
+def test_back_edges_unlit_when_source_not_failed(source_status):
+    # Unverifiable is NOT a fail route: the engine follows on_unverifiable
+    # when set, and the drawn dashed edge is the on_fail retry loopback.
+    result = _back_layout({"dev": "pass", "test": source_status})
+    back_lines = [l for l in result["lines"] if l["kind"] == "back"]
+    back_arrows = [a for a in result["arrows"] if a["kind"] == "back"]
+    assert back_lines, "no back lines drawn"
+    assert all(not l["on"] for l in back_lines)
+    assert all(not a["on"] for a in back_arrows)
+
+
 def test_fewest_rows_that_fit():
     opts = next(c["opts"] for c in _golden() if c["name"] == "full-1336")
     n = len(opts["nodes"])

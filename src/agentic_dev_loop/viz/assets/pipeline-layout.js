@@ -58,6 +58,7 @@
     var idx = {};
     names.forEach(function (n, i) { idx[n] = i; });
     var reached = function (n) { return (status[n] || "pending") !== "pending"; };
+    var failed = function (n) { var s = status[n] || "pending"; return s === "fail" || s === "fatal"; };
 
     // flow edges that are NOT to the next station are routed like conditional edges (solid)
     var rails = [], extraFlow = [];
@@ -150,21 +151,22 @@
 
     L.U.concat(L.C, L.F).forEach(function (e) {
       var xs = nx(e.si) + NW / 2, top = ny(e.ti) + NH, y1 = laneY(e.rs, e.laneS);
-      V(xs, ny(e.si) + NH, y1, e.kind);
+      var on = e.kind === "back" && failed(names[e.si]);
+      V(xs, ny(e.si) + NH, y1, e.kind, on);
       if (e.rs === e.rt) {
-        H(e.xe, xs, y1, e.kind);
-        V(e.xe, top + 6, y1, e.kind);
+        H(e.xe, xs, y1, e.kind, on);
+        V(e.xe, top + 6, y1, e.kind, on);
       } else {
         var xc = e.rs > e.rt
           ? O - CH - CH * (e.j + 1)
           : O + L.core + 14 + 8 + CH * e.k;
         var y2 = laneY(e.rt, e.laneT);
-        H(xc, xs, y1, e.kind);
-        V(xc, y2, y1, e.kind);
-        H(xc, e.xe, y2, e.kind);
-        V(e.xe, top + 6, y2, e.kind);
+        H(xc, xs, y1, e.kind, on);
+        V(xc, y2, y1, e.kind, on);
+        H(xc, e.xe, y2, e.kind, on);
+        V(e.xe, top + 6, y2, e.kind, on);
       }
-      arrows.push({ x: e.xe - 5, y: top, dir: "up", kind: e.kind, on: false });
+      arrows.push({ x: e.xe - 5, y: top, dir: "up", kind: e.kind, on: on });
       if (e.label) { labels.push({ x: xs - 6, y: y1 - 9, text: e.label }); }
     });
 

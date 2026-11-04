@@ -18,6 +18,7 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | --- | --- | --- |
 | `.arr` | Arrowhead geometry (CSS-border triangle) | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.arr-flow` | Flow arrowhead fill | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.arr-back` | Fail-route arrowhead fill | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.arr-right` | Right-pointing arrowhead | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.arr-up` | Up-pointing arrowhead | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.badge` | Verdict chip | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -30,8 +31,6 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.collapsed` | Collapsed stage/console state | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.console-wrap` | Console scroll port | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.copy-btn` | Sticky console copy button | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.divider` | Pipeline height resize handle | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.dragging` | Divider drag state | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.elabel` | Edge label chip | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.exhausted` | Attempt meter exhausted state | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.failed` | Run log failure line | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -42,8 +41,8 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.hdr-brand` | Header brand lockup | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr-right` | Header right cluster | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.ic` | Icon glyph box | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.ic-moon` | Moon theme glyph (CSS-drawn) | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.ic-sun` | Sun theme glyph (CSS-drawn) | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.ic-moon` | Moon theme glyph (inline SVG) | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.ic-sun` | Sun theme glyph (inline SVG) | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.interrupted` | Run log interrupted line | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.lbl` | Tile label | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.led` | 8px square status light | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -117,7 +116,7 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | --- | --- |
 | `*` | Box-sizing and thin scrollbar reset; mechanics only, no visual styling. |
 | `html, body` | Page height, font stack and background; the app shell has no component wrapper. |
-| `button` | Reset for the custom divider and header actions before Carbon loads. |
+| `button` | Reset for the header actions, stage headers and copy buttons before Carbon loads. |
 | `:focus-visible` | A single product focus ring token (R45). |
 
 ## Product tokens (no Carbon equivalent)

@@ -12,4 +12,9 @@ if [ "$#" -eq 0 ]; then
     set -- --flood 600
 fi
 
-exec "$ROOT/.venv/bin/python" "$ROOT/viz_demo.py" "$@"
+# The venv contains an installed (non-editable) wheel of this package, so
+# plain imports would run the last published version. Put the working tree's
+# src/ first on PYTHONPATH so the demo serves the code in this repo - the
+# same shadowing tests/conftest.py does for the test suite.
+PYTHONPATH="$ROOT/src${PYTHONPATH:+:$PYTHONPATH}" \
+    exec "$ROOT/.venv/bin/python" "$ROOT/viz_demo.py" "$@"

@@ -20,7 +20,16 @@ import "https://cdn.jsdelivr.net/npm/@carbon/web-components@2.47.0/es/index.min.
       <span id="stream-label">STREAM LIVE</span></span>
     <button id="theme-toggle" class="hdr-action" type="button"
             data-testid="theme-toggle" aria-label="Switch to light theme">
-      <span id="theme-icon" class="ic ic-sun" aria-hidden="true"></span>
+      <span id="theme-icon" class="ic" aria-hidden="true">
+        <svg class="ic-sun" viewBox="0 0 16 16" width="16" height="16" fill="none">
+          <circle cx="8" cy="8" r="3.33" fill="currentColor"/>
+          <path stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                d="M8 .67v2M8 13.33v2M.67 8h2M13.33 8h2M2.81 2.81l.95.95M12.24 12.24l.95.95M13.19 2.81l-.95.95M3.76 12.24l-.95.95"/>
+        </svg>
+        <svg class="ic-moon" viewBox="0 0 16 16" width="16" height="16">
+          <path d="M14 8.53A6 6 0 1 1 7.47 2 4.67 4.67 0 0 0 14 8.53Z" fill="currentColor"/>
+        </svg>
+      </span>
     </button>
   </div>
 </header>
@@ -43,9 +52,6 @@ import "https://cdn.jsdelivr.net/npm/@carbon/web-components@2.47.0/es/index.min.
       <span class="legend mono">solid = on_pass / dashed = on_fail</span></div>
     <div class="graph-wrap"><div id="graph" role="img" aria-label="Pipeline graph"></div></div>
   </section>
-  <button id="divider" class="divider" type="button" data-testid="divider"
-          aria-label="Resize pipeline panel"
-          title="Drag to resize; double-click to reset"></button>
   <div class="lower">
     <section class="panel panel-stages" aria-label="Stages">
       <div class="panel-h"><span>Stages</span></div>

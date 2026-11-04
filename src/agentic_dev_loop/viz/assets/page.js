@@ -68,8 +68,6 @@
   function applyTheme(theme) {
     var root = document.documentElement;
     if (root && root.setAttribute) { root.setAttribute("data-theme", theme); }
-    var icon = el("theme-icon");
-    if (icon) { icon.className = "ic " + (theme === "dark" ? "ic-sun" : "ic-moon"); }
     var btn = el("theme-toggle");
     if (btn) {
       btn.setAttribute("aria-label", theme === "dark"
@@ -310,14 +308,12 @@
     d.style.top = l.y + "px";
     d.style.width = (l.dir === "h" ? l.w : 2) + "px";
     d.style.height = (l.dir === "v" ? l.h : 2) + "px";
-    if (l.dir === "v") { d.style.width = "0"; }
-    if (l.dir === "h") { d.style.height = "0"; }
     return d;
   }
 
   function makeArrow(a) {
     var d = document.createElement("div");
-    d.className = "arr arr-" + a.dir + " " + a.kind + (a.on ? " on" : "");
+    d.className = "arr arr-" + a.dir + " arr-" + a.kind + (a.on ? " on" : "");
     d.style.left = a.x + "px";
     d.style.top = a.y + "px";
     return d;
@@ -507,26 +503,6 @@
     var p = pendingCompletion;
     pendingCompletion = null;
     setStageStatus(p.node, p.word);
-  }
-
-  function expandStage(node) {
-    var section = ensureSection(node);
-    section.classList.remove("collapsed");
-    renderStageHeader(node);
-    if (section.scrollIntoView) { section.scrollIntoView({ block: "nearest" }); }
-    requestAnimationFrame(function () { tailSection(section); });
-  }
-
-  function collapseStage(node) {
-    ensureSection(node).classList.add("collapsed");
-    renderStageHeader(node);
-  }
-
-  function collapseAll() {
-    Array.from(nodeIds).forEach(function (n) {
-      ensureSection(n).classList.add("collapsed");
-      renderStageHeader(n);
-    });
   }
 
   function clearConsoles() {
@@ -787,9 +763,6 @@
         stageWord[ev.node] = "running";
         liveElapsed = {};
         liveElapsed[ev.node] = 0;
-        Array.from(nodeIds).forEach(function (n) {
-          if (n === ev.node) { expandStage(n); } else { collapseStage(n); }
-        });
         renderGraph();
         break;
       case "node_finished":
@@ -802,7 +775,6 @@
         }
         pendingCompletion = { node: ev.node, word: ev.ok ? "completed" : "errored" };
         setStageStatus(ev.node, ev.ok ? "completed" : "errored");
-        collapseStage(ev.node);
         renderGraph();
         break;
       case "heartbeat":
@@ -866,7 +838,6 @@
           });
           renderGraph();
         }
-        collapseAll();
         renderMeter();
         logLine("run finished: " + (ev.success ? "success" : "failure"),
                 ev.success ? "success" : "failed");
@@ -978,50 +949,6 @@
     es = connectStream();
     lastEventAt = Date.now();
   }
-
-  /* Divider ----------------------------------------------------------- */
-  (function initDivider() {
-    var divider = el("divider");
-    var panel = el("pipeline-panel");
-    if (!divider || !panel) { return; }
-    var dragging = false;
-    function clampHeight(value) {
-      var max = (typeof window !== "undefined" && window.innerHeight)
-        ? window.innerHeight * 0.7 : 700;
-      return Math.max(96, Math.min(value, max));
-    }
-    function setHeight(value) {
-      panel.style.height = clampHeight(value) + "px";
-      panel.style.flex = "0 0 auto";
-    }
-    divider.addEventListener("mousedown", function (e) {
-      dragging = true;
-      divider.classList.add("dragging");
-      document.body.style.userSelect = "none";
-      if (e && e.preventDefault) { e.preventDefault(); }
-    });
-    window.addEventListener("mousemove", function (e) {
-      if (!dragging) { return; }
-      setHeight(e.clientY - panel.getBoundingClientRect().top);
-    });
-    window.addEventListener("mouseup", function () {
-      dragging = false;
-      divider.classList.remove("dragging");
-      document.body.style.userSelect = "";
-    });
-    divider.addEventListener("dblclick", function () {
-      panel.style.height = "";
-      panel.style.flex = "";
-    });
-    divider.addEventListener("keydown", function (e) {
-      var key = e && e.key;
-      if (key !== "ArrowUp" && key !== "ArrowDown") { return; }
-      var current = panel.getBoundingClientRect
-        ? panel.getBoundingClientRect().height : 96;
-      setHeight(current + (key === "ArrowDown" ? 16 : -16));
-      if (e.preventDefault) { e.preventDefault(); }
-    });
-  })();
 
   loadTopology();
 

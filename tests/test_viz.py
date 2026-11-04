@@ -610,7 +610,7 @@ class TestServer:
         for marker in ('id="subject"', 'id="attempt"', 'id="thread-id"',
                        'id="total"', 'id="verdicts"', 'id="stages"',
                        'id="run-log"', 'id="stream-banner"', 'id="run-banner"',
-                       'data-testid="divider"', 'data-testid="theme-toggle"'):
+                       'data-testid="theme-toggle"'):
             assert marker in body
         assert "agentic-dev-loop viz" in body
 
@@ -807,7 +807,7 @@ El.prototype.scrollIntoView = function () {};
 
 var STATIC_IDS = ["subject", "attempt", "thread-id", "total", "verdicts",
                   "stages", "run-log", "graph", "run-banner",
-                  "stream-banner", "divider", "pipeline-panel", "meter",
+                  "stream-banner", "pipeline-panel", "meter",
                   "stream", "stream-label", "theme-toggle", "theme-icon"];
 STATIC_IDS.forEach(function (id) { registry[id] = new El(id); });
 var elCounter = 0;
@@ -850,7 +850,12 @@ Object.defineProperty(globalThis, "navigator", {
     }
   }
 });
-globalThis.document.documentElement = { setAttribute: function () {} };
+var rootTheme = null;
+globalThis.document.documentElement = {
+  setAttribute: function (k, v) {
+    if (k === "data-theme") { rootTheme = v; }
+  }
+};
 globalThis.fetch = function () {
   return Promise.resolve({
     json: function () {
@@ -859,7 +864,7 @@ globalThis.fetch = function () {
         mermaid: "graph TD;\\ndev(dev)\\ntest(test)\\nreview(review)\\n",
         nodes: ["dev", "test", "review"],
         flow: [{ src: "dev", dst: "test" }, { src: "test", dst: "review" }],
-        edges: []
+        edges: [{ src: "review", dst: "dev", label: "NEEDS CHANGES" }]
       });
     }
   });
@@ -923,6 +928,29 @@ function watchdogState() {
   };
 }
 
+function graphLines() {
+  var box = document.getElementById("graph");
+  var out = [];
+  box.children.forEach(function (c) {
+    if ((" " + c._class + " ").indexOf(" ln-") !== -1) {
+      out.push({ cls: c._class, dir: c.getAttribute("data-dir"),
+                 w: c.style.width, h: c.style.height });
+    }
+  });
+  return out;
+}
+
+function graphArrows() {
+  var box = document.getElementById("graph");
+  var out = [];
+  box.children.forEach(function (c) {
+    if ((" " + c._class + " ").indexOf(" arr-") !== -1) {
+      out.push({ cls: c._class });
+    }
+  });
+  return out;
+}
+
 var snapshots = [];
 async function main() {
   // let the topology fetch microtask chain resolve so events are handled
@@ -942,6 +970,17 @@ async function main() {
       fakeNow = ev.now;
       var visFn = document._listeners["visibilitychange"];
       if (visFn) { visFn(); }
+      return;
+    }
+    if (ev.type === "__graph") {
+      snapshots.push({ lines: graphLines(), arrows: graphArrows() });
+      return;
+    }
+    if (ev.type === "__theme") {
+      var tbtn = document.getElementById("theme-toggle");
+      snapshots.push({ theme: rootTheme, label: tbtn.getAttribute("aria-label") });
+      tbtn.listeners["click"]();
+      snapshots.push({ theme: rootTheme, label: tbtn.getAttribute("aria-label") });
       return;
     }
     fire(ev);
@@ -1258,6 +1297,56 @@ main();
         assert snaps[1]["watchdog"]["instances"] == 2
         assert snaps[1]["watchdog"]["bannerDisplay"] == "none"
 
+    def test_graph_flow_lines_have_visible_thickness(self, node, tmp_path):
+        # makeLine used to zero the thickness dimension (height for horizontal
+        # lines, width for vertical), so the background-painted on_pass rails
+        # were invisible in the browser while the dashed on_fail edges
+        # (painted with borders) still showed. Every line must keep a 2px
+        # thickness on its cross axis.
+        snaps = self._run_page(node, [{"type": "__graph"}], tmp_path)
+        lines = snaps[0]["lines"]
+        assert lines, "no graph lines rendered"
+        flow = [l for l in lines if "ln-flow" in l["cls"]]
+        assert flow, "no on_pass flow lines rendered"
+        for l in lines:
+            if l["dir"] == "h":
+                assert l["h"] == "2px", f"horizontal line has height {l['h']}"
+                assert l["w"] != "0px", f"horizontal line has width {l['w']}"
+            else:
+                assert l["w"] == "2px", f"vertical line has width {l['w']}"
+                assert l["h"] != "0px", f"vertical line has height {l['h']}"
+
+    def test_theme_toggle_flips_theme_and_label(self, node, tmp_path):
+        # The SVG glyphs are shown/hidden by CSS off the data-theme attribute,
+        # so the toggle must keep setting it (and the aria-label) on click.
+        snaps = self._run_page(node, [{"type": "__theme"}], tmp_path)
+        assert snaps[0]["theme"] == "dark"
+        assert snaps[0]["label"] == "Switch to light theme"
+        assert snaps[1]["theme"] == "light"
+        assert snaps[1]["label"] == "Switch to dark theme"
+
+    def test_fail_edge_lights_amber_class_when_node_fails(self, node, tmp_path):
+        # A dashed on_fail edge must carry the "on" class while its source is
+        # in a failed state (and drop it again when the retry passes), so CSS
+        # can paint it amber like the green lit flow rails.
+        snaps = self._run_page(node, [
+            {"type": "node_finished", "node": "review", "ok": False},
+            {"type": "__graph"},
+            {"type": "node_finished", "node": "review", "ok": True},
+            {"type": "__graph"},
+        ], tmp_path)
+        failed = snaps[0]
+        back_lines = [l for l in failed["lines"] if "ln-back" in l["cls"]]
+        back_arrows = [a for a in failed["arrows"] if "arr-back" in a["cls"]]
+        assert back_lines, "no dashed back lines rendered"
+        assert back_arrows, "no back arrowheads rendered"
+        assert all(" on" in (" " + l["cls"] + " ") for l in back_lines)
+        assert all(" on" in (" " + a["cls"] + " ") for a in back_arrows)
+        passed = snaps[1]
+        back_lines = [l for l in passed["lines"] if "ln-back" in l["cls"]]
+        assert back_lines, "no dashed back lines rendered after retry pass"
+        assert all(" on" not in (" " + l["cls"] + " ") for l in back_lines)
+
 
 class TestVizPageAssets:
     ROOT = Path(__file__).parent.parent
@@ -1279,6 +1368,78 @@ class TestVizPageAssets:
         assert 'id="graph"' in PAGE
         assert 'role="img"' in PAGE
         assert 'id="pipeline-panel"' in PAGE
+
+    def test_no_resize_divider(self):
+        # The pipeline panel is not user-resizable; sections scroll instead.
+        assert "divider" not in PAGE.lower()
+
+    def _rule(self, selector):
+        match = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", PAGE)
+        assert match, f"{selector} rule missing from PAGE"
+        return match.group(1)
+
+    def test_lower_sections_scroll_instead_of_clipping(self):
+        # Regression: `.lower` used `flex-wrap: wrap`, making it a multi-line
+        # flex container, so the stages/log panels kept their content height,
+        # `#stages`/`#run-log` never scrolled, and body overflow:hidden
+        # chopped the overflow off with no scrollbar.
+        assert "flex-wrap" not in self._rule(".lower")
+        assert "min-width: 0" in self._rule(".panel-stages")
+        assert "min-width: 0" in self._rule(".panel-log")
+        assert "overflow-y: auto" in self._rule("#stages")
+        assert "overflow-y: auto" in self._rule("#run-log")
+
+    def test_pipeline_panel_keeps_graph_height(self):
+        # The panel never shrinks below the graph: it is not a flex shock
+        # absorber for the lower section. A viewport-relative cap keeps a
+        # pathologically tall graph scrolling instead of starving the lower
+        # section entirely.
+        rule = self._rule("#pipeline-panel")
+        assert "flex: 0 0 auto" in rule
+        assert "max-height: 60vh" in rule
+        assert "overflow: auto" in rule
+
+    def test_no_auto_expand_collapse(self):
+        # Stages only open/close when the user clicks them; the run no longer
+        # expands the current step or collapses stages on its own.
+        for fn in ("expandStage", "collapseStage", "collapseAll"):
+            assert fn not in PAGE
+        assert 'classList.toggle("collapsed")' in PAGE
+
+    def test_theme_glyphs_are_svg_icons(self):
+        # The CSS-drawn glyphs were ambiguous: the sun was a plain circle (its
+        # box-shadow "rays" shrank to nothing) and the moon a circle with a
+        # slightly offset overlay. Crisp inline SVGs replace them, shown/hidden
+        # by CSS off the data-theme attribute: dark theme shows the sun (click
+        # to switch to light), light theme shows the moon.
+        assert '<svg class="ic-sun"' in PAGE
+        assert '<svg class="ic-moon"' in PAGE
+        assert "box-shadow: 0 -6px" not in PAGE  # broken ray trick removed
+        assert "position: absolute" in self._rule(".ic-sun, .ic-moon")
+        assert "display: none" in self._rule(':root[data-theme="light"] .ic-sun')
+        assert "display: none" in self._rule(':root[data-theme="dark"] .ic-moon')
+
+    def test_graph_flow_lines_have_visible_thickness(self):
+        # Regression: makeLine zeroed the thickness dimension (height for
+        # horizontal lines, width for vertical), so the background-painted
+        # on_pass lines were invisible while the dashed on_fail borders still
+        # rendered. The zeroing statements must be gone from the page script.
+        assert 'if (l.dir === "v") { d.style.width = "0"; }' not in PAGE
+        assert 'if (l.dir === "h") { d.style.height = "0"; }' not in PAGE
+        assert 'd.style.width = (l.dir === "h" ? l.w : 2) + "px"' in PAGE
+
+    def test_back_edges_light_amber_when_used(self):
+        # Used fail routes (dashed) paint with the warning (amber) token,
+        # mirroring the success-green lit flow rails. The arrows are up
+        # triangles painted with border-bottom.
+        assert "var(--cds-support-warning)" in self._rule(".ln-back.on")
+        assert "var(--cds-support-warning)" in self._rule(".arr-back.on.arr-up")
+
+    def test_arrow_classes_match_kind_for_status_skins(self):
+        # makeArrow must emit "arr-" + kind so the status skins (.arr-flow.on,
+        # .arr-back.on) can match; it used to emit the bare kind ("flow" /
+        # "back"), which no CSS selector ever selected.
+        assert '"arr arr-" + a.dir + " arr-" + a.kind' in PAGE
 
     def test_viz_asset_register_lint(self):
         node = shutil.which("node")

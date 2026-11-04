@@ -49,7 +49,12 @@ def _read(path: Path) -> str:
 def render_page() -> str:
     html = _read(PAGE_HTML)
     inline_style = "<style>\n" + _read(STYLES_CSS) + "</style>"
-    inline_layout = "<script>\n" + _read(LAYOUT_JS) + "</script>"
+    # Embed the normative reference implementation when it exists: the
+    # emitted assets copy is only refreshed by the same run that writes
+    # page.py, so reading it here would embed stale layout content.
+    layout_source = (_read(REFERENCE_LAYOUT) if REFERENCE_LAYOUT.exists()
+                     else _read(LAYOUT_JS))
+    inline_layout = "<script>\n" + layout_source + "</script>"
     inline_page = "<script>\n" + _read(PAGE_JS) + "</script>"
     for marker in (STYLE_LINK, LAYOUT_SCRIPT, PAGE_SCRIPT):
         if html.count(marker) != 1:

@@ -89,6 +89,10 @@ def layout_pipeline(opts: dict[str, Any]) -> dict[str, Any]:
     def reached(name: str) -> bool:
         return (status.get(name) or "pending") != "pending"
 
+    def failed(name: str) -> bool:
+        state = status.get(name) or "pending"
+        return state == "fail" or state == "fatal"
+
     rails: list[dict[str, Any]] = []
     extra_flow: list[_Edge] = []
     for f in flow:
@@ -196,22 +200,23 @@ def layout_pipeline(opts: dict[str, Any]) -> dict[str, Any]:
         xs = node_x(e.si) + NW // 2
         top = node_y(e.ti) + NH
         y1 = lane_y(e.rs, e.lane_s)
-        vertical(xs, node_y(e.si) + NH, y1, e.kind)
+        on = e.kind == "back" and failed(e.src)
+        vertical(xs, node_y(e.si) + NH, y1, e.kind, on)
         if e.rs == e.rt:
-            horizontal(e.xe, xs, y1, e.kind)
-            vertical(e.xe, top + 6, y1, e.kind)
+            horizontal(e.xe, xs, y1, e.kind, on)
+            vertical(e.xe, top + 6, y1, e.kind, on)
         else:
             if e.rs > e.rt:
                 xc = offset - CH - CH * (e.j + 1)
             else:
                 xc = offset + layout["core"] + 14 + 8 + CH * e.k
             y2 = lane_y(e.rt, e.lane_t)
-            horizontal(xc, xs, y1, e.kind)
-            vertical(xc, y2, y1, e.kind)
-            horizontal(xc, e.xe, y2, e.kind)
-            vertical(e.xe, top + 6, y2, e.kind)
+            horizontal(xc, xs, y1, e.kind, on)
+            vertical(xc, y2, y1, e.kind, on)
+            horizontal(xc, e.xe, y2, e.kind, on)
+            vertical(e.xe, top + 6, y2, e.kind, on)
         arrows.append({"x": e.xe - 5, "y": top, "dir": "up", "kind": e.kind,
-                       "on": False})
+                       "on": on})
         if e.label:
             labels.append({"x": xs - 6, "y": y1 - 9, "text": e.label})
 
