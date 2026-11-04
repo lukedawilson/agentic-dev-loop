@@ -454,3 +454,21 @@
 **User Input**: (approval prompt - no user input yet)
 **AI Response**: "Workflow Planning completion prompt: REVIEW REQUIRED - examine execution plan at aidlc-docs/inception/plans/execution-plan.md; options: Request Changes / Add Skipped Stages / Approve & Continue to Functional Design"
 **Context**: Workflow Planning Step 9 - execution plan presented, awaiting approval (unit-9 viz redesign)
+
+## Workflow Planning - Approval
+**Timestamp**: 2026-11-04T07:49:35Z
+**User Input**: "approved"
+**AI Response**: Execution plan approved as-is (3 stages: Functional Design, Code Generation, Build and Test). Marking Workflow Planning complete; proceeding to Construction phase, Functional Design stage for unit-9.
+**Context**: Workflow Planning approval (unit-9 viz redesign)
+
+## Functional Design
+**Timestamp**: 2026-11-04T07:51:05Z
+**User Input**: (approval prompt - no user input yet)
+**AI Response**: Functional Design stage started for unit-9. Plan created at aidlc-docs/construction/plans/unit-9-functional-design-plan.md with execution checklist and 4 open decisions (asset/register locations, build mechanism, layout test harness, SRI). Context analysis noted: no Application Design artifacts exist for unit-9 (execution plan records the normative spec as fulfilling that role). Verified CI (.github/workflows/ci.yml) is Python 3.12 only, no node; node v24.2.0 available on dev machine. Questions Q1-Q4 presented inline.
+**Context**: Functional Design Steps 1-5 (unit-9 viz redesign) - awaiting answers
+
+## Functional Design
+**Timestamp**: 2026-11-04T07:55:56Z
+**User Input**: (approval prompt - no user input yet)
+**AI Response**: FD answers Q1=A, Q2=A, Q3=A, Q4=A written back to unit-9-functional-design-plan.md. Generated 4 artifacts under aidlc-docs/construction/unit-9/functional-design/: business-logic-model.md (layout contract + algorithm model, Python-port test model, status/theme/topology/degradation models), business-rules.md (R1-R13 rule zero, R20-R26 status/motion, R30-R33 fallback, R40-R47 a11y, R50-R53 conformance, R60-R62 supply chain, R70 ASCII, A1-A7 acceptance), domain-entities.md (events unchanged, topology DTO, layout entities, tokens, client state), frontend-components.md (region mapping, custom inventory, class register draft grounded in prototype classes, interaction flows, API points, fallback pairing). Presented standardized 2-option completion message; awaiting approval.
+**Context**: Functional Design Steps 5-7 (unit-9 viz redesign)
