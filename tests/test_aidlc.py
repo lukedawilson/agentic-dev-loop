@@ -135,6 +135,21 @@ class TestResolveUnitDocs:
         assert not any("nfr-design" in k for k in docs)
         assert not any("unit-2" in k for k in docs)
 
+    def test_loads_bare_slug_code_generation_plan(self, tmp_path):
+        """`{slug}-code-generation-plan.md` (no infix) is the build spec -
+        the repo's actual plan filenames, e.g. unit-3-code-generation-plan.md,
+        must load, not only infixed variants like unit-3-scan-*."""
+        unit_dir = tmp_path / "construction" / "unit-3"
+        unit_dir.mkdir(parents=True)
+        (unit_dir / "design.md").write_text("# Design")
+        plans = tmp_path / "construction" / "plans"
+        plans.mkdir(parents=True)
+        (plans / "unit-3-code-generation-plan.md").write_text("# Build spec")
+
+        docs = resolve_unit_docs(tmp_path, "unit-3")
+
+        assert docs["plans/unit-3-code-generation-plan.md"] == "# Build spec"
+
     def test_missing_plans_dir_is_not_an_error(self, tmp_path):
         unit_dir = tmp_path / "construction" / "unit-2"
         unit_dir.mkdir(parents=True)

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-11-04
+
+### Changed
+
+- aidlc-docs
+- docs: add unit-9 viz functional design artifacts (aidlc)
+- fix: 056 slug + pre-cut adoption gate
+- Uncommitted changes: aidlc-docs/aidlc-state.md, aidlc-docs/audit.md, aidlc-docs/construction/unit-9/reference/, src/agentic_dev_loop/engine/extensions/aidlc.py, tests/test_aidlc.py
+
 ## [0.10.3] - 2026-11-04
 
 ### Changed

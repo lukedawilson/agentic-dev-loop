@@ -490,3 +490,9 @@
 **User Input**: "Approve plan" (Q1); "You drive later" (Q2 - inline-implementation question)
 **AI Response**: Plan approved. Execution mode: user drives implementation later (outside AI-DLC sessions). Code Generation Part 1 (Planning) marked COMPLETE; Part 2 (Generation) paused awaiting external implementation; plan checkboxes to be marked [x] as steps land per the plan's single-source-of-truth rule.
 **Context**: Code Generation Part 1 approval (unit-9 viz redesign)
+
+## Code Generation (layout recognition fixes)
+**Timestamp**: 2026-11-04T08:10:45Z
+**User Input**: Q1="Fix state line (Recommended)"; Q2="Fix extension glob (Recommended)"; Q3="Add reference md (Recommended)"; then "do it"
+**AI Response**: Applied all three. (1) aidlc-state.md Current Stage line now reads "Unit unit-9 (viz redesign)" with historical unit mentions lowercased - bare-run autodetect resolves 'unit-9' (verified via get_current_unit). (2) Engine fix via TDD: added red test test_loads_bare_slug_code_generation_plan (failed), then changed aidlc.py plan loading from one infixed glob to two patterns ({slug}-code-generation-plan.md AND {slug}-*-code-generation-plan.md, no prefix leak into unit-30); 28 test_aidlc tests green. (3) Added aidlc-docs/construction/unit-9/reference/normative-values.md with exact token tables, layout constants, kept ids, status mapping, CDN pin, /topology shape. End-to-end: resolve_unit_docs('aidlc-docs','unit-9') loads 4 FD artifacts + reference/normative-values.md + plans/unit-9-code-generation-plan.md (CG plan now reaches agents). Known accepted: inception/application-design 8 docs (units 1-5) still inject into every run - left as is per discussion. tests/test_aidlc.py + tests/test_loaders.py: 55 passed.
+**Context**: Post-approval verification that unit-9 aidlc-docs layout is recognised by the --aidlc-unit extension

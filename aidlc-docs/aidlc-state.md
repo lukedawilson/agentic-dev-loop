@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Unit 9 (viz redesign) Functional Design COMPLETE (2026-11-04); Code Generation Part 1 (Planning) COMPLETE and approved; Part 2 (Generation) paused - user drives implementation outside AI-DLC sessions; plan = aidlc-docs/construction/plans/unit-9-code-generation-plan.md; User Stories SKIPPED (user decision); Units 1-3 COMPLETE; Unit 4 WONTSHIP; Unit 5 COMPLETE (2026-10-25); Unit 6 intent recorded (cloud deployment); Unit 7 intent recorded (Linux-native sandboxing + egress protection); Unit 8 intent recorded (parallel fan-out driver)
+- **Current Stage**: CONSTRUCTION - Unit unit-9 (viz redesign) Functional Design COMPLETE (2026-11-04); Code Generation Part 1 (Planning) COMPLETE and approved; Part 2 (Generation) paused - user drives implementation outside AI-DLC sessions; plan = aidlc-docs/construction/plans/unit-9-code-generation-plan.md; user stories skipped (user decision); units 1-3 COMPLETE; unit 4 WONTSHIP; unit 5 COMPLETE (2026-10-25); units 6-8 intent recorded (unit-6 cloud deployment; unit-7 Linux-native sandboxing + egress protection; unit-8 parallel fan-out driver)
 
 ## Workspace State
 - **Existing Code**: Yes

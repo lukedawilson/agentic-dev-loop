@@ -74,12 +74,18 @@ def resolve_unit_docs_with_sources(
                 sources[f"inception/{file.name}"] = file
 
     # The unit's code-generation plans are the build spec - absent is fine,
-    # present is how the spec reaches agents.
+    # present is how the spec reaches agents. Two shapes are in the wild:
+    # bare (`unit-3-code-generation-plan.md`) and infixed
+    # (`unit-3-scan-core-types-code-generation-plan.md`); the bare shape must
+    # not be lost, and neither pattern may leak into a slug that merely
+    # extends this one (unit-3 must not match a unit-30 plan).
     plans_dir = docs_dir / "construction" / "plans"
     if plans_dir.is_dir():
-        for file in sorted(plans_dir.glob(f"{unit_slug}-*-code-generation-plan.md")):
-            docs[f"plans/{file.name}"] = file.read_text(encoding="utf-8")
-            sources[f"plans/{file.name}"] = file
+        for pattern in (f"{unit_slug}-code-generation-plan.md",
+                        f"{unit_slug}-*-code-generation-plan.md"):
+            for file in sorted(plans_dir.glob(pattern)):
+                docs[f"plans/{file.name}"] = file.read_text(encoding="utf-8")
+                sources[f"plans/{file.name}"] = file
 
     return docs, sources
 
