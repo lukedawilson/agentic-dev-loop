@@ -303,6 +303,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="release-note text for the changelog entry")
     parser.add_argument("--yes", action="store_true",
                         help="skip the release-note confirmation prompt")
+    parser.add_argument("--no-add", action="store_true",
+                        help="exclude uncommitted work from the release "
+                             "commit (commit only the files publish.py "
+                             "writes: pyproject.toml and CHANGELOG.md)")
     parser.add_argument("--cwd", type=Path,
                         help="repository root (default: current directory)")
     parser.add_argument("--dry-run", action="store_true",
@@ -338,17 +342,25 @@ def main(argv: list[str] | None = None) -> int:
         dirty = dirty_note(root)
 
         if args.dry_run:
-            # The dry run is the pre-cut gate: render (and thereby refuse)
-            # the would-be changelog before printing the plan, so a violating
-            # entry fails before anything is written, committed, or tagged.
-            render_changelog(old_changelog, str(target), date,
-                             args.description, bullets)
+            # The dry run is the pre-cut gate AND the notes preview: render
+            # (and thereby refuse) the would-be changelog before printing
+            # the plan and the rendered section, so a violating entry fails
+            # and the caller can review the notes before anything is
+            # written, committed, or tagged.
+            new_changelog = render_changelog(old_changelog, str(target), date,
+                                             args.description, bullets)
             print(f"Current version: {current}")
             print(f"Target version:  {target} (tag {tag})")
             print(f"Changelog entry: {source}")
             if dirty:
-                print("Uncommitted files (included in the release commit): "
-                      f"{dirty}")
+                if args.no_add:
+                    print("Uncommitted files (excluded from the release "
+                          f"commit): {dirty}")
+                else:
+                    print("Uncommitted files (included in the release "
+                          f"commit): {dirty}")
+            print("Release notes to be written:")
+            print(extract_section(new_changelog, str(target), date))
             print(f"Commit:          release: {tag}")
             print(f"Push:            origin {branch}, origin {tag}")
             print("(dry run - nothing changed)")
@@ -359,16 +371,26 @@ def main(argv: list[str] | None = None) -> int:
         print("Release notes to be written:")
         print(extract_section(new_changelog, str(target), date))
         if dirty:
-            print("Uncommitted files will be included in the release commit: "
-                  f"{dirty}")
+            if args.no_add:
+                print("Uncommitted files will NOT be included in the "
+                      f"release commit (--no-add): {dirty}")
+            else:
+                print("Uncommitted files will be included in the release "
+                      f"commit: {dirty}")
         confirm_release(args.yes)
 
         (pyproject).write_text(
             bump_pyproject_text(pyproject.read_text(), str(target)))
         changelog_path.write_text(new_changelog)
 
-        git(root, "add", "-A")
-        git(root, "commit", "-m", f"release: {tag}")
+        if args.no_add:
+            # Commit only publish's own writes by pathspec, so uncommitted
+            # work stays in the tree and out of the release commit.
+            git(root, "commit", "-m", f"release: {tag}", "--",
+                str(pyproject.name), str(changelog_path.name))
+        else:
+            git(root, "add", "-A")
+            git(root, "commit", "-m", f"release: {tag}")
         git(root, "tag", "-a", tag, "-m", f"release {tag}")
         git(root, "push", "origin", branch)
         git(root, "push", "origin", tag)

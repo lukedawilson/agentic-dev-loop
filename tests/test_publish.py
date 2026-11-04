@@ -239,6 +239,16 @@ class TestChangelog:
         assert "Unreleased" in proc.stderr
         assert read_version(repo) == "0.2.0"
 
+    def test_dry_run_shows_rendered_section(self, tmp_path):
+        """The dry run is the notes preview: it prints the rendered release
+        section so the /publish flow can ask for approval before the cut."""
+        repo, _ = make_repo(tmp_path, commits=(("a.txt", "a\n", "feat: alpha"),))
+        proc = run_publish(repo, "--patch", "--dry-run", yes=False)
+        assert proc.returncode == 0, proc.stderr
+        assert "Release notes to be written:" in proc.stdout
+        assert "## [0.2.1]" in proc.stdout
+        assert "feat: alpha" in proc.stdout
+
 
 class TestReleaseConfirmation:
     def test_closed_stdin_without_yes_fails(self, tmp_path):
@@ -413,6 +423,35 @@ class TestGitOps:
         assert last_subject(repo) == "chore: initial"
 
 
+class TestNoAdd:
+    def test_no_add_excludes_unstaged_files(self, tmp_path):
+        """--no-add commits only the files publish.py writes; the WIP stays
+        uncommitted in the tree instead of being swept into the release."""
+        repo, _ = make_repo(tmp_path, commits=(("extra.txt", "old\n",
+                                                "feat: alpha"),))
+        (repo / "extra.txt").write_text("dirty\n")
+        proc = run_publish(repo, "--patch", "--no-add")
+        assert proc.returncode == 0, proc.stderr
+        assert read_version(repo) == "0.2.1"
+        assert "v0.2.1" in tags(repo)
+        assert last_subject(repo) == "release: v0.2.1"
+        committed = _git(repo, "show", "--pretty=format:", "--name-only",
+                         "HEAD").stdout.split()
+        assert "pyproject.toml" in committed
+        assert "CHANGELOG.md" in committed
+        assert "extra.txt" not in committed
+        assert (repo / "extra.txt").read_text() == "dirty\n"
+        assert "extra.txt" in _git(repo, "status", "--porcelain").stdout
+
+    def test_no_add_dry_run_reports_exclusion(self, tmp_path):
+        repo, _ = make_repo(tmp_path)
+        (repo / "extra.txt").write_text("dirty\n")
+        proc = run_publish(repo, "--patch", "--dry-run", "--no-add",
+                           yes=False)
+        assert proc.returncode == 0, proc.stderr
+        assert "excluded from the release commit" in proc.stdout
+
+
 class TestArgs:
     def test_no_selector_fails(self, tmp_path):
         repo, _ = make_repo(tmp_path)
@@ -425,3 +464,48 @@ class TestArgs:
         proc = run_publish(repo, "--major", "--minor")
         assert proc.returncode != 0
         assert read_version(repo) == "0.2.0"
+
+
+class TestPublishCommandFile:
+    """The /publish command file is the source of truth for the release flow.
+
+    Shell blocks in a command file run when OpenCode evaluates the command,
+    before the agent sees the prompt, so a real (non-dry-run) publish must
+    never live in a shell block. Confirmation must route through the
+    `question` tool instead of publish.py's stdin prompt, which has no
+    stdin to read when the command runs in a session.
+    """
+
+    COMMAND_FILE = REPO_ROOT / ".opencode" / "commands" / "publish.md"
+
+    def test_real_publish_never_runs_in_shell_block(self):
+        text = self.COMMAND_FILE.read_text()
+        for line in text.splitlines():
+            if line.strip().startswith("!") and "publish.py" in line:
+                assert "--dry-run" in line, (
+                    "a publish.py shell block without --dry-run would cut "
+                    "a release before the user is asked: %r" % line
+                )
+
+    def test_confirmation_routes_through_question_tool(self):
+        text = self.COMMAND_FILE.read_text()
+        assert "`question` tool" in text
+
+    def test_mandate_present(self):
+        text = self.COMMAND_FILE.read_text()
+        assert "### Consumer adoption" in text
+        assert "CONSUMER_ADOPTION_PLANS" in text
+
+    def test_unstaged_files_confirmation_present(self):
+        """The flow must ask whether the reported uncommitted files are
+        added to the release commit before the cut."""
+        text = self.COMMAND_FILE.read_text()
+        assert "uncommitted files" in text
+        assert "--no-add" in text
+
+    def test_notes_happiness_confirmation_present(self):
+        """The flow must ask whether the user is happy with the rendered
+        release notes, and offer a changes loop."""
+        text = self.COMMAND_FILE.read_text()
+        assert "happy" in text
+        assert "--description" in text
