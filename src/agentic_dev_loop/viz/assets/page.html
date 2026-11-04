@@ -6,9 +6,6 @@
 <title>agentic-dev-loop viz</title>
 <link rel="stylesheet" href="styles.css">
 <script src="pipeline-layout.js"></script>
-<script type="module">
-import "https://cdn.jsdelivr.net/npm/@carbon/web-components@2.47.0/es/index.min.js";
-</script>
 </head>
 <body>
 <a class="skip" href="#stages">Skip to stages</a>
@@ -36,14 +33,14 @@ import "https://cdn.jsdelivr.net/npm/@carbon/web-components@2.47.0/es/index.min.
 <div id="stream-banner" role="status" aria-live="polite" data-testid="stream-banner"></div>
 <main class="shell">
   <section class="tiles" aria-label="Run summary">
-    <cds-tile><div class="tile"><div class="lbl">Run</div>
-      <div id="subject" class="big">agentic-dev-loop pipeline</div></div></cds-tile>
-    <cds-tile><div class="tile"><div class="lbl">Attempt</div>
-      <div id="attempt" class="big">?/?</div><div id="meter" class="meter"></div></div></cds-tile>
-    <cds-tile><div class="tile"><div class="lbl">Thread ID</div>
-      <div id="thread" class="big"><code id="thread-id" title="click to select">--</code></div></div></cds-tile>
-    <cds-tile><div class="tile"><div class="lbl">Total</div>
-      <div id="total" class="big"></div></div></cds-tile>
+    <div class="tile"><div class="lbl">Run</div>
+      <div id="subject" class="big">agentic-dev-loop pipeline</div></div>
+    <div class="tile"><div class="lbl">Attempt</div>
+      <div id="attempt" class="big">?/?</div><div id="meter" class="meter"></div></div>
+    <div class="tile"><div class="lbl">Thread ID</div>
+      <div id="thread" class="big"><code id="thread-id" tabindex="0" role="button" title="click to copy">--</code></div></div>
+    <div class="tile"><div class="lbl">Total</div>
+      <div id="total" class="big"></div></div>
   </section>
   <div id="verdicts" class="verdicts" aria-label="Step verdicts"></div>
   <div id="run-banner" class="outcome" role="status" aria-live="polite" data-testid="run-banner"></div>

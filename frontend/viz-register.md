@@ -30,6 +30,7 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.cline` | One console line | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.collapsed` | Collapsed stage/console state | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.console-wrap` | Console scroll port | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.copied` | Transient copy-confirmation skin on the thread id | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.copy-btn` | Sticky console copy button | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.elabel` | Edge label chip | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.exhausted` | Attempt meter exhausted state | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -116,7 +117,7 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | --- | --- |
 | `*` | Box-sizing and thin scrollbar reset; mechanics only, no visual styling. |
 | `html, body` | Page height, font stack and background; the app shell has no component wrapper. |
-| `button` | Reset for the header actions, stage headers and copy buttons before Carbon loads. |
+| `button` | Reset for the header actions, stage headers and copy buttons. |
 | `:focus-visible` | A single product focus ring token (R45). |
 
 ## Product tokens (no Carbon equivalent)
@@ -124,5 +125,5 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 `--adl-support-unverifiable`, `--adl-tint-run|ok|warn|err|unv`,
 `--adl-console*`, `--adl-font-sans|mono`, `--adl-radius`,
 `--adl-motion-productive`. Values are the exact `tokens.css` values inlined in
-`styles.css`. Carbon loads from an exact pinned CDN version; the plain-HTML
-markup is the authoritative no-CDN baseline (R30, R60).
+`styles.css`. No Carbon runtime is loaded; the hand-written skin (tokens and
+rules below) is the authoritative styling (R30, R60).

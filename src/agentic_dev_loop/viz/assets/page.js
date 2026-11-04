@@ -967,10 +967,13 @@
     if (runActive && Date.now() - lastEventAt > 10000) { recover(); }
   });
 
-  (function initThreadSelect() {
+  (function initThreadCopy() {
     var tid = el("thread-id");
-    if (!tid || !document.createRange) { return; }
-    tid.addEventListener("click", function () {
+    if (!tid) { return; }
+
+    function selectFallback() {
+      // Explicit degradation: if the clipboard API is unavailable, select
+      // the text so the user can copy it manually.
       try {
         var range = document.createRange();
         range.selectNodeContents(tid);
@@ -978,6 +981,36 @@
         sel.removeAllRanges();
         sel.addRange(range);
       } catch (err) { /* selection is best-effort */ }
+    }
+
+    function showFeedback(value) {
+      tid.textContent = "Copied";
+      tid.classList.add("copied");
+      setTimeout(function () {
+        tid.classList.remove("copied");
+        // Only restore when the feedback is still showing; a newer thread
+        // id from run_started must not be clobbered.
+        if (tid.textContent === "Copied") { tid.textContent = value; }
+      }, 1200);
+    }
+
+    function copyThreadId() {
+      var value = tid.textContent;
+      if (!value || value === "--" || value === "Copied") { return; }
+      if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        selectFallback();
+        return;
+      }
+      navigator.clipboard.writeText(value).then(
+        function () { showFeedback(value); }, selectFallback);
+    }
+
+    tid.addEventListener("click", copyThreadId);
+    tid.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        copyThreadId();
+      }
     });
   })();
 

@@ -956,32 +956,44 @@ async function main() {
   // let the topology fetch microtask chain resolve so events are handled
   // live (synchronously inside es.onmessage) instead of buffered
   await new Promise(function (res) { setImmediate(res); });
-  EVENTS.forEach(function (ev) {
+  // Events arrive serially over the stream; process them the same way so
+  // each __copy snapshot reflects exactly one click (an async forEach would
+  // let later clicks run before earlier snapshots are taken).
+  for (var i = 0; i < EVENTS.length; i++) {
+    var ev = EVENTS[i];
     if (ev.type === "__tick") {
       fakeNow = ev.now;
       if (intervalFn) { intervalFn(); }
-      return;
+      continue;
     }
     if (ev.type === "__snapshot") {
       snapshots.push({ watchdog: watchdogState() });
-      return;
+      continue;
     }
     if (ev.type === "__visibility") {
       fakeNow = ev.now;
       var visFn = document._listeners["visibilitychange"];
       if (visFn) { visFn(); }
-      return;
+      continue;
     }
     if (ev.type === "__graph") {
       snapshots.push({ lines: graphLines(), arrows: graphArrows() });
-      return;
+      continue;
     }
     if (ev.type === "__theme") {
       var tbtn = document.getElementById("theme-toggle");
       snapshots.push({ theme: rootTheme, label: tbtn.getAttribute("aria-label") });
       tbtn.listeners["click"]();
       snapshots.push({ theme: rootTheme, label: tbtn.getAttribute("aria-label") });
-      return;
+      continue;
+    }
+    if (ev.type === "__copy") {
+      var tid = document.getElementById("thread-id");
+      if (tid.listeners["click"]) { tid.listeners["click"](); }
+      await new Promise(function (res) { setImmediate(res); });
+      snapshots.push({ copy: { text: tid.textContent, cls: tid._class,
+                               copied: copiedText } });
+      continue;
     }
     fire(ev);
     if (ev.type === "state") {
@@ -989,7 +1001,7 @@ async function main() {
                        times: stageTimes(), total: totalText(),
                        timer: intervalFn !== null });
     }
-  });
+  }
   // exercise the copy button on the dev console
   var dev = document.getElementById("stage-dev");
   var copyBtn = dev.querySelector(".console-wrap").querySelector(".copy-btn");
@@ -1325,6 +1337,31 @@ main();
         assert snaps[1]["theme"] == "light"
         assert snaps[1]["label"] == "Switch to dark theme"
 
+    def test_thread_id_click_copies_and_gives_feedback(self, node, tmp_path):
+        # Clicking the thread id must copy it to the clipboard and show
+        # visible feedback; the "--" placeholder and the feedback state are
+        # not copyable.
+        snaps = self._run_page(node, [
+            {"type": "__copy"},
+            {"type": "run_started", "subject": "s", "max_attempts": 5,
+             "attempt": 1, "thread_id": "t-123"},
+            {"type": "__copy"},
+            {"type": "__copy"},
+        ], tmp_path)
+        # placeholder: click must do nothing (harness starts with an empty
+        # code element; the real page starts with "--" - the guard ignores
+        # both, no clipboard write, no feedback class)
+        assert snaps[0]["copy"]["text"] == ""
+        assert snaps[0]["copy"]["copied"] is None
+        assert "copied" not in snaps[0]["copy"]["cls"].split()
+        # live id: click copies and flips to the "Copied" feedback state
+        assert snaps[1]["copy"]["copied"] == "t-123"
+        assert snaps[1]["copy"]["text"] == "Copied"
+        assert "copied" in snaps[1]["copy"]["cls"].split()
+        # feedback state: a further click must not re-copy or re-trigger
+        assert snaps[2]["copy"]["text"] == "Copied"
+        assert "copied" in snaps[2]["copy"]["cls"].split()
+
     def test_fail_edge_lights_amber_class_when_node_fails(self, node, tmp_path):
         # A dashed on_fail edge must carry the "on" class while its source is
         # in a failed state (and drop it again when the retry passes), so CSS
@@ -1361,8 +1398,15 @@ class TestVizPageAssets:
         PAGE.encode("ascii")
         assert "mermaid" not in PAGE.lower()
 
-    def test_carbon_is_pinned_exactly(self):
-        assert re.search(r"@carbon/web-components@\d+\.\d+\.\d+", PAGE)
+    def test_no_external_script_dependencies(self):
+        # The Carbon import never resolved in browsers: the jsdelivr /es/
+        # chain pulls bare specifiers ("tslib", "lit") that no browser can
+        # resolve without an import map, so it threw on every page load. The
+        # page is fully styled by its own hand-written token skin, so the
+        # dead import is removed - no external scripts may come back.
+        assert "@carbon/web-components" not in PAGE
+        assert "cdn.jsdelivr" not in PAGE
+        assert '<script type="module">' not in PAGE
 
     def test_graph_is_an_accessible_image(self):
         assert 'id="graph"' in PAGE
@@ -1440,6 +1484,42 @@ class TestVizPageAssets:
         # .arr-back.on) can match; it used to emit the bare kind ("flow" /
         # "back"), which no CSS selector ever selected.
         assert '"arr arr-" + a.dir + " arr-" + a.kind' in PAGE
+
+    def test_summary_tiles_wrap_at_natural_breaks(self):
+        # Regression: `.big` used `word-break: break-all`, which slices words
+        # at any character ("plan dem/o.md", "tota/l 0:27"). Natural break
+        # points must win; long unbroken tokens still wrap as a fallback via
+        # overflow-wrap. (Console output keeps word-break: break-all on
+        # purpose - it must wrap dense log lines.)
+        rule = self._rule(".big")
+        assert "overflow-wrap: break-word" in rule
+        assert "word-break" not in rule
+
+    def test_summary_tiles_stack_two_per_row_on_mobile(self):
+        # Regression: on the <=760px layout the tiles kept `flex: 1 1 0`, so
+        # flex-basis 0 meant all four always fit one line, `flex-wrap: wrap`
+        # never engaged, and each tile crushed to ~85px. A percentage basis
+        # forces a 2x2 stack on narrow screens.
+        m = re.search(r"@media \(max-width: 760px\) \{(.*?)\}\s*</style>",
+                      PAGE, re.S)
+        assert m, "mobile media query missing from PAGE"
+        block = m.group(1)
+        rule = re.search(re.escape(".tiles .tile") + r"\s*\{([^}]*)\}", block)
+        assert rule, "mobile .tiles .tile override missing"
+        assert "flex: 1 1 45%" in rule.group(1)
+
+    def test_thread_id_click_copies_to_clipboard_with_feedback(self):
+        # Clicking the thread id copies it and shows transient success
+        # feedback. The element must be focusable/announced as a button, and
+        # the old selection-only handler (createRange/getSelection) is gone.
+        assert ('<code id="thread-id" tabindex="0" role="button" '
+                'title="click to copy">--</code>') in PAGE
+        assert "navigator.clipboard" in PAGE
+        assert "writeText" in PAGE
+        assert 'textContent = "Copied"' in PAGE
+        assert "initThreadSelect" not in PAGE  # selection-only handler replaced
+        assert "selectFallback" in PAGE  # clipboard-less fallback kept
+        assert "var(--cds-support-success)" in self._rule("#thread-id.copied")
 
     def test_viz_asset_register_lint(self):
         node = shutil.which("node")
