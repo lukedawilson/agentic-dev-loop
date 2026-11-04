@@ -41,11 +41,11 @@ NODE_GAP = 1.0    # between nodes - the pace a watcher sees
 EVENT_GAP = 0.35  # between the started/state/finished bursts of one node
 
 
-def real_topology() -> tuple[str, list[str]]:
-    """The shipped self-loop example's vertical flowchart - solid happy-path
-    chain, dotted labeled loop-backs, and the success terminal - exactly as
-    a live run serves it."""
-    return viz.topology_mermaid(load_config(EXAMPLE))
+def real_topology() -> dict:
+    """The shipped self-loop example's topology DTO - solid happy-path
+    chain, labeled loop-backs, and the success terminal - exactly as a live
+    run serves it."""
+    return viz.topology_graph(load_config(EXAMPLE))
 
 
 def emit_node(bus: viz.VizBus, name: str, state: dict | None = None,
@@ -148,9 +148,11 @@ def main() -> int:
     args = parser.parse_args()
 
     bus = viz.VizBus()
-    topology, nodes = real_topology()
+    topology = real_topology()
     try:
-        httpd, _thread = viz.serve_viz(bus, topology, SUBJECT, args.port, nodes)
+        httpd, _thread = viz.serve_viz(bus, topology["mermaid"], SUBJECT,
+                                       args.port, topology["nodes"],
+                                       topology["flow"], topology["edges"])
     except OSError as exc:
         print(f"{exc}\nPick another port with --port.", file=sys.stderr)
         return 1

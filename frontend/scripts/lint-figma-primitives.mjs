@@ -121,6 +121,54 @@ function parseScssRules(source) {
   return rules;
 }
 
+// ---- optional viz-asset mode ------------------------------------------------
+// `--assets <dir> --register <file>` lints the unit-9 viz page assets against
+// the viz class register instead of the frontend/ SCSS corpus. Defaults
+// (neither flag) preserve the original behaviour exactly.
+function cliFlag(name) {
+  const index = process.argv.indexOf(name);
+  return index === -1 ? null : process.argv[index + 1] ?? null;
+}
+const assetsFlag = cliFlag('--assets');
+if (assetsFlag !== null) {
+  const assetsDir = resolve(repoRoot, assetsFlag);
+  const registerFlag = cliFlag('--register');
+  const registerPath = registerFlag === null ? skillPath : resolve(repoRoot, registerFlag);
+  const assetErrors = [];
+  const assetClasses = new Map();
+  for (const file of walk(assetsDir, '.css')) {
+    const stripped = stripScssComments(readFileSync(file, 'utf8'));
+    for (const rule of parseScssRules(stripped)) {
+      for (const match of rule.selector.matchAll(/\.([a-z][a-z0-9-]+)/g)) {
+        if (!assetClasses.has(match[1])) {
+          assetClasses.set(match[1], `${relative(repoRoot, file)}:${rule.line}`);
+        }
+      }
+    }
+  }
+  const registered = new Set();
+  for (const line of readFileSync(registerPath, 'utf8').split('\n')) {
+    if (!/^\s*\|/.test(line)) continue;
+    for (const match of line.matchAll(/`\.([a-z][a-z0-9-]+)`/g)) registered.add(match[1]);
+  }
+  for (const [cls, site] of assetClasses) {
+    if (!registered.has(cls)) {
+      assetErrors.push(`UNDOCUMENTED ASSET CLASS: .${cls} (${site}) is not in ${relative(repoRoot, registerPath)}`);
+    }
+  }
+  for (const cls of registered) {
+    if (!assetClasses.has(cls)) {
+      assetErrors.push(`STALE ASSET DOC: .${cls} is registered but not declared in ${relative(repoRoot, assetsDir)}`);
+    }
+  }
+  if (assetErrors.length) {
+    for (const error of assetErrors) console.error(error);
+    process.exit(1);
+  }
+  console.log(`viz assets OK: ${assetClasses.size} classes match the register`);
+  process.exit(0);
+}
+
 // ---- 1. collect declared classes from SCSS ----------------------------------
 const declared = new Map(); // class -> [{file, line}]
 const declaredProps = new Map(); // custom property -> {file, line}

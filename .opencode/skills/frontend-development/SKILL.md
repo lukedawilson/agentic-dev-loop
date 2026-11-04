@@ -5,6 +5,14 @@ description: Binding rules for ANY change under frontend/ - Carbon web component
 
 # Frontend Development Rules
 
+> **Viz scope note (unit 9).** The live-viz page is its own product surface:
+> its assets live at `src/agentic_dev_loop/viz/assets/` and its class register
+> is `frontend/viz-register.md`, not this file. Lint it with
+> `node frontend/scripts/lint-figma-primitives.mjs --assets src/agentic_dev_loop/viz/assets --register frontend/viz-register.md`.
+> The rules below still apply to `frontend/`; the viz baseline is plain HTML
+> because the Carbon CDN is an enhancement, never a dependency.
+
+
 - ALWAYS make your designs responsive and mobile-friendly
 - ALWAYS use native Carbon web components and utility classes
 - Semantic HTML is REQUIRED where possible

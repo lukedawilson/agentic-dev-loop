@@ -227,12 +227,15 @@ class TestViz:
             sweep_calls.append((port, match, cwd))
             order.append("sweep")
 
-        def fake_serve_viz(bus, topology, subject, port, nodes=()):
+        def fake_serve_viz(bus, topology, subject, port, nodes=(),
+                           flow=(), edges=()):
             captured["bus"] = bus
             captured["topology"] = topology
             captured["subject"] = subject
             captured["port"] = port
             captured["nodes"] = nodes
+            captured["flow"] = flow
+            captured["edges"] = edges
             order.append("serve")
             return types.SimpleNamespace(server_address=("127.0.0.1", port)), \
                 object()

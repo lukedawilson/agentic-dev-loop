@@ -8,7 +8,7 @@ import sys
 
 from agentic_dev_loop.core.config import load_config
 
-from . import VizBus, serve_viz, topology_mermaid
+from . import VizBus, serve_viz, topology_graph
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,9 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = load_config(args.pipeline)
-    topology, nodes = topology_mermaid(cfg)
+    topology = topology_graph(cfg)
     bus = VizBus()
-    httpd, _thread = serve_viz(bus, topology, cfg.name, args.port, nodes)
+    httpd, _thread = serve_viz(bus, topology["mermaid"], cfg.name, args.port,
+                               topology["nodes"], topology["flow"],
+                               topology["edges"])
     bound = httpd.server_address[1]
     url = f"http://127.0.0.1:{bound}"
     print(f"Live graph viz: {url}", flush=True)

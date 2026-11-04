@@ -29,8 +29,8 @@ from agentic_dev_loop import viz
 from agentic_dev_loop.core.config import PipelineConfig, load_config
 from agentic_dev_loop.viz import (MAX_LINE, PAGE, ConsoleCapture, HeartbeatThread,
                               NodeWatch, VizBus, _ReuseSafeServer, _Tee,
-                              _handler_class, serve_viz, topology_mermaid,
-                              translate)
+                              _handler_class, serve_viz, topology_graph,
+                              topology_mermaid, translate)
 
 MERMAID = "graph TD;\n\tdev(dev)\n\ttest(test)\n"
 SELF_PIPELINE = Path(__file__).parent.parent / "agentic-dev-loop" / "pipeline.yaml"
@@ -198,6 +198,34 @@ class TestTopologyMermaid:
         source, _nodes = topology_mermaid(cfg)
 
         assert "test -. &nbsp;fail&nbsp; .-> dev;" in source
+
+    def test_topology_graph_structured_flow_and_edges(self):
+        cfg = load_config(SELF_PIPELINE)
+        dto = topology_graph(cfg)
+        chain = ["brief", "deps", "dev", "restore", "test", "review", "qa",
+                 "commit", "success"]
+        assert dto["nodes"] == chain
+        assert dto["flow"] == [{"src": src, "dst": dst}
+                               for src, dst in zip(chain, chain[1:])]
+        assert dto["edges"] == [
+            {"src": "restore", "dst": "dev", "label": "fail"},
+            {"src": "test", "dst": "dev", "label": "fail"},
+            {"src": "review", "dst": "dev", "label": "NEEDS CHANGES"},
+            {"src": "qa", "dst": "dev", "label": "FAIL"},
+        ]
+        assert dto["mermaid"] == topology_mermaid(cfg)[0]
+
+    def test_topology_graph_unlabelled_nonretry_edge(self):
+        cfg = self._pipeline([{
+            "name": "dev",
+            "agent": "dev",
+            "on_pass": {"goto": "success"},
+            "on_fail": "failure",
+        }])
+        dto = topology_graph(cfg)
+        assert dto["flow"] == [{"src": "dev", "dst": "success"}]
+        assert dto["edges"] == [{"src": "dev", "dst": "failure",
+                                 "label": None}]
 
 
 class TestVizBus:
@@ -577,16 +605,21 @@ class TestServer:
         _bus, _httpd, _thread, port = server
         status, body = http_get(port, "/")
         assert status == 200
-        assert 'id="mermaid-container"' in body
-        assert 'id="subject"' in body
-        assert "agentic-dev-loop pipeline" in body  # topic placeholder
+        assert 'id="graph"' in body
+        assert 'role="img"' in body
+        for marker in ('id="subject"', 'id="attempt"', 'id="thread-id"',
+                       'id="total"', 'id="verdicts"', 'id="stages"',
+                       'id="run-log"', 'id="stream-banner"', 'id="run-banner"',
+                       'data-testid="divider"', 'data-testid="theme-toggle"'):
+            assert marker in body
+        assert "agentic-dev-loop viz" in body
 
     def test_topology_json_round_trip(self, server):
         _bus, _httpd, _thread, port = server
         status, body = http_get(port, "/topology")
         assert status == 200
         assert json.loads(body) == {"mermaid": MERMAID, "subject": "plan plan.md",
-                                    "nodes": []}
+                                    "nodes": [], "flow": [], "edges": []}
 
     def test_topology_round_trip_includes_nodes(self):
         bus = VizBus()
@@ -597,7 +630,8 @@ class TestServer:
             status, body = http_get(port, "/topology")
             assert status == 200
             assert json.loads(body) == {"mermaid": MERMAID, "subject": "subject",
-                                        "nodes": ["dev", "success"]}
+                                        "nodes": ["dev", "success"],
+                                        "flow": [], "edges": []}
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -772,8 +806,9 @@ El.prototype.querySelectorAll = function (sel) {
 El.prototype.scrollIntoView = function () {};
 
 var STATIC_IDS = ["subject", "attempt", "thread-id", "total", "verdicts",
-                  "stages", "run-log", "mermaid-container", "run-banner",
-                  "stream-banner", "divider", "sidebar"];
+                  "stages", "run-log", "graph", "run-banner",
+                  "stream-banner", "divider", "pipeline-panel", "meter",
+                  "stream", "stream-label", "theme-toggle", "theme-icon"];
 STATIC_IDS.forEach(function (id) { registry[id] = new El(id); });
 var elCounter = 0;
 var document = {
@@ -796,10 +831,9 @@ var document = {
 var closeCalls = 0;
 var reloadCalls = 0;
 var esInstances = [];
-var window = { __mermaidFailed: false, innerWidth: 1000, _listeners: {} };
+var window = { innerWidth: 1000, _listeners: {} };
 window.addEventListener = function (t, fn) { window._listeners[t] = fn; };
 window.location = { reload: function () { reloadCalls++; } };
-var mermaidCalls = [];
 var esInstance = null;
 
 globalThis.document = document;
@@ -816,20 +850,16 @@ Object.defineProperty(globalThis, "navigator", {
     }
   }
 });
-globalThis.mermaid = {
-  initialize: function () {},
-  render: function (_id, src) {
-    mermaidCalls.push(src);
-    return Promise.resolve({ svg: "<svg/>", bindFunctions: null });
-  }
-};
+globalThis.document.documentElement = { setAttribute: function () {} };
 globalThis.fetch = function () {
   return Promise.resolve({
     json: function () {
       return Promise.resolve({
         subject: "test subject",
         mermaid: "graph TD;\\ndev(dev)\\ntest(test)\\nreview(review)\\n",
-        nodes: ["dev", "test", "review"]
+        nodes: ["dev", "test", "review"],
+        flow: [{ src: "dev", dst: "test" }, { src: "test", dst: "review" }],
+        edges: []
       });
     }
   });
@@ -856,10 +886,14 @@ function badges() {
   return box.children.map(function (c) { return c.textContent; });
 }
 function nodeClasses() {
-  var src = mermaidCalls[mermaidCalls.length - 1];
   var out = {};
-  var re = /class (\S+) (\S+);/g, m;
-  while ((m = re.exec(src))) { out[m[1]] = m[2]; }
+  for (var k in registry) {
+    var e = registry[k];
+    if (e.id && e.id.indexOf("station-") === 0) {
+      var m = /st-(\S+)/.exec(e._class);
+      if (m) { out[e.id.slice(8)] = m[1]; }
+    }
+  }
   return out;
 }
 function fire(ev) { esInstance.onmessage({ data: JSON.stringify(ev) }); }
@@ -942,8 +976,10 @@ main();
         match = self.INLINE_SCRIPT.search(PAGE)
         assert match, "inline page script not found in PAGE"
         script = match.group(0)[len("<script>\n"):-len("</script>")]
-        js = ("var PAGE_SCRIPT = " + json.dumps(script) + ";\n"
-              + "var EVENTS = " + json.dumps(events) + ";\n"
+        layout_js = (Path(__file__).parent.parent / "src" / "agentic_dev_loop"
+                     / "viz" / "assets" / "pipeline-layout.js").read_text()
+        js = ("var PAGE_SCRIPT = " + json.dumps(layout_js + "\n" + script)
+              + ";\n" + "var EVENTS = " + json.dumps(events) + ";\n"
               + self.HARNESS)
         script_file = tmp_path / "page_script_test.js"
         script_file.write_text(js)
@@ -1221,3 +1257,37 @@ main();
         assert snaps[0]["watchdog"]["reloadCalls"] == 0
         assert snaps[1]["watchdog"]["instances"] == 2
         assert snaps[1]["watchdog"]["bannerDisplay"] == "none"
+
+
+class TestVizPageAssets:
+    ROOT = Path(__file__).parent.parent
+
+    def test_generated_page_matches_committed_assets(self):
+        proc = subprocess.run(
+            [sys.executable, str(self.ROOT / "tools" / "build_viz_page.py"),
+             "--check"], capture_output=True, text=True, timeout=60)
+        assert proc.returncode == 0, proc.stderr
+
+    def test_page_is_ascii_and_mermaid_free(self):
+        PAGE.encode("ascii")
+        assert "mermaid" not in PAGE.lower()
+
+    def test_carbon_is_pinned_exactly(self):
+        assert re.search(r"@carbon/web-components@\d+\.\d+\.\d+", PAGE)
+
+    def test_graph_is_an_accessible_image(self):
+        assert 'id="graph"' in PAGE
+        assert 'role="img"' in PAGE
+        assert 'id="pipeline-panel"' in PAGE
+
+    def test_viz_asset_register_lint(self):
+        node = shutil.which("node")
+        if node is None:
+            pytest.skip("node is not installed")
+        proc = subprocess.run(
+            [node, str(self.ROOT / "frontend" / "scripts"
+                       / "lint-figma-primitives.mjs"),
+             "--assets", "src/agentic_dev_loop/viz/assets",
+             "--register", "frontend/viz-register.md"],
+            capture_output=True, text=True, cwd=self.ROOT, timeout=60)
+        assert proc.returncode == 0, proc.stdout + proc.stderr

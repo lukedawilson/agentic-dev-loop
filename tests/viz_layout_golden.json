@@ -1,0 +1,7499 @@
+[
+ {
+  "name": "full-1336",
+  "opts": {
+   "nodes": [
+    "brief",
+    "deps",
+    "dev",
+    "be-tests",
+    "fe-tests",
+    "conformance",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "deps"
+    },
+    {
+     "src": "deps",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "be-tests"
+    },
+    {
+     "src": "be-tests",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "conformance"
+    },
+    {
+     "src": "conformance",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "be-tests",
+     "dst": "dev",
+     "label": "fail"
+    },
+    {
+     "src": "review",
+     "dst": "dev",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": "FAIL"
+    }
+   ],
+   "status": {},
+   "availWidth": 1336
+  },
+  "result": {
+   "width": 1336,
+   "height": 142,
+   "rows": 1,
+   "perRow": 10,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "deps",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "conformance",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 6,
+     "x": 816,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 7,
+     "x": 952,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 8,
+     "x": 1088,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 9,
+     "x": 1224,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 792,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 928,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 1064,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 1200,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 464,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 370,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 370,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 872,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 356,
+     "y": 108,
+     "w": 516,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 356,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 1008,
+     "y": 76,
+     "w": 0,
+     "h": 50,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 342,
+     "y": 126,
+     "w": 666,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 342,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 810,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 946,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 1082,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 1218,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 365,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 351,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 337,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 458,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 866,
+     "y": 99,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 1002,
+     "y": 117,
+     "text": "FAIL"
+    }
+   ]
+  }
+ },
+ {
+  "name": "full-1100",
+  "opts": {
+   "nodes": [
+    "brief",
+    "deps",
+    "dev",
+    "be-tests",
+    "fe-tests",
+    "conformance",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "deps"
+    },
+    {
+     "src": "deps",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "be-tests"
+    },
+    {
+     "src": "be-tests",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "conformance"
+    },
+    {
+     "src": "conformance",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "be-tests",
+     "dst": "dev",
+     "label": "fail"
+    },
+    {
+     "src": "review",
+     "dst": "dev",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": "FAIL"
+    }
+   ],
+   "status": {},
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 714,
+   "height": 284,
+   "rows": 2,
+   "perRow": 5,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 44,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "deps",
+     "index": 1,
+     "x": 180,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 2,
+     "x": 316,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 3,
+     "x": 452,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 4,
+     "x": 588,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "conformance",
+     "index": 5,
+     "x": 44,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 6,
+     "x": 180,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 7,
+     "x": 316,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 8,
+     "x": 452,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 9,
+     "x": 588,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 156,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 292,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 428,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 564,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 700,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 712,
+     "y": 37,
+     "w": 0,
+     "h": 107,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 682,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 197,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 156,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 292,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 428,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 564,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 508,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 236,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 250,
+     "w": 216,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 400,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 372,
+     "y": 236,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 268,
+     "w": 364,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 0,
+     "h": 160,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 378,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 386,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 174,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 310,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 446,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 582,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 38,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 174,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 310,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 446,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 582,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 409,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 395,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 381,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 502,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 230,
+     "y": 241,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 366,
+     "y": 259,
+     "text": "FAIL"
+    }
+   ]
+  }
+ },
+ {
+  "name": "full-700",
+  "opts": {
+   "nodes": [
+    "brief",
+    "deps",
+    "dev",
+    "be-tests",
+    "fe-tests",
+    "conformance",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "deps"
+    },
+    {
+     "src": "deps",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "be-tests"
+    },
+    {
+     "src": "be-tests",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "conformance"
+    },
+    {
+     "src": "conformance",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "be-tests",
+     "dst": "dev",
+     "label": "fail"
+    },
+    {
+     "src": "review",
+     "dst": "dev",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": "FAIL"
+    }
+   ],
+   "status": {},
+   "availWidth": 700
+  },
+  "result": {
+   "width": 578,
+   "height": 382,
+   "rows": 3,
+   "perRow": 4,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 44,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "deps",
+     "index": 1,
+     "x": 180,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 2,
+     "x": 316,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 3,
+     "x": 452,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 4,
+     "x": 44,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "conformance",
+     "index": 5,
+     "x": 180,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 6,
+     "x": 316,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 7,
+     "x": 452,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 8,
+     "x": 44,
+     "y": 302,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 9,
+     "x": 180,
+     "y": 302,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 156,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 292,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 428,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 564,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 576,
+     "y": 37,
+     "w": 0,
+     "h": 107,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 546,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 197,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 156,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 292,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 428,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 564,
+     "y": 197,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 576,
+     "y": 197,
+     "w": 0,
+     "h": 89,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 285,
+     "w": 546,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 285,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 339,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 156,
+     "y": 339,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 508,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 372,
+     "y": 236,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 250,
+     "w": 352,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 400,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 508,
+     "y": 236,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 268,
+     "w": 500,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 0,
+     "h": 160,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 378,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 386,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 174,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 310,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 446,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 38,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 174,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 310,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 446,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 38,
+     "y": 335,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 174,
+     "y": 335,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 409,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 395,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 381,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 502,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 366,
+     "y": 241,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 502,
+     "y": 259,
+     "text": "FAIL"
+    }
+   ]
+  }
+ },
+ {
+  "name": "full-1100-mixed",
+  "opts": {
+   "nodes": [
+    "brief",
+    "deps",
+    "dev",
+    "be-tests",
+    "fe-tests",
+    "conformance",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "deps"
+    },
+    {
+     "src": "deps",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "be-tests"
+    },
+    {
+     "src": "be-tests",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "conformance"
+    },
+    {
+     "src": "conformance",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "be-tests",
+     "dst": "dev",
+     "label": "fail"
+    },
+    {
+     "src": "review",
+     "dst": "dev",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": "FAIL"
+    }
+   ],
+   "status": {
+    "brief": "pass",
+    "deps": "pass",
+    "dev": "running",
+    "review": "fail",
+    "qa": "unverifiable",
+    "commit": "fatal",
+    "success": "pending"
+   },
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 714,
+   "height": 284,
+   "rows": 2,
+   "perRow": 5,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 44,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "deps",
+     "index": 1,
+     "x": 180,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 2,
+     "x": 316,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 3,
+     "x": 452,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 4,
+     "x": 588,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "conformance",
+     "index": 5,
+     "x": 44,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 6,
+     "x": 180,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 7,
+     "x": 316,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 8,
+     "x": 452,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 9,
+     "x": 588,
+     "y": 160,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 156,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 292,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 428,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 564,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 700,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 712,
+     "y": 37,
+     "w": 0,
+     "h": 107,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 682,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 143,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 197,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 156,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 292,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 428,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 564,
+     "y": 197,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 508,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 236,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 250,
+     "w": 216,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 400,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 372,
+     "y": 236,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 268,
+     "w": 364,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 0,
+     "h": 160,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 378,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 386,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 174,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 310,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 446,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 582,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 38,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 174,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 310,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 446,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 582,
+     "y": 193,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 409,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 395,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 381,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 502,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 230,
+     "y": 241,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 366,
+     "y": 259,
+     "text": "FAIL"
+    }
+   ]
+  }
+ },
+ {
+  "name": "short-1100",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "test",
+     "dst": "dev",
+     "label": "fail"
+    },
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": "FAIL"
+    }
+   ],
+   "status": {},
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 792,
+   "height": 124,
+   "rows": 1,
+   "perRow": 6,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 328,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 220,
+     "y": 108,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 220,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 215,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 322,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 594,
+     "y": 99,
+     "text": "FAIL"
+    }
+   ]
+  }
+ },
+ {
+  "name": "single",
+  "opts": {
+   "nodes": [
+    "only"
+   ],
+   "flow": [],
+   "edges": [],
+   "status": {},
+   "availWidth": 800
+  },
+  "result": {
+   "width": 112,
+   "height": 80,
+   "rows": 1,
+   "perRow": 1,
+   "nodes": [
+    {
+     "id": "only",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [],
+   "arrows": [],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-0",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    }
+   ],
+   "edges": [
+    {
+     "src": "brief",
+     "dst": "success",
+     "label": "fail"
+    },
+    {
+     "src": "failure",
+     "dst": "success",
+     "label": "fail"
+    },
+    {
+     "src": "test",
+     "dst": "review",
+     "label": null
+    },
+    {
+     "src": "dev",
+     "dst": "test",
+     "label": "NEEDS CHANGES"
+    }
+   ],
+   "status": {
+    "test": "pending",
+    "review": "pending",
+    "success": "running"
+   },
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 1064,
+   "height": 160,
+   "rows": 1,
+   "perRow": 8,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 816,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 952,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 792,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 928,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 1008,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 914,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 914,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 328,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 328,
+     "y": 108,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 506,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 192,
+     "y": 76,
+     "w": 0,
+     "h": 50,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 192,
+     "y": 126,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 370,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 76,
+     "w": 0,
+     "h": 68,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 144,
+     "w": 844,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 900,
+     "y": 82,
+     "w": 0,
+     "h": 62,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 810,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 946,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 909,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 501,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 365,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 895,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 1002,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 186,
+     "y": 117,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 50,
+     "y": 135,
+     "text": "fail"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-1",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    }
+   ],
+   "edges": [
+    {
+     "src": "brief",
+     "dst": "dev",
+     "label": null
+    }
+   ],
+   "status": {},
+   "availWidth": 700
+  },
+  "result": {
+   "width": 248,
+   "height": 106,
+   "rows": 1,
+   "perRow": 2,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 90,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-2",
+  "opts": {
+   "nodes": [
+    "brief"
+   ],
+   "flow": [],
+   "edges": [],
+   "status": {},
+   "availWidth": 1336
+  },
+  "result": {
+   "width": 112,
+   "height": 80,
+   "rows": 1,
+   "perRow": 1,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [],
+   "arrows": [],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-3",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    }
+   ],
+   "edges": [
+    {
+     "src": "qa",
+     "dst": "test",
+     "label": "retry"
+    },
+    {
+     "src": "brief",
+     "dst": "dev",
+     "label": "FAIL"
+    },
+    {
+     "src": "review",
+     "dst": "test",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "brief",
+     "dst": "commit",
+     "label": "NEEDS CHANGES"
+    }
+   ],
+   "status": {
+    "test": "fail",
+    "review": "unverifiable",
+    "qa": "running",
+    "commit": "unverifiable",
+    "failure": "unverifiable"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 586,
+   "height": 302,
+   "rows": 2,
+   "perRow": 4,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 32,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 168,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 304,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 440,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 32,
+     "y": 178,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 168,
+     "y": 178,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 304,
+     "y": 178,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 440,
+     "y": 178,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 144,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 280,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 416,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 552,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 564,
+     "y": 37,
+     "w": 0,
+     "h": 125,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 20,
+     "y": 161,
+     "w": 546,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 20,
+     "y": 161,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 20,
+     "y": 215,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 144,
+     "y": 215,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 280,
+     "y": 215,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 416,
+     "y": 215,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 88,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 88,
+     "y": 90,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 496,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 108,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 88,
+     "y": 254,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 286,
+     "w": 80,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 126,
+     "w": 0,
+     "h": 160,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 126,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 388,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 88,
+     "y": 76,
+     "w": 0,
+     "h": 68,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 88,
+     "y": 144,
+     "w": 486,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 574,
+     "y": 144,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 268,
+     "w": 308,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 260,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 162,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 298,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 434,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 26,
+     "y": 211,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 162,
+     "y": 211,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 298,
+     "y": 211,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 434,
+     "y": 211,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 261,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 397,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 383,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 261,
+     "y": 254,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 82,
+     "y": 81,
+     "text": "FAIL"
+    },
+    {
+     "x": 490,
+     "y": 99,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 82,
+     "y": 277,
+     "text": "retry"
+    },
+    {
+     "x": 82,
+     "y": 135,
+     "text": "NEEDS CHANGES"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-4",
+  "opts": {
+   "nodes": [
+    "brief"
+   ],
+   "flow": [],
+   "edges": [],
+   "status": {
+    "brief": "pass"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 112,
+   "height": 80,
+   "rows": 1,
+   "perRow": 1,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [],
+   "arrows": [],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-5",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure",
+    "fe-tests",
+    "be-tests",
+    "lint"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    },
+    {
+     "src": "failure",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "be-tests"
+    },
+    {
+     "src": "be-tests",
+     "dst": "lint"
+    }
+   ],
+   "edges": [],
+   "status": {
+    "dev": "fail",
+    "qa": "fail",
+    "commit": "fail",
+    "success": "running",
+    "failure": "running",
+    "lint": "pass"
+   },
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 826,
+   "height": 186,
+   "rows": 2,
+   "perRow": 6,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 20,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 156,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 292,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 428,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 564,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 700,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 20,
+     "y": 106,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 156,
+     "y": 106,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 8,
+     "x": 292,
+     "y": 106,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 9,
+     "x": 428,
+     "y": 106,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "lint",
+     "index": 10,
+     "x": 564,
+     "y": 106,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 132,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 268,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 404,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 540,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 676,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 812,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 824,
+     "y": 37,
+     "w": 0,
+     "h": 53,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 89,
+     "w": 818,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 89,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 143,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 132,
+     "y": 143,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 268,
+     "y": 143,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 404,
+     "y": 143,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 540,
+     "y": 143,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    }
+   ],
+   "arrows": [
+    {
+     "x": 150,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 286,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 422,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 558,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 694,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 14,
+     "y": 139,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 150,
+     "y": 139,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 286,
+     "y": 139,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 422,
+     "y": 139,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 558,
+     "y": 139,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-6",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    }
+   ],
+   "edges": [
+    {
+     "src": "dev",
+     "dst": "review",
+     "label": "NEEDS CHANGES"
+    },
+    {
+     "src": "test",
+     "dst": "dev",
+     "label": null
+    }
+   ],
+   "status": {
+    "dev": "pass",
+    "test": "fatal",
+    "review": "unverifiable"
+   },
+   "availWidth": 2400
+  },
+  "result": {
+   "width": 520,
+   "height": 124,
+   "rows": 1,
+   "perRow": 4,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 328,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 192,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 192,
+     "y": 108,
+     "w": 314,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 506,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 501,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 186,
+     "y": 99,
+     "text": "NEEDS CHANGES"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-7",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [],
+   "status": {
+    "brief": "running",
+    "dev": "pending",
+    "review": "running",
+    "commit": "fatal",
+    "success": "unverifiable"
+   },
+   "availWidth": 1336
+  },
+  "result": {
+   "width": 928,
+   "height": 80,
+   "rows": 1,
+   "perRow": 7,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 816,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 792,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 810,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-8",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    }
+   ],
+   "edges": [
+    {
+     "src": "review",
+     "dst": "qa",
+     "label": "retry"
+    },
+    {
+     "src": "qa",
+     "dst": "commit",
+     "label": null
+    },
+    {
+     "src": "commit",
+     "dst": "qa",
+     "label": "NEEDS CHANGES"
+    }
+   ],
+   "status": {
+    "dev": "running",
+    "review": "pending",
+    "qa": "pass",
+    "commit": "pending"
+   },
+   "availWidth": 1600
+  },
+  "result": {
+   "width": 928,
+   "height": 142,
+   "rows": 1,
+   "perRow": 7,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 816,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 792,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 464,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 464,
+     "y": 90,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 642,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 108,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 778,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 736,
+     "y": 76,
+     "w": 0,
+     "h": 50,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 628,
+     "y": 126,
+     "w": 108,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 628,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 810,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 637,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 773,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 623,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 458,
+     "y": 81,
+     "text": "retry"
+    },
+    {
+     "x": 730,
+     "y": 117,
+     "text": "NEEDS CHANGES"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-9",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure",
+    "fe-tests",
+    "be-tests"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    },
+    {
+     "src": "failure",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "be-tests"
+    },
+    {
+     "src": "brief",
+     "dst": "be-tests"
+    }
+   ],
+   "edges": [],
+   "status": {
+    "dev": "pass",
+    "test": "pass",
+    "qa": "pass",
+    "commit": "unverifiable",
+    "success": "unverifiable",
+    "failure": "pending",
+    "be-tests": "fail"
+   },
+   "availWidth": 480
+  },
+  "result": {
+   "width": 438,
+   "height": 442,
+   "rows": 4,
+   "perRow": 3,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 20,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 156,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 292,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 20,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 156,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 292,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 20,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 156,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 8,
+     "x": 292,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 9,
+     "x": 20,
+     "y": 336,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 132,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 268,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 404,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 416,
+     "y": 37,
+     "w": 0,
+     "h": 71,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 107,
+     "w": 410,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 107,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 161,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 132,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 404,
+     "y": 161,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 416,
+     "y": 161,
+     "w": 0,
+     "h": 53,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 213,
+     "w": 410,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 213,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 267,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 132,
+     "y": 267,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 268,
+     "y": 267,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 404,
+     "y": 267,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 416,
+     "y": 267,
+     "w": 0,
+     "h": 53,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 319,
+     "w": 410,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 319,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 373,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 76,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 76,
+     "y": 90,
+     "w": 350,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 426,
+     "y": 90,
+     "w": 0,
+     "h": 336,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 118,
+     "y": 426,
+     "w": 308,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 118,
+     "y": 418,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 150,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 286,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 14,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 150,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 14,
+     "y": 263,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 150,
+     "y": 263,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 286,
+     "y": 263,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 14,
+     "y": 369,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 113,
+     "y": 412,
+     "dir": "up",
+     "kind": "flow",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-10",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure"
+   ],
+   "flow": [
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    },
+    {
+     "src": "brief",
+     "dst": "failure"
+    }
+   ],
+   "edges": [],
+   "status": {
+    "brief": "pass",
+    "dev": "pending",
+    "review": "pending",
+    "qa": "pending",
+    "success": "pending",
+    "failure": "pass"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 574,
+   "height": 230,
+   "rows": 2,
+   "perRow": 4,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 20,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 156,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 292,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 428,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 20,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 156,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 292,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 428,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 268,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 268,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 404,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 76,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 76,
+     "y": 90,
+     "w": 486,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 562,
+     "y": 90,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 526,
+     "y": 214,
+     "w": 36,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 526,
+     "y": 206,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 286,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 286,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 422,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 521,
+     "y": 200,
+     "dir": "up",
+     "kind": "flow",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-11",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure",
+    "fe-tests"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    }
+   ],
+   "edges": [
+    {
+     "src": "review",
+     "dst": "brief",
+     "label": "retry"
+    },
+    {
+     "src": "test",
+     "dst": "qa",
+     "label": null
+    }
+   ],
+   "status": {
+    "fe-tests": "fail"
+   },
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 690,
+   "height": 222,
+   "rows": 2,
+   "perRow": 5,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 20,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 156,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 292,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 428,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 564,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 20,
+     "y": 142,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 156,
+     "y": 142,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 292,
+     "y": 142,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 8,
+     "x": 428,
+     "y": 142,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 132,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 268,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 404,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 540,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 132,
+     "y": 179,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 268,
+     "y": 179,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 348,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 348,
+     "y": 90,
+     "w": 314,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 662,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 484,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 118,
+     "y": 108,
+     "w": 366,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 118,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 150,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 286,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 422,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 558,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 150,
+     "y": 175,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 286,
+     "y": 175,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 657,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 113,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 478,
+     "y": 99,
+     "text": "retry"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-12",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    }
+   ],
+   "edges": [
+    {
+     "src": "review",
+     "dst": "dev",
+     "label": null
+    }
+   ],
+   "status": {
+    "test": "running",
+    "review": "pass"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 520,
+   "height": 106,
+   "rows": 1,
+   "perRow": 4,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 464,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 90,
+     "w": 230,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-13",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    }
+   ],
+   "edges": [
+    {
+     "src": "brief",
+     "dst": "dev",
+     "label": "fail"
+    }
+   ],
+   "status": {
+    "dev": "fatal"
+   },
+   "availWidth": 1336
+  },
+  "result": {
+   "width": 248,
+   "height": 106,
+   "rows": 1,
+   "perRow": 2,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 112,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 56,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 90,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 130,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 50,
+     "y": 81,
+     "text": "fail"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-14",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure",
+    "fe-tests",
+    "be-tests"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    },
+    {
+     "src": "failure",
+     "dst": "fe-tests"
+    },
+    {
+     "src": "fe-tests",
+     "dst": "be-tests"
+    }
+   ],
+   "edges": [
+    {
+     "src": "dev",
+     "dst": "failure",
+     "label": null
+    }
+   ],
+   "status": {
+    "brief": "unverifiable",
+    "dev": "running",
+    "test": "fail",
+    "review": "running",
+    "qa": "pending",
+    "commit": "fatal",
+    "failure": "unverifiable",
+    "be-tests": "pending"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 710,
+   "height": 230,
+   "rows": 2,
+   "perRow": 5,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 20,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 156,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 292,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 428,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 564,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 20,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 156,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 292,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 8,
+     "x": 428,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "be-tests",
+     "index": 9,
+     "x": 564,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 132,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 404,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 540,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 676,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 688,
+     "y": 37,
+     "w": 0,
+     "h": 71,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 107,
+     "w": 682,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 107,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 8,
+     "y": 161,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 132,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 268,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 404,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 540,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 212,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 212,
+     "y": 90,
+     "w": 486,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 698,
+     "y": 90,
+     "w": 0,
+     "h": 124,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 390,
+     "y": 214,
+     "w": 308,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 390,
+     "y": 206,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 150,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 422,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 558,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 14,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 150,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 286,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 422,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 558,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 385,
+     "y": 200,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-15",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit"
+   ],
+   "flow": [
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    }
+   ],
+   "edges": [
+    {
+     "src": "qa",
+     "dst": "dev",
+     "label": null
+    }
+   ],
+   "status": {
+    "brief": "pass",
+    "dev": "unverifiable"
+   },
+   "availWidth": 900
+  },
+  "result": {
+   "width": 792,
+   "height": 106,
+   "rows": 1,
+   "perRow": 6,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 90,
+     "w": 366,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-16",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa"
+   ],
+   "flow": [
+    {
+     "src": "brief",
+     "dst": "dev"
+    },
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    }
+   ],
+   "edges": [
+    {
+     "src": "test",
+     "dst": "qa",
+     "label": null
+    },
+    {
+     "src": "qa",
+     "dst": "test",
+     "label": "retry"
+    },
+    {
+     "src": "brief",
+     "dst": "qa",
+     "label": "fail"
+    },
+    {
+     "src": "qa",
+     "dst": "brief",
+     "label": "FAIL"
+    },
+    {
+     "src": "dev",
+     "dst": "test",
+     "label": "fail"
+    }
+   ],
+   "status": {
+    "dev": "fatal",
+    "test": "running"
+   },
+   "availWidth": 480
+  },
+  "result": {
+   "width": 474,
+   "height": 356,
+   "rows": 2,
+   "perRow": 3,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 44,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 180,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 316,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 44,
+     "y": 196,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 180,
+     "y": 196,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 156,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 292,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 428,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 440,
+     "y": 37,
+     "w": 0,
+     "h": 143,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 179,
+     "w": 410,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 179,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 32,
+     "y": 233,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 156,
+     "y": 233,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 90,
+     "w": 178,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 414,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 272,
+     "w": 0,
+     "h": 50,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 322,
+     "w": 216,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 0,
+     "h": 196,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 126,
+     "w": 380,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 400,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 236,
+     "y": 272,
+     "w": 0,
+     "h": 68,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 340,
+     "w": 228,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 0,
+     "h": 232,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 108,
+     "w": 134,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 142,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 372,
+     "y": 76,
+     "w": 0,
+     "h": 68,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 372,
+     "y": 144,
+     "w": 78,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 450,
+     "y": 144,
+     "w": 0,
+     "h": 142,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 278,
+     "y": 286,
+     "w": 172,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 278,
+     "y": 278,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 100,
+     "y": 76,
+     "w": 0,
+     "h": 86,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 100,
+     "y": 162,
+     "w": 362,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 462,
+     "y": 162,
+     "w": 0,
+     "h": 142,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 264,
+     "y": 304,
+     "w": 198,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 264,
+     "y": 278,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 174,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 310,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 38,
+     "y": 229,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 174,
+     "y": 229,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 409,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 395,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 137,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 273,
+     "y": 272,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 259,
+     "y": 272,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 230,
+     "y": 81,
+     "text": "fail"
+    },
+    {
+     "x": 230,
+     "y": 313,
+     "text": "retry"
+    },
+    {
+     "x": 230,
+     "y": 331,
+     "text": "FAIL"
+    },
+    {
+     "x": 94,
+     "y": 153,
+     "text": "fail"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-17",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure",
+    "fe-tests"
+   ],
+   "flow": [
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    },
+    {
+     "src": "failure",
+     "dst": "fe-tests"
+    }
+   ],
+   "edges": [
+    {
+     "src": "fe-tests",
+     "dst": "dev",
+     "label": "fail"
+    }
+   ],
+   "status": {
+    "dev": "fail",
+    "test": "running",
+    "commit": "unverifiable",
+    "success": "pending"
+   },
+   "availWidth": 700
+  },
+  "result": {
+   "width": 430,
+   "height": 336,
+   "rows": 3,
+   "perRow": 3,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 32,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 168,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 304,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 32,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 168,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 304,
+     "y": 124,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 32,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 168,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "fe-tests",
+     "index": 8,
+     "x": 304,
+     "y": 230,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 416,
+     "y": 37,
+     "w": 14,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 428,
+     "y": 37,
+     "w": 0,
+     "h": 71,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 107,
+     "w": 410,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 107,
+     "w": 0,
+     "h": 56,
+     "dir": "v",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 20,
+     "y": 161,
+     "w": 12,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 144,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 280,
+     "y": 161,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 144,
+     "y": 267,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 280,
+     "y": 267,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 360,
+     "y": 306,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 320,
+     "w": 352,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 90,
+     "w": 0,
+     "h": 230,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 8,
+     "y": 90,
+     "w": 258,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 266,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 26,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 162,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 298,
+     "y": 157,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 162,
+     "y": 263,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 298,
+     "y": 263,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 261,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 354,
+     "y": 311,
+     "text": "fail"
+    }
+   ]
+  }
+ },
+ {
+  "name": "sweep-18",
+  "opts": {
+   "nodes": [
+    "brief"
+   ],
+   "flow": [],
+   "edges": [],
+   "status": {
+    "brief": "running"
+   },
+   "availWidth": 1100
+  },
+  "result": {
+   "width": 112,
+   "height": 80,
+   "rows": 1,
+   "perRow": 1,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [],
+   "arrows": [],
+   "labels": []
+  }
+ },
+ {
+  "name": "sweep-19",
+  "opts": {
+   "nodes": [
+    "brief",
+    "dev",
+    "test",
+    "review",
+    "qa",
+    "commit",
+    "success",
+    "failure"
+   ],
+   "flow": [
+    {
+     "src": "dev",
+     "dst": "test"
+    },
+    {
+     "src": "test",
+     "dst": "review"
+    },
+    {
+     "src": "review",
+     "dst": "qa"
+    },
+    {
+     "src": "qa",
+     "dst": "commit"
+    },
+    {
+     "src": "commit",
+     "dst": "success"
+    },
+    {
+     "src": "success",
+     "dst": "failure"
+    }
+   ],
+   "edges": [
+    {
+     "src": "success",
+     "dst": "test",
+     "label": "FAIL"
+    },
+    {
+     "src": "brief",
+     "dst": "success",
+     "label": "fail"
+    },
+    {
+     "src": "qa",
+     "dst": "success",
+     "label": "FAIL"
+    },
+    {
+     "src": "test",
+     "dst": "dev",
+     "label": "NEEDS CHANGES"
+    }
+   ],
+   "status": {
+    "test": "unverifiable"
+   },
+   "availWidth": 1600
+  },
+  "result": {
+   "width": 1064,
+   "height": 160,
+   "rows": 1,
+   "perRow": 8,
+   "nodes": [
+    {
+     "id": "brief",
+     "index": 0,
+     "x": 0,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "dev",
+     "index": 1,
+     "x": 136,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "test",
+     "index": 2,
+     "x": 272,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "review",
+     "index": 3,
+     "x": 408,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "qa",
+     "index": 4,
+     "x": 544,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "commit",
+     "index": 5,
+     "x": 680,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "success",
+     "index": 6,
+     "x": 816,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    },
+    {
+     "id": "failure",
+     "index": 7,
+     "x": 952,
+     "y": 0,
+     "w": 112,
+     "h": 76
+    }
+   ],
+   "lines": [
+    {
+     "x": 248,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 384,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 520,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 656,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 792,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 928,
+     "y": 37,
+     "w": 24,
+     "h": 0,
+     "dir": "h",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 328,
+     "y": 76,
+     "w": 0,
+     "h": 14,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 90,
+     "w": 94,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 234,
+     "y": 82,
+     "w": 0,
+     "h": 8,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 76,
+     "w": 0,
+     "h": 32,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 600,
+     "y": 108,
+     "w": 314,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 914,
+     "y": 82,
+     "w": 0,
+     "h": 26,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 872,
+     "y": 76,
+     "w": 0,
+     "h": 50,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 370,
+     "y": 126,
+     "w": 502,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 370,
+     "y": 82,
+     "w": 0,
+     "h": 44,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 76,
+     "w": 0,
+     "h": 68,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 56,
+     "y": 144,
+     "w": 844,
+     "h": 0,
+     "dir": "h",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 900,
+     "y": 82,
+     "w": 0,
+     "h": 62,
+     "dir": "v",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "arrows": [
+    {
+     "x": 266,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": true
+    },
+    {
+     "x": 402,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 538,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 674,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 810,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 946,
+     "y": 33,
+     "dir": "right",
+     "kind": "flow",
+     "on": false
+    },
+    {
+     "x": 229,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 909,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 365,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    },
+    {
+     "x": 895,
+     "y": 76,
+     "dir": "up",
+     "kind": "back",
+     "on": false
+    }
+   ],
+   "labels": [
+    {
+     "x": 322,
+     "y": 81,
+     "text": "NEEDS CHANGES"
+    },
+    {
+     "x": 594,
+     "y": 99,
+     "text": "FAIL"
+    },
+    {
+     "x": 866,
+     "y": 117,
+     "text": "FAIL"
+    },
+    {
+     "x": 50,
+     "y": 135,
+     "text": "fail"
+    }
+   ]
+  }
+ }
+]

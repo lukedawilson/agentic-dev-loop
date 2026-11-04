@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentic-dev-loop viz</title>
+<link rel="stylesheet" href="styles.css">
+<script src="pipeline-layout.js"></script>
+<script type="module">
+import "https://cdn.jsdelivr.net/npm/@carbon/web-components@2.47.0/es/index.min.js";
+</script>
+</head>
+<body>
+<a class="skip" href="#stages">Skip to stages</a>
+<header class="hdr">
+  <div class="hdr-brand"><span class="mark" aria-hidden="true"></span>
+    <span class="hdr-name">agentic-dev-loop viz</span></div>
+  <div class="hdr-right">
+    <span id="stream" class="stream" role="status"><span class="led" aria-hidden="true"></span>
+      <span id="stream-label">STREAM LIVE</span></span>
+    <button id="theme-toggle" class="hdr-action" type="button"
+            data-testid="theme-toggle" aria-label="Switch to light theme">
+      <span id="theme-icon" class="ic ic-sun" aria-hidden="true"></span>
+    </button>
+  </div>
+</header>
+<div id="stream-banner" role="status" aria-live="polite" data-testid="stream-banner"></div>
+<main class="shell">
+  <section class="tiles" aria-label="Run summary">
+    <cds-tile><div class="tile"><div class="lbl">Run</div>
+      <div id="subject" class="big">agentic-dev-loop pipeline</div></div></cds-tile>
+    <cds-tile><div class="tile"><div class="lbl">Attempt</div>
+      <div id="attempt" class="big">?/?</div><div id="meter" class="meter"></div></div></cds-tile>
+    <cds-tile><div class="tile"><div class="lbl">Thread ID</div>
+      <div id="thread" class="big"><code id="thread-id" title="click to select">--</code></div></div></cds-tile>
+    <cds-tile><div class="tile"><div class="lbl">Total</div>
+      <div id="total" class="big"></div></div></cds-tile>
+  </section>
+  <div id="verdicts" class="verdicts" aria-label="Step verdicts"></div>
+  <div id="run-banner" class="outcome" role="status" aria-live="polite" data-testid="run-banner"></div>
+  <section id="pipeline-panel" class="panel" aria-label="Pipeline">
+    <div class="panel-h"><span>Pipeline</span>
+      <span class="legend mono">solid = on_pass / dashed = on_fail</span></div>
+    <div class="graph-wrap"><div id="graph" role="img" aria-label="Pipeline graph"></div></div>
+  </section>
+  <button id="divider" class="divider" type="button" data-testid="divider"
+          aria-label="Resize pipeline panel"
+          title="Drag to resize; double-click to reset"></button>
+  <div class="lower">
+    <section class="panel panel-stages" aria-label="Stages">
+      <div class="panel-h"><span>Stages</span></div>
+      <div id="stages"></div>
+    </section>
+    <section class="panel panel-log" aria-label="Event log">
+      <div class="panel-h"><span>Event log</span></div>
+      <ol id="run-log" data-testid="run-log"></ol>
+    </section>
+  </div>
+</main>
+<script src="page.js"></script>
+</body>
+</html>

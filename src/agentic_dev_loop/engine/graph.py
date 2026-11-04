@@ -275,13 +275,15 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
         if bus is None and not getattr(args, "no_viz", True):
             start_state = initial if initial is not None \
                 else graph.get_state(config).values
-            topology, nodes = viz.topology_mermaid(cfg)
+            topology = viz.topology_graph(cfg)
             bus = viz.VizBus()
             if args.viz_port:
                 kill_listeners_on_port(args.viz_port, match="agentic-dev-loop",
                                        cwd=runtime.workspace)
             httpd, _thread = viz.serve_viz(
-                bus, topology, start_state["subject"], args.viz_port, nodes)
+                bus, topology["mermaid"], start_state["subject"],
+                args.viz_port, topology["nodes"], topology["flow"],
+                topology["edges"])
             bound = httpd.server_address[1]
             url = f"http://127.0.0.1:{bound}"
             if args.viz_port and bound != args.viz_port:
