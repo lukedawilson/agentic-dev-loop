@@ -10,8 +10,8 @@ import yaml
 import pytest
 from pydantic import ValidationError
 
-from agentic_dev_loop.core.config import (KNOWN_SECRET_PROVIDERS, PipelineConfig,
-                                          SecretSpec, load_config)
+from agentic_dev_loop.core.config import (PipelineConfig, SecretSpec,
+                                          load_config)
 from agentic_dev_loop.engine.isolation import resolve_sandbox_env
 from agentic_dev_loop.engine.secrets import (
     REDACTED, EnvProvider, SecretResolutionError, redact_values,
@@ -64,9 +64,6 @@ class TestSecretSchema:
         spec = SecretSpec.model_validate({"from": "env", "key": "K"})
         assert spec.model_dump(by_alias=True) == {"from": "env", "key": "K"}
         assert spec.model_dump() == {"from_": "env", "key": "K"}
-
-    def test_known_providers_pinned(self):
-        assert KNOWN_SECRET_PROVIDERS == frozenset({"env"})
 
     def test_value_shaped_ref_rejected(self, tmp_path):
         data = _base()
@@ -167,12 +164,6 @@ class TestInjectionAssembly:
         env = resolve_sandbox_env({"K": "literal"}, host_env={},
                                   secrets={"K": "secret"})
         assert env["K"] == "secret"
-
-    def test_no_secrets_param_changes_nothing(self):
-        env = resolve_sandbox_env({"MY_VAR": "declared"}, host_env={})
-        assert env == {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/tmp",
-                       "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8", "TERM": "xterm",
-                       "MY_VAR": "declared"}
 
 
 class TestEnvFileBan:

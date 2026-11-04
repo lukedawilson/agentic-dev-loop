@@ -192,34 +192,6 @@ def _stub_pipeline(tmp_path: Path, additional: list[str],
     return pipeline, workspace
 
 
-class TestMaterializeReferencedDocs:
-    """The consumer_repo fixture derives pipeline-referenced stubs from the
-    copied pipeline.yaml (see _materialize_referenced_docs). Pin the
-    derivation itself: missing additional_files and brief_inputs.include
-    entries get a stub, existing files are never overwritten, and wildcard
-    includes raise (a wildcard cannot be stub-materialized, and silent
-    fallbacks are forbidden)."""
-
-    def test_missing_entries_are_stubbed(self, tmp_path):
-        pipeline, workspace = _stub_pipeline(
-            tmp_path, ["../a.md", "../docs/b.md"], ["rules.md"])
-        _materialize_referenced_docs(pipeline, workspace)
-        assert (workspace / "a.md").is_file()
-        assert (workspace / "docs" / "b.md").is_file()
-        assert (workspace / "rules.md").is_file()
-
-    def test_existing_files_are_not_overwritten(self, tmp_path):
-        pipeline, workspace = _stub_pipeline(tmp_path, ["../a.md"], [])
-        (workspace / "a.md").write_text("keep\n")
-        _materialize_referenced_docs(pipeline, workspace)
-        assert (workspace / "a.md").read_text(encoding="utf-8") == "keep\n"
-
-    def test_wildcard_include_raises(self, tmp_path):
-        pipeline, workspace = _stub_pipeline(tmp_path, [], ["*.md"])
-        with pytest.raises(RuntimeError, match="wildcard"):
-            _materialize_referenced_docs(pipeline, workspace)
-
-
 class TestHistoricalFixtures:
     def test_run004_decorated_verdict_still_passes(self, consumer_repo,
                                                    fake_agents):

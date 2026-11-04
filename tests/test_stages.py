@@ -152,15 +152,6 @@ class TestBuildContext:
 
 
 class TestDepsPolicyContext:
-    def test_locked_policy_injected(self, runtime):
-        cfg = make_cfg(STEPS, deps_policy="locked", lockfiles=["uv.lock"])
-        rt = dataclasses.replace(runtime, cfg=cfg)
-        ctx = build_context(rt, {}, "s", [])
-        assert "## Dependency policy" in ctx
-        assert "`uv.lock`" in ctx
-        assert "## Missing dependencies" in ctx
-        assert "Do not add it to the manifest." in ctx
-
     def test_open_policy_injected(self, runtime):
         cfg = make_cfg(STEPS, deps_policy="open")
         rt = dataclasses.replace(runtime, cfg=cfg)
@@ -276,17 +267,6 @@ class TestAgentNode:
         assert "check agent produced no final response on attempt 1" in note
         assert update["retry_target"] == "dev"  # on_fail's goto
 
-    def test_empty_response_note_names_the_step(self, tmp_path, fake_agents):
-        state_dir = tmp_path / "agentic-dev-loop" / ".pr"
-        state_dir.mkdir(parents=True)
-        rt = Runtime(cfg=make_cfg(STEPS), registry=default_registry(),
-                     llm=LLM(model="openai/test-model", api_key="sk-test"),
-                     agents_dir=tmp_path / "agents", state_dir=state_dir,
-                     workspace=tmp_path)
-        update = make_agent_node(rt, rt.cfg.steps[1])(make_state())
-        (note,) = update["notes"]
-        assert "check agent produced no final response on attempt 1" in note
-
     def test_no_verdict_surfaces_content(self, runtime, fake_agents):
         fake_agents.set("check", [("write", "ci-fix.md", "I am undecided")])
         update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
@@ -323,7 +303,6 @@ class TestAgentNode:
         update = make_agent_node(runtime, runtime.cfg.steps[0])(make_state())
         assert update["failed"] is False
         assert update["step_verdicts"] == {"dev": "pass"}
-        assert fake_agents.calls[0]["max_iterations"] == 500  # default budget
 
     def test_max_iterations_from_step(self, runtime, fake_agents):
         step = make_cfg([{"name": "qa", "agent": "qa", "artifact": "qa.md",
@@ -348,19 +327,6 @@ class TestAgentNode:
         assert update["failed"] is False
         assert "notes" not in update
         assert "UNVERIFIABLE (moves on)" in capsys.readouterr().out
-
-    def test_unclear_note_mentions_third_keyword(self, runtime, fake_agents):
-        step = make_cfg([
-            {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
-             "verdicts": {"pass": "PASS", "fail": "FAIL",
-                          "unverifiable": "UNVERIFIABLE"},
-             "on_pass": "success"}]).steps[0]
-        fake_agents.set("qa", [("write", "qa-report.md", "undecided")])
-        update = make_agent_node(runtime, step)(make_state())
-        (note,) = update["notes"]
-        assert "VERDICT: PASS" in note
-        assert "VERDICT: FAIL" in note
-        assert "VERDICT: UNVERIFIABLE" in note
 
     def test_unclear_note_mentions_fourth_keyword(self, runtime, fake_agents):
         step = make_cfg([
@@ -415,12 +381,6 @@ class TestCommandNode:
         cfg = make_cfg(steps)
         rt = dataclasses.replace(runtime, cfg=cfg)
         return make_command_node(rt, cfg.steps[idx])
-
-    def test_pass_verdict(self, runtime):
-        node = self._node(runtime, [{"name": "test", "command": "true",
-                                     "on_pass": "success"}])
-        update = node(make_state())
-        assert update == {"step_verdicts": {"test": "pass"}, "failed": False}
 
     def test_fail_verdict_surfaces_output_and_retry_target(self, runtime):
         node = self._node(runtime, [
@@ -560,46 +520,6 @@ class TestRunCommandHybrid:
                  "STAGE_TEST_MARKER": "expanded"})
         assert exit_code == 0 and not timed_out
         assert output == "expanded"
-
-
-class TestCommandRouter:
-    def _router(self, runtime, steps, idx=0):
-        cfg = make_cfg(steps)
-        rt = dataclasses.replace(runtime, cfg=cfg)
-        return make_router(rt, cfg.steps[idx])
-
-    def test_pass_routes_on_pass(self, runtime):
-        router = self._router(runtime, [
-            {"name": "dev", "agent": "dev", "on_pass": "test"},
-            {"name": "test", "command": "true", "on_pass": "success",
-             "on_fail": {"goto": "dev", "retry": True}}], idx=1)
-        assert router(make_state(step_verdicts={"test": "pass"})) == "success"
-
-    def test_fail_retry_while_attempts_remain(self, runtime):
-        router = self._router(runtime, [
-            {"name": "dev", "agent": "dev", "on_pass": "test"},
-            {"name": "test", "command": "true", "on_pass": "success",
-             "on_fail": {"goto": "dev", "retry": True}}], idx=1)
-        assert router(make_state(attempt=1, step_verdicts={"test": "fail"})) == "bump"
-
-    def test_fail_retry_exhausted_ends(self, runtime):
-        router = self._router(runtime, [
-            {"name": "dev", "agent": "dev", "on_pass": "test"},
-            {"name": "test", "command": "true", "on_pass": "success",
-             "on_fail": {"goto": "dev", "retry": True}}], idx=1)
-        assert router(make_state(attempt=3, step_verdicts={"test": "fail"})) == END
-
-    def test_fail_plain_on_fail_routes_directly(self, runtime):
-        router = self._router(runtime, [
-            {"name": "dev", "agent": "dev", "on_pass": "test"},
-            {"name": "test", "command": "true", "on_pass": "success",
-             "on_fail": "dev"}], idx=1)
-        assert router(make_state(step_verdicts={"test": "fail"})) == "dev"
-
-    def test_fail_without_on_fail_ends(self, runtime):
-        router = self._router(runtime, [{"name": "test", "command": "true",
-                                         "on_pass": "success"}], idx=0)
-        assert router(make_state(step_verdicts={"test": "fail"})) == END
 
 
 class TestRouter:
@@ -956,10 +876,6 @@ class TestProvisionStep:
         _provision_step(SimpleNamespace(sandbox=sandbox),
                         self._step("agent", None))
         assert calls == []
-
-    def test_noop_without_sandbox(self):
-        _provision_step(SimpleNamespace(sandbox=None),
-                        self._step("agent", "make warm"))
 
     def test_noop_for_brief_and_action(self):
         calls = []

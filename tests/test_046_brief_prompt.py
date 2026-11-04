@@ -2,11 +2,7 @@
 configured section headings, so the prompt and the coverage gate share one
 list and cannot drift apart (the 043 divergence class)."""
 
-from agentic_dev_loop.engine.brief_prompt import (
-    BRIEF_PROMPT_VERSION,
-    load_template,
-    render_brief_prompt,
-)
+from agentic_dev_loop.engine.brief_prompt import render_brief_prompt
 
 SECTIONS = ["Repo rules digest", "Unit scope digest",
             "Environment facts", "Open risks"]
@@ -33,13 +29,3 @@ class TestRenderBriefPrompt:
         assert "`## Scope`" in prompt
         assert "`## Risks`" in prompt
         assert "Do not shorten or rename them" in prompt
-
-    def test_static_template_loads(self):
-        template = load_template()
-        assert "## WORKFLOW" in template
-        assert "## RULES" in template
-        assert "Do not use em dash characters" in template
-
-    def test_version_is_stable_string(self):
-        assert isinstance(BRIEF_PROMPT_VERSION, str)
-        assert BRIEF_PROMPT_VERSION

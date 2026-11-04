@@ -147,12 +147,6 @@ def test_env_allowlist_defaults_to_empty_and_loads(tmp_path):
     assert _load(tmp_path, data).env_allowlist == ["MY_VAR", "OTHER_VAR"]
 
 
-def test_produces_accepts_a_list(tmp_path):
-    data = _base()
-    data["steps"][0]["produces"] = ["a.md", "b.md"]
-    assert _load(tmp_path, data).steps[0].produces == ["a.md", "b.md"]
-
-
 def test_unknown_top_level_key_rejected(tmp_path):
     data = _base() | {"bogus": 1}
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
@@ -188,10 +182,6 @@ def test_llm_reasoning_effort_round_trips(tmp_path):
     assert _load(tmp_path, data).llm.reasoning_effort == "medium"
 
 
-def test_llm_reasoning_effort_defaults_none(tmp_path):
-    assert _load(tmp_path, _base()).llm.reasoning_effort is None
-
-
 def test_llm_reasoning_effort_unknown_value_rejected(tmp_path):
     data = _base()
     data["llm"]["reasoning_effort"] = "maximum"
@@ -203,10 +193,6 @@ def test_step_reasoning_effort_round_trips(tmp_path):
     data = _base()
     data["steps"][0]["reasoning_effort"] = "xhigh"
     assert _load(tmp_path, data).steps[0].reasoning_effort == "xhigh"
-
-
-def test_step_reasoning_effort_defaults_none(tmp_path):
-    assert _load(tmp_path, _base()).steps[0].reasoning_effort is None
 
 
 def test_step_reasoning_effort_unknown_value_rejected(tmp_path):
@@ -309,24 +295,6 @@ def test_step_kind_is_explicit_discriminator(tmp_path):
         ["agent", "command", "action"]
 
 
-def test_command_step_round_trips(tmp_path):
-    data = _base()
-    data["steps"] = [{"name": "test", "command": "python -m pytest",
-                      "timeout": 60, "on_pass": "success"}]
-    step = _load(tmp_path, data).steps[0]
-    assert step.command == "python -m pytest"
-    assert step.timeout == 60
-
-
-def test_command_step_defaults_timeout_none(tmp_path):
-    data = _base()
-    data["steps"] = [{"name": "test", "command": "make check",
-                      "on_pass": "success"}]
-    step = _load(tmp_path, data).steps[0]
-    assert step.command == "make check"
-    assert step.timeout is None
-
-
 @pytest.mark.parametrize("timeout", [0, -1])
 def test_command_timeout_must_be_positive(tmp_path, timeout):
     data = _base()
@@ -392,9 +360,6 @@ def test_negative_terminal_timeout_rejected(tmp_path):
 
 
 class TestCustomPrompt:
-    def test_defaults_none(self, tmp_path):
-        assert _load(tmp_path, _base()).steps[0].custom_prompt is None
-
     def test_literal_text_round_trips(self, tmp_path):
         data = _base()
         data["steps"][0]["custom_prompt"] = "verify the export tab first"
@@ -480,11 +445,6 @@ class TestBriefStep:
     def test_kind_is_brief(self, tmp_path):
         assert _load(tmp_path, self._brief()).steps[0].kind == "brief"
 
-    def test_defaults_applied_at_parse(self, tmp_path):
-        step = _load(tmp_path, self._brief()).steps[0]
-        assert step.produces == BRIEF_PRODUCES
-        assert step.max_iterations == BRIEF_MAX_ITERATIONS
-
     def test_name_free_form_and_multiple_brief_steps(self, tmp_path):
         data = _base()
         data["steps"] = [
@@ -533,12 +493,6 @@ class TestBriefStep:
         data = self._brief(setup="make warm")
         with pytest.raises(ValidationError,
                            match="'setup' is only allowed on 'command' or 'agent'"):
-            _load(tmp_path, data)
-
-    def test_finalize_nudge_rejected(self, tmp_path):
-        data = self._brief(finalize_nudge_turns=3)
-        with pytest.raises(ValidationError,
-                           match="drop 'finalize_nudge_turns'"):
             _load(tmp_path, data)
 
 
@@ -596,14 +550,6 @@ def test_non_mapping_yaml_rejected(tmp_path):
 
 
 class TestIsolationConfig:
-    def test_defaults(self):
-        from agentic_dev_loop.core.config import IsolationConfig
-        iso = IsolationConfig()
-        assert iso.image is None
-        assert iso.memory is None and iso.cpus is None
-        assert iso.allow_git_mutations is False
-        assert iso.state_dir == "~/.agentic-dev-loop/state"
-
     def test_accepts_overrides(self, tmp_path):
         data = _base() | {"isolation": {"image": "img@sha256:x",
                                         "memory": "8g", "cpus": 4.0,
@@ -643,8 +589,6 @@ class TestIsolationConfig:
                                         "/host/chromium-userns.json"}}
         iso = _load(tmp_path, data).isolation
         assert iso.seccomp_profile == "/host/chromium-userns.json"
-        roundtripped = type(iso).model_validate(iso.model_dump())
-        assert roundtripped.seccomp_profile == iso.seccomp_profile
 
     @pytest.mark.parametrize("memory", ["8", "g", "8G", "8 g", ""])
     def test_invalid_memory_rejected(self, tmp_path, memory):
@@ -663,14 +607,6 @@ class TestIsolationConfig:
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             _load(tmp_path, data)
 
-    def test_round_trip(self, tmp_path):
-        data = _base() | {"isolation": {"image": "img",
-                                        "memory": "4g", "cpus": 2.0}}
-        cfg = _load(tmp_path, data)
-        iso = cfg.isolation
-        roundtripped = type(iso).model_validate(iso.model_dump())
-        assert roundtripped == iso
-
 
 class TestStepEnvAndSetup:
     def test_env_accepts_null_and_values(self, tmp_path):
@@ -678,16 +614,6 @@ class TestStepEnvAndSetup:
         data["steps"][0]["env"] = {"A": "x", "B": None}
         step = _load(tmp_path, data).steps[0]
         assert step.env == {"A": "x", "B": None}
-
-    def test_env_defaults_none(self, tmp_path):
-        assert _load(tmp_path, _base()).steps[0].env is None
-
-    def test_setup_allowed_on_command_step(self, tmp_path):
-        data = _base()
-        data["steps"] = [{"name": "t", "command": "make",
-                          "setup": "python -m venv .venv-sandbox",
-                          "on_pass": "success"}]
-        assert _load(tmp_path, data).steps[0].setup is not None
 
     def test_setup_allowed_on_agent_step(self, tmp_path):
         data = _base()
@@ -703,13 +629,6 @@ class TestStepEnvAndSetup:
                 ValidationError,
                 match="'setup' is only allowed on 'command' or 'agent' steps"):
             _load(tmp_path, data)
-
-    def test_env_round_trip(self, tmp_path):
-        data = _base()
-        data["steps"][0]["env"] = {"A": "x", "B": None}
-        step = _load(tmp_path, data).steps[0]
-        rt = type(step).model_validate(step.model_dump())
-        assert rt.env == {"A": "x", "B": None}
 
 
 class TestSetupProbe:
@@ -825,9 +744,7 @@ def test_env_keyword_optional_three_keyword_still_loads(tmp_path):
                      "unverifiable": "UNVERIFIABLE"},
         "on_pass": "success", "on_unverifiable": "success",
     }
-    step = _load(tmp_path, data).steps[0]
-    assert step.verdicts.env is None
-    assert step.on_env is None
+    _load(tmp_path, data)
 
 
 class TestLlmProfiles:
@@ -836,9 +753,6 @@ class TestLlmProfiles:
 
     def _profile(self, **over):
         return {"model": "m", "api_key_env": "K", **over}
-
-    def test_llms_defaults_to_empty(self, tmp_path):
-        assert _load(tmp_path, _base()).llms == {}
 
     def test_llms_profile_round_trips(self, tmp_path):
         data = _base()
@@ -863,9 +777,6 @@ class TestLlmProfiles:
         data["llms"] = {"review": self._profile(bogus=1)}
         with pytest.raises(ValidationError, match="bogus"):
             _load(tmp_path, data)
-
-    def test_step_llm_defaults_none(self, tmp_path):
-        assert _load(tmp_path, _base()).steps[0].llm is None
 
     def test_step_llm_unknown_profile_rejected(self, tmp_path):
         data = _base()

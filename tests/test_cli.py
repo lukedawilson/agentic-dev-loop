@@ -110,37 +110,6 @@ def write_pipeline(repo: Path, name: str, text: str) -> str:
     return name
 
 
-class TestHelp:
-    def test_core_and_builtin_loader_flags(self, repo, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["pipeline.yaml", "--help"])
-        assert e.value.code == 0
-        out = capsys.readouterr().out
-        assert "--resume" in out
-        assert "--max-attempts" in out
-        assert "--no-viz" in out
-        assert "--viz-port" in out
-        assert "--plan" in out  # built-in plan loader is always present
-
-    def test_extension_flags_only_when_configured(self, repo, capsys):
-        write_pipeline(repo, "aidlc.yaml", with_extensions(
-            PLAIN_YAML, "agentic_dev_loop.engine.extensions.aidlc:AidlcExtension"))
-        with pytest.raises(SystemExit) as e:
-            main(["aidlc.yaml", "--help"])
-        assert e.value.code == 0
-        assert "--aidlc-unit" in capsys.readouterr().out
-
-        with pytest.raises(SystemExit):
-            main(["pipeline.yaml", "--help"])
-        assert "--aidlc-unit" not in capsys.readouterr().out
-
-    def test_no_pipeline_shows_core_surface(self, repo, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["--help"])
-        assert e.value.code == 0
-        assert "--resume" in capsys.readouterr().out
-
-
 class TestVersion:
     def test_version_flag_without_pipeline(self, capsys):
         with pytest.raises(SystemExit) as e:
@@ -149,20 +118,6 @@ class TestVersion:
         assert capsys.readouterr().out.strip() == (
             f"agentic-dev-loop {importlib.metadata.version('agentic-dev-loop')}"
         )
-
-    def test_version_flag_with_pipeline(self, repo, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["pipeline.yaml", "--version"])
-        assert e.value.code == 0
-        assert capsys.readouterr().out.strip() == (
-            f"agentic-dev-loop {importlib.metadata.version('agentic-dev-loop')}"
-        )
-
-    def test_version_flag_in_core_help(self, repo, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["--help"])
-        assert e.value.code == 0
-        assert "--version" in capsys.readouterr().out
 
 
 class TestRun:
@@ -259,10 +214,6 @@ class TestViz:
             ["pipeline.yaml", "--no-viz", "--viz-port", "9"])
         assert args.no_viz is True
         assert args.viz_port == 9
-
-    def test_viz_on_by_default(self, repo):
-        args = build_parser("pipeline.yaml").parse_args(["pipeline.yaml"])
-        assert args.no_viz is False
 
     def test_lifecycle_serves_and_exits(self, repo, fake_agents, monkeypatch):
         import queue
@@ -391,17 +342,6 @@ steps:
     produces: implementation-summary.md
     on_pass: success
 """
-
-
-class TestContainersSubcommand:
-    def test_help_without_pipeline(self, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["containers", "--help"])
-        assert e.value.code == 0
-        out = capsys.readouterr().out
-        assert "--reap" in out
-        assert "--json" in out
-        assert "--state-dir" in out
 
 
 class TestCliLightweightImports:

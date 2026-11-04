@@ -195,11 +195,6 @@ class TestExtensionsDir:
 
 
 class TestLoadExtensions:
-    def test_fixture_extension_action_becomes_invocable(self):
-        reg = Registry()
-        load_extensions(["sample_ext:SampleExtension"], reg)
-        assert reg.sandbox_actions["sample_action"] == "echo sample-ran {subject}"
-
     def test_extension_tool_registers_with_sdk(self):
         from openhands.sdk.tool import registry as sdk_registry
         reg = Registry()

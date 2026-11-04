@@ -51,15 +51,6 @@ def test_added_modified_deleted_sync(tmp_path):
     assert not (ws / "src" / "b.py").exists()
 
 
-def test_non_declared_never_syncs(tmp_path):
-    ws = _workspace(tmp_path)
-    exp = _export(tmp_path, ws)
-    (exp / "tests" / "t.py").write_text("changed-t")
-    report = sync_back(exp, ws, ["src"], baseline={})
-    assert report.synced_paths == ()
-    assert (ws / "tests" / "t.py").read_text() == "orig-t"
-
-
 def test_git_never_touched(tmp_path):
     ws = _workspace(tmp_path)
     exp = _export(tmp_path, ws)

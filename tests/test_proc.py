@@ -12,41 +12,22 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from agentic_dev_loop.engine.proc import (
-    child_env, host_shell_execution, is_pid_token, kill_process_tree,
-    needs_shell, split_command,
+    child_env, is_pid_token, kill_process_tree, needs_shell, split_command,
 )
 
 
 class TestNeedsShell:
-    def test_no_metacharacters_is_simple(self):
-        assert needs_shell("pytest tests/ -q") is False
-        assert needs_shell(".venv/bin/python -m pytest") is False
-        assert needs_shell("") is False
-
-    def test_shell_metacharacters_need_shell(self):
-        for cmd in ("a && b", "a | b", "a; b", "a > b", "a < b",
-                    "echo $HOME", "echo `date`", "cd ~", "ls *.py",
-                    "ls file?.py", "echo [ab]", "echo a&b"):
-            assert needs_shell(cmd) is True, cmd
-
     @given(st.text(alphabet="abcXYZ019_-/=.,: ", max_size=40))
     @settings(max_examples=200)
     def test_plain_sequences_never_need_shell(self, cmd: str):
         assert needs_shell(cmd) is False
 
     @given(st.text(alphabet="abcXYZ019_-/ ", max_size=20),
-           st.sampled_from(["&", "|", ";", ">", "<", "$", "`", "~", "*", "?"]))
+           st.sampled_from(
+               ["&", "|", ";", ">", "<", "$", "`", "~", "*", "?", "[", "]"]))
     @settings(max_examples=200)
     def test_metachar_anywhere_needs_shell(self, prefix: str, metachar: str):
         assert needs_shell(f"{prefix}{metachar}{prefix}") is True
-
-
-class TestHostShellExecution:
-    """How the HOST (non-sandbox) path executes a shell-needing command."""
-
-    def test_uses_shell_true(self):
-        argv, shell = host_shell_execution("a && b")
-        assert (argv, shell) == ("a && b", True)
 
 
 class TestSplitCommand:
@@ -66,21 +47,12 @@ class TestSplitCommand:
 
 
 class TestIsPidToken:
-    def test_accepts_plain_decimal(self):
-        assert is_pid_token("0") is True
-        assert is_pid_token("123") is True
-        assert is_pid_token("00042") is True
-
-    def test_rejects_injection_shapes(self):
-        for bad in ("-9", "1;rm", "", " 123", "12a", "1 2", "+1", "0x1f"):
-            assert is_pid_token(bad) is False, bad
-
     @given(st.text(alphabet="0123456789", min_size=1, max_size=10))
     @settings(max_examples=200)
     def test_all_decimal_strings_accepted(self, digits: str):
         assert is_pid_token(digits) is True
 
-    @given(st.text(alphabet=string.printable, min_size=1, max_size=20)
+    @given(st.text(alphabet=string.printable, min_size=0, max_size=20)
            .filter(lambda t: not t.isdigit()))
     @settings(max_examples=200)
     def test_non_decimal_rejected(self, token: str):

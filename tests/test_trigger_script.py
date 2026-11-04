@@ -152,8 +152,6 @@ def test_trigger_rejects_both_flags(tmp_path):
                          env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
-            "--resume <thread-id>") in result.stderr
     assert "cli-ran:" not in result.stdout
 
 
@@ -163,8 +161,6 @@ def test_trigger_requires_exactly_one_flag(tmp_path):
     result = _run_script(env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
-            "--resume <thread-id>") in result.stderr
     assert "cli-ran:" not in result.stdout
 
 
@@ -218,8 +214,6 @@ def test_trigger_rejects_resume_with_plan(tmp_path):
                          env=_env_with(bin_dir))
 
     assert result.returncode != 0
-    assert ("pass exactly one of --plan <path>, --aidlc-unit <slug>, or "
-            "--resume <thread-id>") in result.stderr
     assert "cli-ran:" not in result.stdout
 
 

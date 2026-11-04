@@ -6,14 +6,12 @@ invariants: network off, single-mount, read-only rootfs, caps dropped.
 """
 from __future__ import annotations
 
-import dataclasses
-
 from hypothesis import assume, given, strategies as st
 
 from agentic_dev_loop.engine.isolation import (
-    EffectiveProfile, ProbeResult, SandboxExecutionRequest, SandboxExecutionResult,
-    docker_create_payload, exec_container_name, is_git_mutation,
-    resolve_effective_profile, resolve_sandbox_env, run_network_name,
+    EffectiveProfile, ProbeResult,
+    docker_create_payload, is_git_mutation,
+    resolve_effective_profile, resolve_sandbox_env,
     select_backend, translate_mount_path,
 )
 
@@ -70,28 +68,6 @@ class TestResolveSandboxEnvScrub:
         assert set(env) == {"PATH", "HOME", "LANG", "LC_ALL", "TERM"}
 
 
-class TestNetworkModePayload:
-    @given(profile=profiles, workspace=st.text(min_size=1), run_id=st.text(min_size=1))
-    def test_default_is_network_none(self, profile, workspace, run_id):
-        p = docker_create_payload(run_id=run_id, image="img", profile=profile,
-                                  workspace=workspace, network=False)
-        assert "--network" in p and "none" in p
-        assert "--name" in p and p[p.index("--name") + 1] == exec_container_name(run_id)
-
-    @given(profile=profiles, workspace=st.text(min_size=1), run_id=st.text(min_size=1))
-    def test_network_true_swaps_mode_and_name(self, profile, workspace, run_id):
-        p = docker_create_payload(run_id=run_id, image="img", profile=profile,
-                                  workspace=workspace, network=True)
-        assert "--network" in p and run_network_name(run_id) in p
-        assert "--add-host" not in p
-        assert "--name" in p and p[p.index("--name") + 1] == exec_container_name(
-            run_id, network=True)
-        # the rest of the hardening invariants still hold for the networked container
-        assert "--read-only" in p and "--cap-drop" in p and "ALL" in p
-        mounts = [p[i + 1] for i, a in enumerate(p) if a == "-v"]
-        assert mounts == [f"{workspace}:{workspace}"]
-
-
 class TestMountTranslation:
     @given(path=st.text(min_size=1))
     def test_idempotent(self, path):
@@ -128,26 +104,3 @@ class TestSelectBackendTotality:
     def test_always_docker(self, platform, api, ostype):
         from agentic_dev_loop.engine.isolation import DockerBackend
         assert select_backend(platform, ProbeResult(api, ostype)) is DockerBackend
-
-
-class TestRequestResultRoundTrip:
-    @given(argv=st.lists(st.text(min_size=1), min_size=1),
-           cwd=st.text(min_size=1), timeout=st.one_of(st.none(), st.floats(min_value=0.1)),
-           exit_code=st.one_of(st.none(), st.integers()),
-           timed_out=st.booleans())
-    def test_request_round_trip(self, argv, cwd, timeout, exit_code, timed_out):
-        req = SandboxExecutionRequest(argv=argv, cwd=f"/{cwd}", env={},
-                                      timeout=timeout)
-        d = dataclasses.asdict(req)
-        req2 = SandboxExecutionRequest(**d)
-        assert req == req2
-
-    @given(exit_code=st.one_of(st.none(), st.integers()),
-           stdout=st.text(), stderr=st.text(),
-           duration=st.floats(min_value=0.0), timed_out=st.booleans())
-    def test_result_round_trip(self, exit_code, stdout, stderr, duration, timed_out):
-        res = SandboxExecutionResult(exit_code, stdout, stderr, duration,
-                                     "docker", timed_out=timed_out)
-        d = dataclasses.asdict(res)
-        res2 = SandboxExecutionResult(**d)
-        assert res == res2

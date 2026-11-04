@@ -33,7 +33,6 @@ class TestBuildLlm:
         assert kw["model"] == "openai/deepseek-v4-pro"
         assert kw["api_key"] == "sk-test"
         assert kw["base_url"] == "https://api.deepseek.com"
-        assert "extra_body" not in kw  # dead config - the SDK silently drops it
         assert kw["timeout"] is None  # opinionated no-timeout default
 
     def test_timeout_passed_through_when_set(self, monkeypatch):

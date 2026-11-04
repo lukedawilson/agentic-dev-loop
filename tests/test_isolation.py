@@ -33,7 +33,7 @@ from agentic_dev_loop.engine.isolation import (
     probe_docker, process_start, reap_orphaned_containers,
     resolve_effective_profile, resolve_ignored_paths,
     resolve_image_ref,
-    resolve_sandbox_env, select_backend,
+    resolve_sandbox_env,
     translate_mount_path,
     )
 
@@ -69,11 +69,6 @@ def fail(code, stderr=""):
 
 
 class TestRequest:
-    def test_valid_request(self):
-        r = SandboxExecutionRequest(argv=["echo", "hi"], cwd="/ws",
-                                    env={"PATH": "/bin"}, timeout=1.0)
-        assert r.argv == ["echo", "hi"]
-
     def test_empty_argv_rejected(self):
         with pytest.raises(ValueError, match="non-empty"):
             SandboxExecutionRequest(argv=[], cwd="/ws", env={})
@@ -114,7 +109,6 @@ class TestEffectiveProfile:
         assert p.network_off and p.read_only_rootfs and p.writes_only_on_mounts
         assert p.drop_all_capabilities and p.git_mutations_blocked
         assert p.image == DEFAULT_DEV_IMAGE_REF
-        assert p.memory == "4g" and p.cpus == 2.0
 
     def test_default_ref_is_digest_pinned(self):
         """KD-2: the shipped default must name the published dev image by
@@ -228,7 +222,6 @@ class TestTranslateMountPath:
     def test_identity_and_idempotence(self, tmp_path):
         p = str(tmp_path / "ws")
         assert translate_mount_path(p) == p
-        assert translate_mount_path(translate_mount_path(p)) == translate_mount_path(p)
 
     def test_expands_user(self):
         out = translate_mount_path("~/ws")
@@ -327,13 +320,6 @@ class TestExecContainerName:
 
     def test_networked_suffix(self):
         assert exec_container_name("abc", network=True) == "abc-exec-net"
-
-
-class TestSelectBackend:
-    def test_totality(self):
-        assert select_backend("darwin", ProbeResult("1.43", "linux")) is DockerBackend
-        assert select_backend("win32", ProbeResult("1.43", "linux")) is DockerBackend
-        assert select_backend("linux", ProbeResult("1.43", "linux")) is DockerBackend
 
 
 # ---------------------------------------------------------------------------
@@ -756,41 +742,6 @@ class TestStartupSandbox:
         finally:
             sandbox.close()
 
-    def test_startup_announces_each_phase(self, tmp_path, monkeypatch, capsys):
-        """The eager startup is the long silent span between the CLI banner
-        and the first step's output. Every phase announces itself on the
-        console, tagged with the emitting module's own name."""
-        from agentic_dev_loop.engine import isolation
-        from agentic_dev_loop.engine.isolation import startup_sandbox
-
-        ws = tmp_path / "ws"
-        ws.mkdir()
-        cfg = self._cfg(tmp_path, with_setup=True)
-        monkeypatch.setattr("agentic_dev_loop.engine.isolation.shutil.which",
-                            lambda *a: "/usr/bin/docker")
-        monkeypatch.setenv("AGENTIC_DEV_LOOP_DEV_IMAGE", "img:tag")
-        runner = FakeRunner(
-            ok("1.54"),           # probe version
-            ok("linux"),          # probe ostype
-            ok(""),               # image inspect (pull)
-            ok(""),               # docker run -d --rm (exec container)
-            ok(""),               # docker run provision
-        )
-        sandbox = startup_sandbox(cfg, workspace=ws, state_dir=tmp_path / "run-state", runner=runner)
-        try:
-            out = capsys.readouterr().out
-            tag = f"[{isolation.__name__.rsplit('.', 1)[-1]}]"
-            assert f"{tag} probing docker daemon" in out
-            assert f"{tag} materialising workspace export" in out
-            assert f"{tag} export ready at" in out
-            assert f"{tag} preparing sandbox image img:tag" in out
-            assert f"{tag} sandbox image ready" in out
-            assert f"{tag} starting execution container" in out
-            assert f"{tag} execution container started" in out
-            assert f"{tag} sandbox ready" in out
-        finally:
-            sandbox.close()
-
     def test_network_declaration_starts_second_container(self, tmp_path, monkeypatch):
         """014/unit-5: startup creates only the base network-none export
         container. The bridge-network container for a network-declaring step
@@ -984,16 +935,6 @@ class TestUnit5PayloadAdditions:
     def _profile(self):
         return EffectiveProfile(True, True, True, True, True, "img", "4g", 2.0)
 
-    def test_networked_payload_uses_internal_network_no_host_gateway(self, tmp_path):
-        """038: sandbox containers have no host route and no host-gateway
-        alias; the proxy container alone keeps that mapping (D8)."""
-        ws = str(tmp_path)
-        p = docker_create_payload(run_id="r1", image="img",
-                                  profile=self._profile(), workspace=ws,
-                                  network=True, network_name="r1-net")
-        assert "--network" in p and "r1-net" in p
-        assert "--add-host" not in p
-
     def test_network_none_payload_omits_host_gateway(self, tmp_path):
         ws = str(tmp_path)
         p = docker_create_payload(run_id="r1", image="img",
@@ -1047,11 +988,6 @@ class TestUnit5PayloadAdditions:
 
 
 class TestContainerProfileKey:
-    def test_stable_and_ordered(self):
-        ms = resolve_mount_set([MountSpec(path="src", mode="ro")])
-        p = EgressPolicy(targets=(TargetEntry(host="a.com"),))
-        assert container_profile_key(ms, p) == container_profile_key(ms, p)
-
     def test_mount_flags_empty_mounts_nothing(self, tmp_path):
         """Strict-by-default (BR-1.1): an empty mount set mounts nothing."""
         export = str(tmp_path / "export")

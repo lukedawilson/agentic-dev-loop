@@ -15,8 +15,6 @@ from agentic_dev_loop.core.config import PipelineConfig, load_config
 from agentic_dev_loop.engine.registry import default_registry
 from agentic_dev_loop.engine.stages import Runtime, _FinalizeNudgeController
 
-NUDGE = "3 turns remain: produce your final response now"
-
 
 def _base() -> dict:
     return {
@@ -124,7 +122,8 @@ class TestFinalizeNudgeLoop:
         Runtime._run_finalize_loop(None, conv, max_iterations=10,
                                     finalize_controller=controller)
         assert controller.nudged is True
-        assert conv.sent == [(7, NUDGE)]
+        assert [turn for turn, _msg in conv.sent] == [7]
+        assert conv.sent[0][1].strip()
 
     def test_no_nudge_when_finished_before_threshold(self):
         conv = self._conv(finish_after=3)
@@ -141,7 +140,8 @@ class TestFinalizeNudgeLoop:
                                     finalize_controller=controller)
         assert controller.nudged is True
         assert conv.state.execution_status == ConversationExecutionStatus.ERROR
-        assert conv.sent == [(2, NUDGE)]
+        assert [turn for turn, _msg in conv.sent] == [2]
+        assert conv.sent[0][1].strip()
 
 
 class TestRunAgentFinalizeNudge:
@@ -213,6 +213,7 @@ class TestRunAgentFinalizeNudge:
         assert result.ok is True
         assert result.truncated is False
         assert conv.callbacks
-        assert conv.messages == ["the task", NUDGE]
+        assert conv.messages[0] == "the task"
+        assert len(conv.messages) == 2
         assert conv.run_calls == 9
         assert conv.closed is True

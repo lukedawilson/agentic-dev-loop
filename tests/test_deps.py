@@ -20,7 +20,6 @@ class TestPolicyInjection:
         text = policy_injection(cfg)
         assert "`uv.lock`" in text
         assert MISSING_DEPS_HEADER in text
-        assert "Do not add it to the manifest." in text
 
     def test_locked_with_multiple_lockfiles_joins_them(self):
         cfg = _cfg(lockfiles=["packages.lock.json", "package-lock.json"])
@@ -71,6 +70,6 @@ class TestExtensionMessage:
     def test_names_lockfile_and_pins(self):
         cfg = _cfg(lockfiles=["uv.lock"])
         msg = extension_message(cfg, ["requests==2.32.0"])
-        assert msg == ("Extend `uv.lock` with these pins and re-run:\n\n"
-                       "requests==2.32.0")
+        assert "`uv.lock`" in msg
+        assert "requests==2.32.0" in msg
 

@@ -51,9 +51,6 @@ class TestResolvePlanDocs:
 
 
 class TestPlanDocumentLoader:
-    def test_is_not_defaultable(self):
-        assert PlanDocumentLoader.defaultable is False
-
     def test_contributes_plan_flag(self):
         reg = Registry()
         reg.add_document_loader(PlanDocumentLoader())

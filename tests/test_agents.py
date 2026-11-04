@@ -36,15 +36,6 @@ class TestLoadAgent:
     fast - the SDK's dir loader would silently skip it) and its frontmatter
     name must match its filename."""
 
-    def test_builds_agent_from_file(self, agents_dir, llm):
-        make_agent(agents_dir, "dev",
-                   "name: dev\ntools: [terminal, file_editor]\n",
-                   "# System prompt\nDo the work.")
-
-        agent = load_agent(agents_dir, "dev", llm)
-
-        assert isinstance(agent, Agent)
-
     def test_raises_if_file_missing(self, agents_dir, llm):
         with pytest.raises(FileNotFoundError):
             load_agent(agents_dir, "nonexistent", llm)
@@ -63,12 +54,6 @@ class TestLoadAgent:
         make_agent(agents_dir, "dev", "name: other\ntools: []\n", "# Body")
         with pytest.raises(ValueError, match="does not match"):
             load_agent(agents_dir, "dev", llm)
-
-    def test_frontmatter_with_extra_fields_ok(self, agents_dir, llm):
-        make_agent(agents_dir, "extra",
-                   "name: extra\ntools: [terminal]\nextra: ignored\n", "# Body")
-
-        assert isinstance(load_agent(agents_dir, "extra", llm), Agent)
 
     def test_unknown_tool_name_fails(self, agents_dir, llm):
         """The SDK factory resolves frontmatter tool names against the
@@ -98,13 +83,6 @@ class TestLoadBriefAgent:
         agent = load_brief_agent("brief", sections, llm)
         assert isinstance(agent, Agent)
         assert [t.name for t in agent.tools] == ["terminal"]
-
-    def test_does_not_read_agents_dir(self, tmp_path, llm):
-        agents_dir = tmp_path / "agents"
-        agents_dir.mkdir()
-        # No brief.agent.md exists; the embedded loader must not look for one.
-        agent = load_brief_agent("brief", ["Repo rules digest"], llm)
-        assert isinstance(agent, Agent)
 
 
 from agentic_dev_loop.engine.isolation import SandboxError

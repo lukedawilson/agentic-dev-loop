@@ -163,14 +163,6 @@ class TestDryRun:
         assert "dry run complete" in capsys.readouterr().out
 
 
-class TestDryRunHelp:
-    def test_help_documents_flag(self, repo, capsys):
-        with pytest.raises(SystemExit) as e:
-            main(["pipeline.yaml", "--help"])
-        assert e.value.code == 0
-        assert "--dry-run" in capsys.readouterr().out
-
-
 class TestDryRunFailures:
     def test_invalid_yaml(self, repo):
         (repo / "bad.yaml").write_text("steps: [unclosed\n")

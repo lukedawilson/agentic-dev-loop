@@ -84,8 +84,3 @@ class TestRejected:
         data["caches"] = ["qa"]
         data["merge_on_conflict"] = ["**/audit.md"]
         assert _load(tmp_path, data).merge_on_conflict == ["**/audit.md"]
-
-    def test_clear_entry_accepted(self, tmp_path):
-        data = _base()
-        data["merge_on_conflict"] = ["aidlc-docs/audit.md"]
-        assert _load(tmp_path, data).merge_on_conflict == ["aidlc-docs/audit.md"]

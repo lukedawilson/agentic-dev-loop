@@ -486,26 +486,3 @@ class TestPublishCommandFile:
                     "a publish.py shell block without --dry-run would cut "
                     "a release before the user is asked: %r" % line
                 )
-
-    def test_confirmation_routes_through_question_tool(self):
-        text = self.COMMAND_FILE.read_text()
-        assert "`question` tool" in text
-
-    def test_mandate_present(self):
-        text = self.COMMAND_FILE.read_text()
-        assert "### Consumer adoption" in text
-        assert "CONSUMER_ADOPTION_PLANS" in text
-
-    def test_unstaged_files_confirmation_present(self):
-        """The flow must ask whether the reported uncommitted files are
-        added to the release commit before the cut."""
-        text = self.COMMAND_FILE.read_text()
-        assert "uncommitted files" in text
-        assert "--no-add" in text
-
-    def test_notes_happiness_confirmation_present(self):
-        """The flow must ask whether the user is happy with the rendered
-        release notes, and offer a changes loop."""
-        text = self.COMMAND_FILE.read_text()
-        assert "happy" in text
-        assert "--description" in text

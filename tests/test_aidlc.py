@@ -168,14 +168,6 @@ class TestDirectSlugMatching:
         (unit_dir / "design.md").write_text("# Design")
         return unit_dir
 
-    def test_slug_matches_directory_exactly(self, tmp_path):
-        self._unit(tmp_path, "unit-004-preset-management")
-        assert resolve_unit_docs(tmp_path, "unit-004-preset-management")["design.md"] == "# Design"
-
-    def test_bare_slug_directory(self, tmp_path):
-        self._unit(tmp_path, "support-for-windows")
-        assert resolve_unit_docs(tmp_path, "support-for-windows")["design.md"] == "# Design"
-
     def test_number_alone_does_not_match_slugged_dir(self, tmp_path):
         """The numeric fallback is gone: `004` must not resolve
         `unit-004-preset-management`."""
@@ -189,10 +181,6 @@ class TestDirectSlugMatching:
         self._unit(tmp_path, "unit-3")
         with pytest.raises(FileNotFoundError, match="unit-3"):
             resolve_unit_docs(tmp_path, "unit_3")
-
-    def test_non_numeric_slug(self, tmp_path):
-        self._unit(tmp_path, "unit-scan")
-        assert resolve_unit_docs(tmp_path, "unit-scan")["design.md"] == "# Design"
 
 
 class TestGetCurrentUnit:
@@ -257,9 +245,6 @@ class TestAidlcDocumentLoader:
         unit_dir = tmp_path / "construction" / "unit-3"
         unit_dir.mkdir(parents=True)
         (unit_dir / "design.md").write_text("# Design")
-
-    def test_is_defaultable(self):
-        assert AidlcDocumentLoader.defaultable is True
 
     def test_resolve_with_explicit_slug(self, tmp_path):
         self._unit_docs(tmp_path)

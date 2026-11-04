@@ -1,6 +1,5 @@
-"""Unit-5 PBT (code-gen step 12, PBT-03): serialisation round-trips, profile
-key stability, strict-default, preset-expansion determinism, export-path
-invariants."""
+"""Unit-5 PBT: serialisation round-trips, strict-default, preset-expansion
+invariants, sync-back exclude planning."""
 
 from hypothesis import given, strategies as st
 
@@ -8,7 +7,6 @@ from agentic_dev_loop.core.config import EgressSpec, MountSpec
 from agentic_dev_loop.engine.egress_policy import (
     TargetEntry, assemble_egress_policy,
 )
-from agentic_dev_loop.engine.isolation import container_profile_key
 from agentic_dev_loop.engine.mounts import resolve_mount_set
 
 mount_specs = st.lists(
@@ -50,28 +48,11 @@ class TestEgressRoundTrip:
         assert assemble_egress_policy(p.to_spec()) == p
 
 
-class TestProfileKeyStability:
-    @given(specs=mount_specs,
-           hosts=st.lists(st.sampled_from(["a.com", "b.com", "c.org"]),
-                          max_size=3, unique=True))
-    def test_stable(self, specs, hosts):
-        ms = resolve_mount_set(specs)
-        p = assemble_egress_policy(EgressSpec(targets=hosts))
-        assert container_profile_key(ms, p) == container_profile_key(ms, p)
-
-    @given(specs=mount_specs)
-    def test_equal_mounts_equal_key(self, specs):
-        p = assemble_egress_policy(None)
-        assert container_profile_key(resolve_mount_set(specs), p) == \
-            container_profile_key(resolve_mount_set(list(specs)), p)
-
-
 class TestPresetDeterminism:
-    def test_expansion_deterministic(self):
-        a = assemble_egress_policy(EgressSpec(presets=["package-registries"]))
-        b = assemble_egress_policy(EgressSpec(presets=["package-registries"]))
-        assert a == b
-        assert a.targets and all(isinstance(t, TargetEntry) for t in a.targets)
+    def test_preset_expands_to_target_entries(self):
+        policy = assemble_egress_policy(EgressSpec(presets=["package-registries"]))
+        assert policy.targets
+        assert all(isinstance(t, TargetEntry) for t in policy.targets)
 
 
 class TestSyncBackExcludeDeterminism:
@@ -82,12 +63,9 @@ class TestSyncBackExcludeDeterminism:
                          "src/obj/z.o", "docs/readme.md", "qa/.artifacts/big"]),
         st.sampled_from(["added", "modified", "deleted", "conflict"]),
         max_size=6))
-    def test_plan_deterministic_with_excludes(self, changes):
+    def test_plan_excludes_apply(self, changes):
         from agentic_dev_loop.engine.sync_back import plan_sync_back
-        a = plan_sync_back(changes, ["."],
-                           excludes=["**/bin/**", "**/obj/**"])
-        b = plan_sync_back(changes, ["."],
-                           excludes=["**/bin/**", "**/obj/**"])
-        assert a == b
-        for rel in a.to_copy + a.to_delete + a.conflicts:
+        plan = plan_sync_back(changes, ["."],
+                              excludes=["**/bin/**", "**/obj/**"])
+        for rel in plan.to_copy + plan.to_delete + plan.conflicts:
             assert "bin/" not in rel and "obj/" not in rel

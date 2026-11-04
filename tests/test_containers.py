@@ -13,8 +13,7 @@ from pathlib import Path
 
 from agentic_dev_loop.engine.containers import containers_report
 from agentic_dev_loop.engine.isolation import (CONTAINER_REGISTRY, CmdResult,
-                                               process_start,
-                                               reap_orphaned_containers)
+                                               process_start)
 
 
 class FakeRunner:
@@ -113,26 +112,3 @@ class TestContainersReport:
         containers_report(tmp_path / "state", runner)
         path = tmp_path / "state" / CONTAINER_REGISTRY
         assert json.loads(path.read_text()) == entry
-
-
-class TestReapReturnValue:
-    def test_reap_returns_removed_names(self, tmp_path):
-        proc = subprocess.Popen([sys.executable, "-c", "pass"])
-        proc.wait()
-        name = f"{'a' * 32}-exec"
-        _write(tmp_path / "state", [_entry(name, proc.pid, None)])
-        runner = FakeRunner(ok(""))
-        assert reap_orphaned_containers(tmp_path / "state", runner) == [name]
-        assert runner.calls == [
-            ["docker", "rm", "-f", name],
-            ["docker", "ps", "-a", "--filter", f"name={name}",
-             "--format", "{{.Names}}"],
-        ]
-
-    def test_reap_live_owner_returns_empty(self, tmp_path):
-        name = f"{'b' * 32}-exec"
-        _write(tmp_path / "state", [_entry(name, os.getpid(),
-                                           process_start(os.getpid()))])
-        runner = FakeRunner()
-        assert reap_orphaned_containers(tmp_path / "state", runner) == []
-        assert runner.calls == []

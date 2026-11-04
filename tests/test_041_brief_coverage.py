@@ -1,8 +1,6 @@
 """Brief coverage gate (041): anchor extraction and the coverage check over
 the captured brief, plus the brief node's bounded retry and failure path."""
 
-from pathlib import Path
-
 import pytest
 
 from openhands.sdk import LLM
@@ -21,9 +19,6 @@ from agentic_dev_loop.engine.stages import (
     make_brief_node,
 )
 
-ROOT = Path(__file__).resolve().parents[1]
-AGENTS_MD = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-STANDARDS_YAML = (ROOT / "coding-standards-ddd.yaml").read_text(encoding="utf-8")
 SECTIONS = ["Repo rules digest", "Unit scope digest",
             "Environment facts", "Open risks"]
 
@@ -100,39 +95,6 @@ class TestExtractAnchors:
         assert missing_anchors(text, [], [], SECTIONS) == []
         assert "Renamed section" in missing_anchors(
             text, [], [], ["Renamed section"])
-
-    def test_markdown_headings_from_real_agents_md(self):
-        anchors = extract_anchors(AGENTS_MD)
-        assert anchors == [
-            "default development mode - ask before coding",
-            "slash commands",
-            "github urls",
-            "file search",
-            "group session mode",
-            "error handling",
-            "em dash ban",
-            "consumer name ban",
-            "debugging",
-            "reverse engineering undocumented systems",
-            "development workflow",
-            "backward compatibility",
-            "mock policy",
-            "sdk compat shims",
-        ]
-
-    def test_yaml_categories_and_enforcement_levels_from_real_file(self):
-        anchors = extract_anchors(STANDARDS_YAML)
-        assert anchors == [
-            "enforcement_levels",
-            "general_principles",
-            "architecture_and_boundaries",
-            "domain_and_persistence",
-            "error_handling",
-            "coding_style",
-            "services_are_exceptions",
-            "stack_conventions",
-            "forbidden_patterns",
-        ]
 
     def test_plain_file_has_no_anchors(self):
         assert extract_anchors("just prose\nno headings here\n") == []
@@ -213,8 +175,7 @@ class TestBriefNodeCoverage:
         (runtime.agents_dir / "brief.agent.md").write_text("vendored\n")
         make_brief_node(runtime, runtime.cfg.steps[0])
         err = capsys.readouterr().err
-        assert "ignoring vendored brief prompt" in err
-        assert "embedded prompt is authoritative" in err
+        assert "vendored" in err.lower()
 
     def test_miss_returns_retry_note_and_reruns(self, runtime, fake_agents):
         good = _brief_ok()

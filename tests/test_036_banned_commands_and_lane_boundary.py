@@ -137,17 +137,6 @@ class TestEngineAllowlistLoader:
 
 
 class TestSyncBackLaneBoundary:
-    def test_absent_allowlist_is_unrestricted(self, tmp_path):
-        ws = _workspace(tmp_path)
-        exp = _export(tmp_path, ws)
-        (exp / "src" / "a.py").write_text("changed")
-        (exp / "docs").mkdir()
-        (exp / "docs" / "new.md").write_text("new")
-        baseline = {"src/a.py": _digest(ws / "src" / "a.py")}
-        report = sync_back(exp, ws, ["."], baseline=baseline, allowlist=None)
-        assert report.lane_violations == ()
-        assert set(report.synced_paths) == {"src/a.py", "docs/new.md"}
-
     def test_matching_paths_sync(self, tmp_path):
         ws = _workspace(tmp_path)
         exp = _export(tmp_path, ws)

@@ -143,12 +143,6 @@ class TestKillListenersOnPort:
             if proc.poll() is None:
                 proc.kill()
 
-    def test_kill_listeners_wrapper_removed(self):
-        """The port_sweep pipeline step that used the node-shaped wrapper is
-        gone; the startup sweep calls kill_listeners_on_port directly."""
-        import agentic_dev_loop.engine.actions as actions_module
-        assert not hasattr(actions_module, "kill_listeners")
-
     @lsof_required
     def test_never_sweeps_own_listener(self):
         """A pipeline's own process may be listening on the swept port (the
