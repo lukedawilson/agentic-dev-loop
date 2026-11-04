@@ -13,9 +13,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - feat: construct plan 056-tool-rules-to-profiles.md (agent dev loop)
 - viz refresh docs
-- feat: construct plan 056-tool-rules-to-profiles.md (agent dev loop)
 - Frontend rules
-- Uncommitted changes: README.md, agentic-dev-loop/pipeline.yaml, aidlc-docs/aidlc-state.md, aidlc-docs/audit.md, aidlc-docs/inception/plans/execution-plan.md, aidlc-docs/inception/plans/user-stories-assessment.md, planning-docs/056-tool-rules-to-profiles.md
+
+### Consumer adoption
+
+Plan 056 (tool rules to profiles) requires consumer repos to make these
+edits (human commits; see planning-docs/056, Consumer follow-ups):
+
+- Add tool patterns to the brief/dev/review steps' forbidden_commands in
+  agentic-dev-loop/pipeline.yaml (npm install, npm ci, dotnet add package,
+  dotnet restore, dotnet add, npx playwright, playwright): the engine
+  defaults no longer carry package/browser tool rules.
+- Move the browser download and qa harness install into the qa step's
+  setup hook (cd frontend && npm ci && npm ci --prefix qa && npx
+  playwright-core install chromium-headless-shell, with
+  PLAYWRIGHT_BROWSERS_PATH=qa/.browsers).
+- Delete the npm ci and playwright-core install instructions from
+  sdk_agents/qa.agent.md (the setup hook owns installation now).
+- Fix qa/probe.mjs findHeadlessShell() to accept
+  chrome-headless-shell-linux-* subdirectories.
 
 ## [0.10.2] - 2026-11-03
 

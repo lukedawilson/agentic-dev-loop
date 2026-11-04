@@ -14,7 +14,8 @@ Invariants (enforced here, not by convention):
   tag v<version> does not exist yet
 - a release entry that references a consumer-adoption plan must carry a
   `### Consumer adoption` subsection (registry CONSUMER_ADOPTION_PLANS
-  below); without it the release is refused
+  below); without it the release is refused. The dry run runs the same
+  refusal checks, so the pre-cut gate fails before anything is written
 - any failure leaves the repository unchanged and exits non-zero, loudly
 """
 
@@ -51,6 +52,7 @@ CONSUMER_ADOPTION_PLANS = {
     "-native-brief-step-type": "plan 049",
     "-per-step-model": "plan 054",
     "-consumer-onboarding-init-doctor": "plan 055",
+    "-tool-rules-to-profiles": "plan 056",
 }
 
 
@@ -294,6 +296,11 @@ def main(argv: list[str] | None = None) -> int:
             raise PublishError("HEAD is detached; check out a branch first")
 
         if args.dry_run:
+            # The dry run is the pre-cut gate: render (and thereby refuse)
+            # the would-be changelog before printing the plan, so a violating
+            # entry fails before anything is written, committed, or tagged.
+            render_changelog(old_changelog, str(target), date,
+                             args.description, bullets)
             print(f"Current version: {current}")
             print(f"Target version:  {target} (tag {tag})")
             print(f"Changelog entry: {source}")
