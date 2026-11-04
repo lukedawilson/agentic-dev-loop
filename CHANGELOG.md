@@ -11,15 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- docs(aidlc): mark unit-9 complete in state file
-- Mark unit as complete
-- Fix copy
-- viz bugfixes
-- fix(viz-demo): demo covers every pipeline step
-- feat: construct unit unit-9 (agent dev loop)
-- Test reaper
-- chore: bump engine pin to 0.10.5
-- test: remove TDD artefacts without preservation value
+- Viz refresh: the pipeline visualization page is redesigned. Stage graph with flow rails and fail loopbacks, status skins including amber lighting on used fail edges, light/dark theme toggle, section-level scrolling, mobile stacking summary tiles, and thread-id click-to-copy with feedback.
 
 ## [0.10.5] - 2026-11-04
 
