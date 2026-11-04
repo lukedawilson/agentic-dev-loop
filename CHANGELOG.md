@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-04
+
+### Changed
+
+- docs(aidlc): mark unit-9 complete in state file
+- Mark unit as complete
+- Fix copy
+- viz bugfixes
+- fix(viz-demo): demo covers every pipeline step
+- feat: construct unit unit-9 (agent dev loop)
+- Test reaper
+- chore: bump engine pin to 0.10.5
+- test: remove TDD artefacts without preservation value
+
 ## [0.10.5] - 2026-11-04
 
 ### Changed
