@@ -7,7 +7,7 @@ trusted actions - and `agentic-dev-loop` runs it end to end: agent and command s
 kernel-level sandboxing via Docker, verdicts route the graph, every boundary is
 checkpointed, and nothing gets committed until every gate passes.
 
-![The live graph view - pipeline graph with fail loopbacks, summary tiles, per-stage consoles, and event log](https://raw.githubusercontent.com/lukedawilson/agentic-dev-loop/main/docs/viz-screenshot-2026-11-05-2006.png)
+![The live graph view - pipeline graph with fail loopbacks, summary tiles, per-stage consoles, and event log](https://raw.githubusercontent.com/lukedawilson/agentic-dev-loop/main/docs/viz-pipeline.png)
 
 - **A tool, not a wiring project.** One CLI entry point, opinionated defaults,
   fixed safety policies. You write the pipeline and the agent definitions -
