@@ -134,3 +134,37 @@ def test_canary_sdk_run_loop_still_breaks_on_stuck():
         "(agents.py) is dead. Adopt the SDK's supported stop mechanism and "
         "update COMPAT-SHIMS.md."
     )
+
+
+# -- unit 10 optional harness SDKs -----------------------------------------
+# The base CI job installs no extras, so these guard only when the extra is
+# present; the compat/contract CI job installs both and runs them for real.
+
+def test_claude_sdk_surface_present():
+    import pytest
+
+    sdk = pytest.importorskip("claude_agent_sdk")
+    import inspect
+
+    assert hasattr(sdk, "ClaudeAgentOptions"), (
+        "claude-agent-sdk no longer exposes ClaudeAgentOptions - the unit-10 "
+        "claude driver cannot construct a hardened session. Read "
+        "COMPAT-SHIMS.md and rework the driver on a supported surface.")
+    params = inspect.signature(sdk.ClaudeAgentOptions).parameters
+    for name in ("setting_sources", "allowed_tools", "permission_mode",
+                 "mcp_servers", "system_prompt", "cwd", "env", "max_turns"):
+        assert name in params, (
+            f"claude-agent-sdk dropped the {name!r} option - the unit-10 "
+            "hardening contract in COMPAT-SHIMS.md no longer holds.")
+    assert hasattr(sdk, "ClaudeSDKClient"), (
+        "claude-agent-sdk no longer exposes ClaudeSDKClient - the unit-10 "
+        "session driver must be reworked.")
+
+
+def test_copilot_sdk_surface_present():
+    import pytest
+
+    sdk = pytest.importorskip("openai_codex")
+    assert hasattr(sdk, "CodexSession") or hasattr(sdk, "Codex"), (
+        "openai-codex no longer exposes a session factory - the unit-10 "
+        "copilot driver cannot be constructed. Read COMPAT-SHIMS.md.")

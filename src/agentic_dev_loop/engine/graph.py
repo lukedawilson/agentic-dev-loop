@@ -193,8 +193,10 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
     # 054 (D7): build the default LLM plus one per profile referenced by any
     # step, eagerly, so a missing api_key_env for a referenced profile fails
     # at run start, not mid-run.
-    profile_llms = _build_profile_llms(cfg)
-    runtime = Runtime(cfg=cfg, registry=registry, llm=build_llm(cfg.llm),
+    openhands = cfg.provider == "openhands"
+    profile_llms = _build_profile_llms(cfg) if openhands else {}
+    default_llm = build_llm(cfg.llm) if cfg.llm is not None else None
+    runtime = Runtime(cfg=cfg, registry=registry, llm=default_llm,
                       llms=profile_llms,
                       agents_dir=base / cfg.agents_dir, state_dir=state_dir,
                       workspace=Path.cwd(), sandbox=sandbox,

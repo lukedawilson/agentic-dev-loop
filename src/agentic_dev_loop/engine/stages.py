@@ -29,11 +29,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from langgraph.graph import END
-from openhands.sdk import Conversation
 
 from .agent_error_guide import guide_section
-from .agents import (BRIEF_AGENT_NAME, load_agent, load_brief_agent,
-                      register_sandbox_terminal)
+from .agents import BRIEF_AGENT_NAME
 from .brief_coverage import extract_anchors, missing_anchors
 from .brief_prompt import BRIEF_PROMPT_VERSION
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
@@ -43,9 +41,7 @@ from .egress_policy import assemble_egress_policy
 from .forbidden import resolve_forbidden_rules
 from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
                         resolve_sandbox_env)
-from .llm import build_llm
 from .mounts import resolve_mount_set
-from .outputs import CapturedOutput
 from .secrets import redact_values, step_secret_env
 from agentic_dev_loop.core.verdict import Verdict
 from .proc import (child_env, host_shell_execution, kill_process_tree,
@@ -69,45 +65,6 @@ def custom_prompt_section(text: str) -> str:
     """The per-step ``custom_prompt`` section (040): appended verbatim, no
     rewording, under a fixed heading."""
     return f"## {CUSTOM_PROMPT_HEADING}\n\n{text}"
-
-
-class _TurnPauseController:
-    """Turn-level pause callback: pause the SDK run loop after every
-    agent-sourced event so the caller can drive one turn at a time. The
-    finalize nudge (035) reuses this hook."""
-
-    def __init__(self) -> None:
-        self.conversation = None
-
-    def attach(self, conversation) -> None:
-        self.conversation = conversation
-
-    def on_event(self, event) -> None:
-        if self.conversation is None:
-            return
-        if getattr(event, "source", None) == "agent":
-            from openhands.sdk.conversation.state import (
-                ConversationExecutionStatus,
-            )
-            self.conversation.state.execution_status = (
-                ConversationExecutionStatus.PAUSED
-            )
-
-
-class _FinalizeNudgeController(_TurnPauseController):
-    """Finalize nudge (035): template text, never step-named. The turn loop
-    asks for the message when the conversation reaches the configured index;
-    ``nudged`` guards against re-injection on a same-turn retry."""
-
-    _TEMPLATE = "{n} turns remain: produce your final response now"
-
-    def __init__(self, turns: int) -> None:
-        super().__init__()
-        self.turns = turns
-        self.nudged = False
-
-    def message(self) -> str:
-        return self._TEMPLATE.format(n=self.turns)
 
 
 @dataclass
@@ -135,106 +92,30 @@ class Runtime:
     def run_agent(self, agent_name: str, message: str,
                   max_iterations: int = DEFAULT_MAX_ITERATIONS,
                   step: StepConfig | None = None) -> AgentResult:
-        """Run one agent stage. The agent file's body is delivered as a system
-        message suffix (AgentContext); the user turn carries only the task.
-        Any failure - setup or run - is reported to <state_dir>/last-error.md.
+        """Run one agent stage through the configured provider runtime.
 
-        For steps declaring outputs (produces/artifact), the final response is
-        captured from conv.state.events (before conv.close()) and written by the
-        pipeline to the declared artifact path - the agent never files its own
-        report."""
-        conv = None
+        All graph-layer policy stays here: the runtime is built per call,
+        translated to ``AgentResult``, closed in ``finally``, and any failure
+        (setup or run) is reported to <state_dir>/last-error.md."""
+        from .runtimes.factory import build_runtime
+        from .runtimes.protocol import NudgePolicy, RuntimeContext
+
+        runtime = None
+        redactions = tuple(self.secrets.values())
         try:
-            from openhands.sdk.conversation.state import ConversationExecutionStatus
-
-            finalize_controller = None
-            if step is not None and step.finalize_nudge_turns is not None:
-                finalize_controller = _FinalizeNudgeController(
-                    step.finalize_nudge_turns)
-
-            if self.sandbox is not None:
-                if step is not None:
-                    cwd, mount_set, egress_policy = _step_sandbox(self, step)
-                else:
-                    cwd, mount_set, egress_policy = (self.workspace, None, None)
-                forbidden_commands = (
-                    resolve_forbidden_rules(step.forbidden_commands)
-                    if step is not None else None)
-                allowlist = (
-                    tuple(self.engine_allowlist)
-                    if self.engine_allowlist is not None else None)
-                register_sandbox_terminal(
-                    self.sandbox,
-                    env=step.env if step is not None else None,
-                    workspace=str(cwd),
-                    pipeline=self.cfg.name,
-                    step=step.name if step is not None else None,
-                    network=step.network if step is not None else False,
-                    mount_set=mount_set,
-                    egress_policy=egress_policy,
-                    terminal_timeout=(step.terminal_timeout
-                                      if step is not None else None),
-                    secrets=(step_secret_env(self.cfg, step, self.secrets)
-                             if step is not None else None),
-                    forbidden_commands=forbidden_commands,
-                    allowlist=allowlist)
-            # 054 (D6/D7): a named profile selects the whole config (model,
-            # endpoint, key, effort default move together); the step's own
-            # reasoning_effort then overrides the effective profile's value.
-            llm = self.llm
-            if step is not None:
-                effective_cfg = (self.cfg.llms[step.llm]
-                                 if step.llm is not None else self.cfg.llm)
-                if step.llm is not None:
-                    llm = self.llms.get(step.llm, self.llm)
-                if step.reasoning_effort is not None:
-                    llm = build_llm(effective_cfg,
-                                    reasoning_effort=step.reasoning_effort)
-            if step is not None and step.kind == "brief":
-                agent = load_brief_agent(
-                    agent_name, step.brief_inputs.sections, llm)
-            else:
-                agent = load_agent(self.agents_dir, agent_name, llm)
-            callbacks = []
-            if finalize_controller is not None:
-                callbacks.append(finalize_controller.on_event)
-            conv = Conversation(agent=agent, workspace=str(self.workspace),
-                                max_iteration_per_run=max_iterations,
-                                callbacks=callbacks or None)
-            if finalize_controller is not None:
-                finalize_controller.attach(conv)
-            conv.send_message(message)
-            if finalize_controller is not None:
-                self._run_finalize_loop(conv, max_iterations,
-                                        finalize_controller)
-            else:
-                conv.run()
-
-            # 030, D1/D2: a sticky infra failure must fail the run with no
-            # retry - check before any capture/verdict path would schedule an
-            # unclear-retry. The existing except turns this into ok=False.
-            if self.sandbox is not None and self.sandbox.infra_error is not None:
-                raise self.sandbox.infra_error
-
-            truncated = conv.state.execution_status != ConversationExecutionStatus.FINISHED
-
-            if step is not None and (step.artifact is not None or step.produces):
-                artifact = step.artifact if step.artifact is not None else step.produces[0]
-                captured = CapturedOutput.from_agent_result(
-                    conv, artifact, self.state_dir,
-                    redactions=tuple(self.secrets.values()))
-                if captured.is_err():
-                    return AgentResult(ok=True, truncated=truncated,
-                                       capture_error=captured.error.value)
-                write_result = captured.unwrap().write()
-                if write_result.is_err():
-                    raise RuntimeError(
-                        f"captured output write failed: {write_result.error.value}")
-                return AgentResult(ok=True, truncated=truncated,
-                                   response=captured.unwrap().raw_text)
-            return AgentResult(ok=True, truncated=truncated)
+            ctx = self._runtime_context(agent_name, max_iterations, step)
+            nudge_policy = (
+                NudgePolicy.for_turns(step.finalize_nudge_turns)
+                if step is not None and step.finalize_nudge_turns is not None
+                else None)
+            runtime = build_runtime(self.cfg, ctx)
+            redactions += tuple(getattr(runtime, "extra_redactions", ()))
+            result = runtime.run(message, nudge_policy=nudge_policy)
+            return AgentResult(ok=True, truncated=result.truncated,
+                               response=result.final_text,
+                               capture_error=result.capture_error)
         except Exception:
-            err = redact_values(traceback.format_exc(), self.secrets.values())
+            err = redact_values(traceback.format_exc(), redactions)
             print(err[-4000:], file=sys.stderr, flush=True)
             self.state_dir.mkdir(parents=True, exist_ok=True)
             error_path = self.state_dir / LAST_ERROR
@@ -244,40 +125,47 @@ class Runtime:
             print(f"Agent run failed - error details written to {error_path}", flush=True)
             return AgentResult(ok=False, truncated=False)
         finally:
-            if conv is not None:
-                conv.close()
+            if runtime is not None:
+                runtime.close()
 
-    def _run_finalize_loop(self, conv,
-                           max_iterations: int,
-                           finalize_controller: _FinalizeNudgeController | None = None) -> None:
-        """Drive one turn at a time so turn-level hooks can inject their
-        nudges and enforce budgets. A controller's callback pauses the SDK
-        run loop after every agent-sourced event, so each ``conv.run()`` here
-        advances exactly one agent turn."""
-        from openhands.sdk.conversation.state import ConversationExecutionStatus
+    def _runtime_context(self, agent_name: str, max_iterations: int,
+                         step: StepConfig | None):
+        """Resolve the provider-independent context a driver is built with."""
+        from .runtimes.protocol import RuntimeContext
 
-        turns = 0
-        nudge_at = (max_iterations - finalize_controller.turns
-                    if finalize_controller is not None else None)
-        while True:
-            conv.run()
-            status = conv.state.execution_status
-            if status in (ConversationExecutionStatus.FINISHED,
-                          ConversationExecutionStatus.STUCK,
-                          ConversationExecutionStatus.ERROR):
-                break
-
-            turns += 1
-            if turns >= max_iterations:
-                conv.state.execution_status = ConversationExecutionStatus.ERROR
-                break
-
-            if (finalize_controller is not None and turns == nudge_at
-                    and not finalize_controller.nudged):
-                conv.send_message(finalize_controller.message())
-                finalize_controller.nudged = True
-                continue
-
+        if self.sandbox is not None and step is not None:
+            cwd, mount_set, egress_policy = _step_sandbox(self, step)
+            forbidden_commands = resolve_forbidden_rules(step.forbidden_commands)
+            secret_env = step_secret_env(self.cfg, step, self.secrets)
+        else:
+            cwd, mount_set, egress_policy = (self.workspace, None, None)
+            forbidden_commands = None
+            secret_env = None
+        return RuntimeContext(
+            cfg=self.cfg,
+            workspace=self.workspace,
+            state_dir=self.state_dir,
+            agents_dir=self.agents_dir,
+            agent_name=agent_name,
+            max_iterations=max_iterations,
+            step=step,
+            sandbox=self.sandbox,
+            sandbox_cwd=cwd,
+            secrets=self.secrets,
+            engine_allowlist=self.engine_allowlist,
+            llm=self.llm,
+            llms=self.llms,
+            terminal_timeout=(step.terminal_timeout
+                              if step is not None else None),
+            network=step.network if step is not None else False,
+            mount_set=mount_set,
+            egress_policy=egress_policy,
+            step_env=step.env if step is not None else None,
+            secret_env=secret_env,
+            forbidden_commands=forbidden_commands,
+            allowlist=(tuple(self.engine_allowlist)
+                       if self.engine_allowlist is not None else None),
+        )
 
 def prompt_dir(runtime: Runtime) -> str:
     """state_dir as agents must address it. Agents resolve prompt paths
@@ -945,7 +833,9 @@ def make_command_node(runtime: Runtime, step: StepConfig):
         env = resolve_sandbox_env(
             step.env, secrets=step_secret_env(runtime.cfg, step, runtime.secrets))
     else:
-        env = child_env(runtime.cfg.env_allowlist, runtime.cfg.llm.api_key_env)
+        env = child_env(
+            runtime.cfg.env_allowlist,
+            runtime.cfg.llm.api_key_env if runtime.cfg.llm is not None else None)
 
     def node(state: dict) -> dict:
         attempt = state["attempt"]

@@ -13,7 +13,9 @@ from openhands.sdk.conversation.state import ConversationExecutionStatus
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
 from agentic_dev_loop.engine.registry import default_registry
-from agentic_dev_loop.engine.stages import Runtime, _FinalizeNudgeController
+from agentic_dev_loop.engine.runtimes.openhands_runtime import (
+    _FinalizeNudgeController, _run_finalize_loop)
+from agentic_dev_loop.engine.stages import Runtime
 
 
 def _base() -> dict:
@@ -119,7 +121,7 @@ class TestFinalizeNudgeLoop:
     def test_nudge_at_configured_turn_and_only_once(self):
         conv = self._conv(finish_after=9)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_finalize_loop(None, conv, max_iterations=10,
+        _run_finalize_loop(conv, max_iterations=10,
                                     finalize_controller=controller)
         assert controller.nudged is True
         assert [turn for turn, _msg in conv.sent] == [7]
@@ -128,7 +130,7 @@ class TestFinalizeNudgeLoop:
     def test_no_nudge_when_finished_before_threshold(self):
         conv = self._conv(finish_after=3)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_finalize_loop(None, conv, max_iterations=10,
+        _run_finalize_loop(conv, max_iterations=10,
                                     finalize_controller=controller)
         assert controller.nudged is False
         assert conv.sent == []
@@ -136,7 +138,7 @@ class TestFinalizeNudgeLoop:
     def test_turn_cap_still_applies_when_nudge_ignored(self):
         conv = self._conv(finish_after=999)
         controller = _FinalizeNudgeController(3)
-        Runtime._run_finalize_loop(None, conv, max_iterations=5,
+        _run_finalize_loop(conv, max_iterations=5,
                                     finalize_controller=controller)
         assert controller.nudged is True
         assert conv.state.execution_status == ConversationExecutionStatus.ERROR
@@ -205,7 +207,7 @@ class TestRunAgentFinalizeNudge:
             return conv
 
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.Conversation", factory)
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.Conversation", factory)
 
         result = runtime.run_agent("qa", "the task", max_iterations=10,
                                    step=runtime.cfg.steps[0])

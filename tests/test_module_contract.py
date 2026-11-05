@@ -111,3 +111,19 @@ def test_viz_fresh_import_loads_no_heavy_deps():
                          cwd=REPO_ROOT)
     assert out.returncode == 0, out.stderr
     assert out.stdout.strip() == "[]", out.stdout
+
+
+def test_runtimes_package_layout_and_light_imports():
+    """Unit 10 (BR-10.10): the runtimes package is present with one module per
+    concern and imports without either optional harness SDK."""
+    import importlib
+
+    modules = [
+        "protocol", "catalog", "bridge", "openhands_runtime", "factory",
+        "mcp_server", "async_bridge", "claude_runtime", "copilot_auth",
+        "copilot_runtime",
+    ]
+    for name in modules:
+        importlib.import_module(f"agentic_dev_loop.engine.runtimes.{name}")
+    assert "claude_agent_sdk" not in sys.modules
+    assert "openai_codex" not in sys.modules

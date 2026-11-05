@@ -39,8 +39,29 @@ class CapturedOutput:
         text = _final_agent_text(conv)
         if not text.strip():
             return Result.err(CaptureError.EMPTY_RESPONSE)
+        return CapturedOutput.from_text(text, artifact, state_dir, redactions)
+
+    @staticmethod
+    def from_runtime_result(
+        final_text: str | None, artifact: str, state_dir: Path,
+        redactions: tuple[str, ...] = ()
+    ) -> "Result[CapturedOutput, CaptureError]":
+        """Capture from a provider-independent ``RuntimeResult.final_text``
+        (unit 10). Shares the redaction and artifact-path internals with the
+        OpenHands extraction."""
+        return CapturedOutput.from_text(final_text or "", artifact, state_dir,
+                                        redactions)
+
+    @staticmethod
+    def from_text(
+        text: str, artifact: str, state_dir: Path,
+        redactions: tuple[str, ...] = ()
+    ) -> "Result[CapturedOutput, CaptureError]":
+        if not text.strip():
+            return Result.err(CaptureError.EMPTY_RESPONSE)
         text = redact_values(text, redactions)
-        return Result.ok(CapturedOutput(raw_text=text, artifact_path=state_dir / artifact))
+        return Result.ok(CapturedOutput(raw_text=text,
+                                        artifact_path=state_dir / artifact))
 
     def write(self) -> Result[None, CaptureError]:
         """Write the captured response to the step's artifact path (BR-4/BR-5)."""

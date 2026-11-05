@@ -745,7 +745,7 @@ class TestRunAgent:
         self._write_agent(runtime)
         convs = []
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.Conversation",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.Conversation",
             lambda **kw: convs.append(FakeConversation(ConversationExecutionStatus.FINISHED, **kw)) or convs[-1])
         result = runtime.run_agent("dev", "the task", max_iterations=200)
         assert result.ok and not result.truncated
@@ -758,7 +758,7 @@ class TestRunAgent:
     def test_unfinished_run_is_truncated(self, runtime, monkeypatch):
         self._write_agent(runtime)
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.Conversation",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.Conversation",
             lambda **kw: FakeConversation(ConversationExecutionStatus.ERROR, **kw))
         result = runtime.run_agent("dev", "msg")
         assert result.ok and result.truncated
@@ -767,7 +767,7 @@ class TestRunAgent:
         self._write_agent(runtime)
         runtime.sandbox.infra_error = SandboxError("AE-SBX-019: boom")
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.Conversation",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.Conversation",
             lambda **kw: FakeConversation(ConversationExecutionStatus.FINISHED, **kw))
         result = runtime.run_agent("dev", "msg")
         assert result.ok is False
@@ -959,7 +959,7 @@ class TestRunAgentProfileSelection:
 
     def _stub_conversation(self, monkeypatch):
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.Conversation",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.Conversation",
             lambda **kw: FakeConversation(
                 ConversationExecutionStatus.FINISHED, **kw))
 
@@ -972,7 +972,7 @@ class TestRunAgentProfileSelection:
         self._stub_conversation(monkeypatch)
         captured = {}
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.load_agent",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.load_agent",
             lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
                                            and object()))
 
@@ -988,7 +988,7 @@ class TestRunAgentProfileSelection:
         self._stub_conversation(monkeypatch)
         captured = {}
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.load_agent",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.load_agent",
             lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
                                            and object()))
 
@@ -1006,13 +1006,13 @@ class TestRunAgentProfileSelection:
         self._stub_conversation(monkeypatch)
         build_calls = []
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.build_llm",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.build_llm",
             lambda cfg, reasoning_effort=None: (
                 build_calls.append((cfg.model, cfg.api_key_env, reasoning_effort))
                 or profile_llm))
         captured = {}
         monkeypatch.setattr(
-            "agentic_dev_loop.engine.stages.load_agent",
+            "agentic_dev_loop.engine.runtimes.openhands_runtime.load_agent",
             lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
                                            and object()))
 
