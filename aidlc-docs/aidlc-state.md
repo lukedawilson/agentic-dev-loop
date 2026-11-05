@@ -3,12 +3,12 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Unit unit-9 (viz redesign) COMPLETE (2026-11-04): Functional Design approved; Code Generation complete (Part 1 plan approved; Part 2 implemented user-driven outside AI-DLC sessions, TDD + browser-verified); user stories skipped (user decision); Carbon runtime removed by user directive - hand-written skin authoritative; units 1-3 COMPLETE; unit 4 WONTSHIP; unit 5 COMPLETE (2026-10-25); units 6-8 intent recorded (unit-6 cloud deployment; unit-7 Linux-native sandboxing + egress protection; unit-8 parallel fan-out driver)
+- **Current Stage**: CONSTRUCTION - Unit unit-10 (multi-provider runtime): Functional Design, NFR Requirements, Infrastructure Design approved (2026-11-05); Code Generation in progress (single continuous stage, commit-level green checkpoints; user restructure supersedes the 3-part staging). Prior: unit-9 (viz redesign) COMPLETE (2026-11-04). Units 1-3, 5, 9 complete; unit-4 WONTSHIP; units 6-8 intent-only.
 
 ## Workspace State
 - **Existing Code**: Yes
 - **Reverse Engineering Needed**: Yes
-- **Workspace Root**: /Users/luke/dev/work/agent-engine
+- **Workspace Root**: /Users/luke/dev/work/dev-tooling/agentic-dev-loop (repo moved from /Users/luke/dev/work/agent-engine; reverse-engineering artifacts predate the move and are stale for path references)
 
 ## Code Location Rules
 - **Application Code**: Workspace root (NEVER in aidlc-docs/)
@@ -72,6 +72,14 @@ Per-unit construction stages (5 stages per unit: Functional Design, NFR Requirem
 - Unit 9: viz redesign - NFR Design [x] (global SKIP)
 - Unit 9: viz redesign - Infrastructure Design - NOT RUN (same 3-stage plan; viz is a Python-embedded page, no infra work)
 - Unit 9: viz redesign - Code Generation [x] (complete 2026-11-04, user-driven implementation, browser-verified)
+- Unit 10: multi-provider runtime - Functional Design [x] (approved 2026-11-05; Q1=A provider key, Q2=A engine-internal MCP server, Q3=A user-level copilot auth store; artifacts in aidlc-docs/construction/unit-10/functional-design/)
+- Unit 10: multi-provider runtime - NFR Requirements [x] (approved 2026-11-05; NFR-1..4 all A)
+- Unit 10: multi-provider runtime - Infrastructure Design [x] (approved 2026-11-05; ID-1=A extras on main package, ID-2=A opt-in live smoke)
+- Unit 10: multi-provider runtime - Code Generation [ ] (plan approved 2026-11-05; single continuous stage per user restructure, 3 commit checkpoints, implementation mode C = user-driven outside AI-DLC)
+- Unit 10: multi-provider runtime - NFR Requirements [x] (approved 2026-11-05; NFR-1..4 all A; artifacts in aidlc-docs/construction/unit-10/nfr-requirements/)
+- Unit 10: multi-provider runtime - NFR Design [x] (global SKIP)
+- Unit 10: multi-provider runtime - Infrastructure Design [x] (approved 2026-11-05; ID-1=A extras on main package + CI tiers, ID-2=A live_harness opt-in marker; artifacts in aidlc-docs/construction/unit-10/infrastructure-design/)
+- Unit 10: multi-provider runtime - Code Generation [ ] (in progress 2026-11-05; single continuous stage with commit-level green checkpoints per user restructure "A" - supersedes the 3-part Q1 staging)
 - Build and Test: green at unit-3 close (2026-10-21, full suite incl. docker-marked tests); re-run at unit-5 close (2026-10-25): 80 unit-5 tests green locally, 244-test regression sweep green, docker-marked integration tests green on CI Linux; re-run at unit-9 close (2026-11-04): 1292 passed, 1 skipped (full suite incl. test_repo_ascii.py); browser-verified (desktop + mobile emulation, theme toggle, fail-edge amber lighting, thread-id copy feedback)
 
 ## Unit Progress
@@ -138,3 +146,18 @@ Withdrawn by user directive 2026-10-22 ("Let's rip it out and mark unit 4 as won
 - Key deviations (user directives): Carbon runtime removed entirely - hand-written skin authoritative (R30/R60 restated in the viz register); resize divider dropped (sections scroll); auto expand/collapse dropped; fail edges light amber when used; thread-id click-to-copy with feedback; build tool embeds the normative reference (single-run consistency)
 - Build and Test: full suite green at close: 1292 passed, 1 skipped; browser-verified (desktop + mobile emulation, theme toggle, fail-edge amber lighting, thread-id copy feedback)
 - Next: units 6-8 remain intent-only
+
+### unit-10 (multi-provider runtime: OpenHands + Claude Agent + Copilot) - STARTED (2026-11-05)
+
+- Intent document: aidlc-docs/unit-10-intent-provider-abstraction.md (STARTED 2026-11-05; brainstorm design approved same day, user: "OK, I agree with the design. STart a new AI-DLC unit and feed this into it")
+- Scope: one AgentRuntime protocol; three drivers (OpenHandsRuntime = moved Conversation body, ClaudeAgentRuntime = claude-agent-sdk subprocess, CopilotRuntime = codex/copilot SDK subprocess); one shared tool catalog (terminal, file_editor, task_tracker, finish) with per-driver bindings; shared SandboxToolBridge over the existing Sandbox.run + viz_bus seams; Docker sandboxing and viz preserved; provider config key defaulting to openhands (backward compat)
+- Relationship to unit-4 (WONTSHIP): inverse shape - engine stays in charge, harness runs as subprocess; see intent doc
+- Inception: Workspace Detection [x] (2026-11-05); Requirements Analysis [x] (approved 2026-11-05: unit-10 section in requirements.md, detail in unit-10-requirements.md); Workflow Planning [x] (execution-plan.md, awaiting construction confirmation)
+- User Stories: SKIP (Q6=A, consistent with all prior units)
+- Construction stages: NOT STARTED
+### unit-10 (multi-provider runtime) - IN PROGRESS (2026-11-05)
+
+- Intent document: aidlc-docs/unit-10-intent-provider-abstraction.md (brainstorm design approved; verified external facts; concept-mapping table; codebase anchor map)
+- Requirements: aidlc-docs/inception/requirements/unit-10-requirements.md (FR-10.1..10.13, NFR-10.1..10.7; approved 2026-11-05; Q1-Q6 all A)
+- Functional Design: plans/unit-10-functional-design-plan.md (Q1=A top-level provider: key with strict per-provider blocks and llm-fields forbidden on non-openhands; Q2=A engine-internal stdio MCP server, one catalog implementation for both harnesses; Q3=A copilot token in ~/.agentic-dev-loop/auth/); artifacts in aidlc-docs/construction/unit-10/functional-design/ (domain-entities.md, business-logic-model.md, business-rules.md BR-10.1..10.11). Design refinements vs sketch: nudge() folded into NudgePolicy on run(); finish harness-native (MCP set = terminal, file_editor, task_tracker); permission_mode=deny kept as defense in depth. User clarification Q&A: harness -> MCP stdio server (thin adapter) -> engine bridge -> Sandbox.run; OpenHands does NOT use the MCP/bridge path (keeps SDK tools; shares catalog naming, policy-resolution helpers, Sandbox.run gate)
+- Next: Infrastructure Design -> Code Generation (3 staged parts: abstraction + OpenHandsRuntime with green gate + dogfood; claude driver; copilot driver) -> Build and Test

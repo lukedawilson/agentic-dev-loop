@@ -38,3 +38,15 @@ unit-3 Infrastructure Design (2026-10-19). Units 1-2 had no infrastructure
 ## Amendment (2026-10-19) - package rename
 
 - Package references updated `agent-engine` → `agentic-dev-loop` throughout (module paths, default image `ghcr.io/lukedawilson/agentic-dev-loop/dev`, env var `AGENTIC_DEV_LOOP_DEV_IMAGE`, user state dirs `~/.agentic-dev-loop/*`). No design change.
+
+## 6. Provider auth store (added 2026-11-05, unit-10)
+
+- **What**: `~/.agentic-dev-loop/auth/copilot.json` - the Copilot device-flow token (user-level, mode 600, outside the workspace, never mounted into any sandbox). Claude subscription mode stores nothing here: the engine only DETECTS `~/.claude/.credentials.json` presence and never reads or replays the credential.
+- **Who uses it**: any pipeline with `provider: copilot`; token expiry re-runs the engine-hosted device flow.
+- **Governed by**: `aidlc-docs/construction/unit-10/infrastructure-design/infrastructure-design.md`.
+
+## 7. Optional provider extras + CI tiers (added 2026-11-05, unit-10)
+
+- **What**: `[project.optional-dependencies] claude` / `copilot` (floor-pinned SDKs, COMPAT-SHIMS registered); CI runs a base extras-free job plus a compat/contract job installing both extras (ubuntu + windows). Live harness smoke is a `live_harness`-marked opt-in suite (`RUN_LIVE_HARNESS=1`), manual at the dogfood gate, never in CI.
+- **Who uses it**: any pipeline with `provider: claude` / `provider: copilot`; the CI jobs and gate procedure.
+- **Governed by**: `aidlc-docs/construction/unit-10/infrastructure-design/infrastructure-design.md`.

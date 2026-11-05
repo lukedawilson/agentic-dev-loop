@@ -496,3 +496,124 @@
 **User Input**: Q1="Fix state line (Recommended)"; Q2="Fix extension glob (Recommended)"; Q3="Add reference md (Recommended)"; then "do it"
 **AI Response**: Applied all three. (1) aidlc-state.md Current Stage line now reads "Unit unit-9 (viz redesign)" with historical unit mentions lowercased - bare-run autodetect resolves 'unit-9' (verified via get_current_unit). (2) Engine fix via TDD: added red test test_loads_bare_slug_code_generation_plan (failed), then changed aidlc.py plan loading from one infixed glob to two patterns ({slug}-code-generation-plan.md AND {slug}-*-code-generation-plan.md, no prefix leak into unit-30); 28 test_aidlc tests green. (3) Added aidlc-docs/construction/unit-9/reference/normative-values.md with exact token tables, layout constants, kept ids, status mapping, CDN pin, /topology shape. End-to-end: resolve_unit_docs('aidlc-docs','unit-9') loads 4 FD artifacts + reference/normative-values.md + plans/unit-9-code-generation-plan.md (CG plan now reaches agents). Known accepted: inception/application-design 8 docs (units 1-5) still inject into every run - left as is per discussion. tests/test_aidlc.py + tests/test_loaders.py: 55 passed.
 **Context**: Post-approval verification that unit-9 aidlc-docs layout is recognised by the --aidlc-unit extension
+
+## New Unit Request (unit-10 provider abstraction)
+**Timestamp**: 2026-11-05T19:35:33Z
+**User Input**: "OK, I agree with the design. STart a new AI-DLC unit and feed this into it"
+**AI Response**: AI-DLC workflow started for the brainstorm-approved design (multi-provider runtime: OpenHands + Claude Agent + Copilot drivers behind one AgentRuntime protocol, shared tool catalog, shared SandboxToolBridge, Docker sandboxing and viz preserved). Workspace detection: brownfield, aidlc-state.md exists (resume path), reverse engineering artifacts present but stale (old workspace root /Users/luke/dev/work/agent-engine vs current /Users/luke/dev/work/dev-tooling/agentic-dev-loop); the brainstorm's live-verified architecture map supersedes them for this unit. Intent doc created at aidlc-docs/unit-10-intent-provider-abstraction.md. Proceeding to Requirements Analysis (standard depth).
+**Context**: New unit inception, Workspace Detection stage
+
+---
+
+## Requirements Analysis (unit-10)
+**Timestamp**: 2026-11-05T19:36:00Z
+**User Input**: (approval prompt - no user input yet)
+**AI Response**: Requirements Analysis started for unit-10 at standard depth. Workspace detection findings: brownfield, aidlc-state.md exists, reverse-engineering artifacts stale (pre-date repo move); brainstorm architecture map supersedes them. Extension configuration already set in aidlc-state.md (Domain Standards: Yes; Resiliency Baseline: Yes scoped; Security Baseline: Yes; Property-Based Testing: Partial) so no opt-in re-prompt needed. Clarifying questions file created at aidlc-docs/inception/requirements/unit-10-requirement-verification-questions.md with Q1-Q6 (unit decomposition, claude auth UX, copilot auth UX, policy-risk stance, missing design sections placement, user stories skip). Questions presented inline in chat per repo override.
+**Context**: Requirements Analysis Steps 1-6 (unit-10) - awaiting answers
+
+---
+
+## Requirements Analysis (unit-10)
+**Timestamp**: 2026-11-05T19:45:00Z
+**User Input**: "1. A
+2. A
+3. A
+4. A
+5. A
+6. A"
+**AI Response**: All six answers recorded as A in aidlc-docs/inception/requirements/unit-10-requirement-verification-questions.md (note: project-level requirement-verification-questions.md was briefly clobbered by mistake during question-file creation and restored from git; per-unit convention followed instead). Answers unambiguous, no follow-up questions needed. Requirements document generated at aidlc-docs/inception/requirements/unit-10-requirements.md: intent analysis, FR-10.1..10.13, NFR-10.1..10.7, per-provider data flows (section 3, the missing brainstorm sections), accepted trade-offs/risks, full status-mapping walkthrough (section 5), extension compliance notes. Approval prompt presented inline.
+**Context**: Requirements Analysis Steps 7-9 (unit-10) - awaiting approval
+
+---
+
+## Requirements Analysis (unit-10)
+**Timestamp**: 2026-11-05T19:48:00Z
+**User Input**: "A"
+**AI Response**: Requirements APPROVED (option A: proceed to Workflow Planning). Unit 10 section appended to aidlc-docs/inception/requirements/requirements.md per unit-9 convention (concise FR-10.1..10.13 / NFR-10.1..10.7 tables; detailed doc aidlc-docs/inception/requirements/unit-10-requirements.md holds the per-provider data flows and status walkthrough). aidlc-state.md updated: Requirements Analysis [x], Current Stage -> WORKFLOW PLANNING. Proceeding to Workflow Planning.
+**Context**: Requirements Analysis complete (unit-10); starting Workflow Planning
+
+---
+
+## Workflow Planning (unit-10)
+**Timestamp**: 2026-11-05T19:55:00Z
+**User Input**: (stage transition - Requirements approved 2026-11-05T19:48:00Z)
+**AI Response**: Execution plan written to aidlc-docs/inception/plans/execution-plan.md (rolling artifact, replaces unit-9's plan; unit-9 content preserved in git history). Stage selection: RE SKIP (stale artifacts, brainstorm map supersedes), AD SKIP (brainstorm design serves), UG SKIP (single unit per Q1=A), FD EXECUTE, NFR Requirements EXECUTE, NFR Design SKIP (project-wide), Infrastructure Design EXECUTE, Code Generation EXECUTE staged 3 parts (part 1 abstraction + OpenHandsRuntime with green gate + dogfood, part 2 claude driver, part 3 copilot driver), Build and Test EXECUTE, Operations PLACEHOLDER. Timeline ~9 working days. Completion message presented with standard 2-option format.
+**Context**: Workflow Planning complete (unit-10) - awaiting user confirmation to proceed to Construction phase (Functional Design first)
+
+---
+
+## Functional Design (unit-10)
+**Timestamp**: 2026-11-05T20:05:00Z
+**User Input**: "A" (Workflow Planning completion: Continue to Next Stage - Functional Design)
+**AI Response**: Functional Design stage started. Grounding investigation read src/agentic_dev_loop/core/config.py (LlmConfig, PipelineConfig: llm/llms blocks, profile key already means the 055 toolchain profile so the provider key cannot be named "profile"), src/agentic_dev_loop/engine/stages.py Runtime.run_agent body (lines 135-278: build_llm per 054, register_sandbox_terminal per KD-4, Conversation, finalize nudge loop, infra-error check, truncated rule, CapturedOutput.from_agent_result), unit-9 FD plan template conventions, and the dogfood convention (agentic-dev-loop/pipeline.yaml = this repo's dogfood pipeline). FD plan written to aidlc-docs/construction/plans/unit-10-functional-design-plan.md with Q1-Q3 open design decisions presented inline.
+**Context**: Construction phase, Functional Design (unit-10) - awaiting Q1-Q3 answers
+
+## Functional Design (unit-10) - decisions answered
+**Timestamp**: 2026-11-05T20:20:00Z
+**User Input**: "1. A\n2. A - but why is an MCP server needed at all for this?\n3. A"
+**AI Response**: Q1=A (top-level provider: key, whole-pipeline, strict blocks, llm-fields forbidden on non-openhands), Q2=A with the MCP rationale answered in chat (codex CLI receives external tools only via MCP config so MCP is required there; claude has an in-process @tool alternative but dual implementation would duplicate the catalog, observation formats and bridge hook points; the server is engine-internal stdio, catalog-only, the opposite direction of the WONTSHIP unit-4 MCP toolkit). Q3=A (user-level auth store under ~/.agentic-dev-loop/auth/). Answers recorded in the FD plan. FD artifacts generated: domain-entities.md (protocol, RuntimeResult, NudgePolicy, provider configs, catalog, bridge, auth entities), business-logic-model.md (factory, pure-move OpenHandsRuntime, claude/copilot run mechanics, bridge path, RuntimeResult-to-AgentResult translation, status walkthrough), business-rules.md (BR-10.1..10.11). Design refinements flagged vs the approved sketch: nudge() folded into NudgePolicy param on run(); finish stays harness-native (MCP set = terminal, file_editor, task_tracker); permission_mode=deny kept as defense in depth. Completion message presented (standardized 2-option).
+**Context**: Functional Design (unit-10) complete - awaiting approval or change requests
+
+## Functional Design (unit-10) - APPROVED
+**Timestamp**: 2026-11-05T20:35:00Z
+**User Input**: "B"
+**AI Response**: Functional Design APPROVED (B: Continue to Next Stage). FD plan marked complete (stage outcome appended). aidlc-state.md updated: Current Stage -> CONSTRUCTION, unit-10 NFR Requirements in progress; unit-10 section added with FD summary. Clarifications answered pre-approval: (1) MCP server is a thin stdio adapter that forwards tool calls to the engine, where the bridge executes via Sandbox.run (the SDK spawns the MCP server so it cannot hold engine state; only tool I/O crosses the channel); (2) OpenHands does not use the MCP/bridge path - it keeps the existing SDK tools and shares only the catalog naming contract, the policy-resolution helpers, and the Sandbox.run gate. Proceeding to NFR Requirements.
+**Context**: Functional Design complete (unit-10); starting NFR Requirements
+
+## NFR Requirements (unit-10)
+**Timestamp**: 2026-11-05T21:00:00Z
+**User Input**: "1. A
+2. A
+3. A
+4. A"
+**AI Response**: All four NFR answers recorded as A in aidlc-docs/construction/plans/unit-10-nfr-requirements-plan.md (NFR-1 practical perf targets measured not enforced; NFR-2 first-party minimal MCP stdio server, stdlib-only; NFR-3 direct GitHub device flow over stdlib urllib with pinned partnership client_id; NFR-4 contract tests + opt-in live smoke at the dogfood gate). Artifacts generated: aidlc-docs/construction/unit-10/nfr-requirements/nfr-requirements.md (NFR-10.1..10.7 measurable acceptance criteria + NFR-1/NFR-4 resolutions + security-baseline disposition: no blocking findings) and tech-stack-decisions.md (TS-1..TS-8). Completion message presented inline awaiting approval.
+**Context**: NFR Requirements (unit-10) - awaiting approval
+
+## NFR Requirements (unit-10) - APPROVED
+**Timestamp**: 2026-11-05T21:10:00Z
+**User Input**: "B"
+**AI Response**: NFR Requirements APPROVED (B: Continue to Next Stage). Plan marked complete (stage outcome appended). aidlc-state.md updated: NFR Requirements [x], Current Stage -> CONSTRUCTION, unit-10 Infrastructure Design in progress. Proceeding to Infrastructure Design.
+**Context**: NFR Requirements complete (unit-10); starting Infrastructure Design
+
+## Infrastructure Design (unit-10)
+**Timestamp**: 2026-11-05T21:25:00Z
+**User Input**: "1. A
+2. A"
+**AI Response**: ID-1=A and ID-2=A recorded in aidlc-docs/construction/plans/unit-10-infrastructure-design-plan.md. Artifacts generated: aidlc-docs/construction/unit-10/infrastructure-design/infrastructure-design.md (scope: no new containers, host-side harnesses, reused sandbox/egress/state; extras packaging + CI tiers; auth store layout; MCP server lifecycle; harness process posture; dogfood-gate procedure for parts 2/3) and deployment-architecture.md (mermaid component view, deployment changes, trust/isolation summary). shared-infrastructure.md amended with sections 6 (provider auth store) and 7 (optional extras + CI tiers). Completion message presented inline awaiting approval.
+**Context**: Infrastructure Design (unit-10) - awaiting approval
+
+## Infrastructure Design (unit-10) - APPROVED
+**Timestamp**: 2026-11-05T21:20:00Z
+**User Input**: "B"
+**AI Response**: Infrastructure Design APPROVED (B: Continue to Next Stage - Code Generation Part 1). Stage Outcome appended to aidlc-docs/construction/plans/unit-10-infrastructure-design-plan.md. aidlc-state.md updated: Infrastructure Design [x], Current Stage -> Code Generation Part 1. Proceeding to Code Generation plan for Part 1 (abstraction + OpenHandsRuntime pure move with green gate + dogfood).
+**Context**: Infrastructure Design complete (unit-10); starting Code Generation Part 1 planning
+
+## Code Generation restructure (unit-10)
+**Timestamp**: 2026-11-05T21:30:00Z
+**User Input**: "Why is the code generation split into 3 parts like this? Each part is useless" followed by answer "A"
+**AI Response**: User challenged the 3-part CG staging (each part has no standalone deliverable value: part 1 is a zero-delta refactor, parts 2/3 each depend on part 1). Agreed; the de-risking value survives as commit-level green checkpoints inside ONE continuous Code Generation stage. Presented restructure question; user answered A = one CG stage: TDD sequence with commit checkpoints (pure move green first, then claude driver, then copilot driver), one Build and Test gate. This supersedes the Q1=A staged answer in unit-10-requirement-verification-questions.md (recorded there as a supersession note). CG plan being written as one stage.
+**Context**: Code Generation stage entry (unit-10); supersedes Q1 staging
+
+## Code Generation (unit-10) - implementation mode decided
+**Timestamp**: 2026-11-05T21:45:00Z
+**User Input**: "C"
+**AI Response**: CG plan Q1 answered: C - user-driven outside AI-DLC sessions (unit-9 precedent); the user implements, the agent stays available for assistance and review. Answer recorded in aidlc-docs/construction/plans/unit-10-code-generation-plan.md (option letters aligned between the chat presentation and the file before recording). NO code is written by the agent in this stage. The CG plan (20 steps, 3 commit checkpoints, --aidlc-unit compatibility constraints) stands as the build spec.
+**Context**: Code Generation (unit-10) - awaiting user-driven implementation
+
+## Code Generation (unit-10) - QA and auth policy clarification
+**Timestamp**: 2026-11-05T21:55:00Z
+**User Input**: "Second question: how will the loop do QA? Should I provide auth tokens now?"
+**AI Response**: Clarified (chat only, no design change): (1) NO auth tokens are ever provided to the agent or the repo - claude subscription mode uses the user's existing local `claude login` (engine only detects ~/.claude/.credentials.json presence; harness reads the login via Anthropic's SDK); claude key mode reads ANTHROPIC_API_KEY from the user's environment; copilot auth happens on first run via the engine-hosted device flow storing the token in ~/.agentic-dev-loop/auth/copilot.json (mode 600). Tokens never enter pipeline yaml or commits. (2) QA under implementation mode C (user-driven): the dogfood loop's QA stage only runs when the loop implements (mode A). For mode C the QA set = the CG plan gates, split by who can run them: subscription-free (full pytest suite incl. docker-marked, test_repo_ascii, aidlc loader tests, contract tests) - runnable by the agent on request; subscription-dependent (live_harness opt-in smoke, scratch-pipeline e2e with provider: claude/copilot, container audit) - runnable only by the user with real subscriptions.
+**Context**: Code Generation (unit-10) - user-driven implementation in progress
+
+## Code Generation (unit-10) - implementation mode amended to A (dogfood loop)
+**Timestamp**: 2026-11-05T22:05:00Z
+**User Input**: "I'll be running the dogfood loop in my terminal!"
+**AI Response**: Implementation mode amended from C to A: the dogfood loop implements the unit (unit-5 precedent), the user operates the loop runs in their terminal. CG plan Q1 answer superseded with the amendment. aidlc-state.md updated. Operational split: the loop builds all three checkpoints TDD-style with its own test step as the gate (dogfood pipeline stays openhands per the plan's --aidlc-unit constraints, so the loop stays healthy while refactoring its own runtime path; BR-10.1 rule zero guarantees byte-identical openhands behavior through checkpoint 1); the subscription-dependent gates (live_harness smoke with real Claude/Copilot subscriptions, scratch-pipeline e2e, container audit) remain user-run. The agent does not monitor loop runs (no deployment/CI status checks; repo rule) - it reviews commits/gate output the user presents.
+**Context**: Code Generation (unit-10) - dogfood loop implementing, user-operated
+
+## Code Generation (unit-10) - pre-launch auth question
+**Timestamp**: 2026-11-05T22:10:00Z
+**User Input**: "Should I run claude login and copilot login before kicking it off?"
+**AI Response**: Answered no - no pre-launch auth steps. The dogfood loop needs zero subscriptions (openhands/DeepSeek pipeline; test step runs pytest -m "not docker"; live_harness is opt-in and never fires in loop runs). Claude: the user's existing local claude login suffices, needed only at the checkpoint 2 live gate. Copilot: no pre-login exists in this design; the engine hosts the device flow on first provider: copilot run (checkpoint 3 gate). Any loop-agent stray into live territory is stopped by the fail-fast auth messages.
+**Context**: Code Generation (unit-10) - dogfood loop about to launch

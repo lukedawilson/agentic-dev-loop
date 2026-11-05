@@ -117,3 +117,46 @@ Isolation is **always-on** (amended 2026-10-19, unit-3 FD-4): every run uses the
 | NFR-9.3 | **Resiliency (scoped extension)**: CDN-unreachable fallback (FR-9.4) and the stream watchdog/reload behaviour are spec'd and preserved. |
 | NFR-9.4 | **Layout cost O(N + E)**; reflow live on resize without reload (ResizeObserver). |
 | NFR-9.5 | **Repo ASCII policy**: shipped PAGE assets follow AGENTS.md's ASCII rule (current checker enforces em dash U+2014 only; non-ASCII UI glyphs from the prototype are replaced by CSS-drawn elements, Carbon icons, or ASCII). |
+
+## Unit 10 - Multi-provider runtime (OpenHands + Claude Agent + Copilot) (2026-11-05)
+
+Detail (per-provider data flows, status-mapping walkthrough, trade-offs):
+`aidlc-docs/inception/requirements/unit-10-requirements.md` (approved 2026-11-05).
+
+### Intent Analysis
+
+- **User request**: plug Claude Code and GitHub Copilot subscription logins into the agentic dev loop as swappable agent providers alongside OpenHands (OpenCode-style architecture: run the real harness CLI as a subprocess, swap in the engine's tools), preserving the kernel-level (Docker) sandboxing and the viz for every provider.
+- **Request type**: New Feature (multi-provider capability).
+- **Scope**: Multiple Components (core config, engine runner path, tool registration, outputs, a new runtime driver package, pyproject extras, SDK compat shims).
+- **Complexity**: Complex (three provider behaviours, two external SDKs, policy and security constraints, backward compatibility).
+- **Decisions**: `aidlc-docs/inception/requirements/unit-10-requirement-verification-questions.md` (Q1-Q6 all A, answered 2026-11-05): one unit with staged Code Generation; user runs `claude login`, engine detects session and fails fast with guidance; engine hosts GitHub device flow for Copilot; ship claude provider with documented risk note; data flows covered here + Functional Design; skip User Stories.
+
+### Functional Requirements
+
+| ID | Requirement |
+| --- | --- |
+| FR-10.1 | **Provider selection with backward compatibility**: pipeline config gains `provider` key (`openhands \| claude-agent \| copilot`), default `openhands`; pre-feature configs behave exactly as today (test asserts old configs run the OpenHandsRuntime path identically). |
+| FR-10.2 | **AgentRuntime protocol**: engine-owned `run(msg) -> RuntimeResult(final_text, truncated, status)`, `nudge()`, `close()`; RuntimeStatus = `FINISHED \| ERROR \| STUCK \| TRUNCATED`; the step runner consumes only this protocol. |
+| FR-10.3 | **OpenHandsRuntime (stage 1, pure refactor)**: today's Conversation-driving body of stages.py moves verbatim in behaviour; reasoning-effort gate stays OpenHands-only; lands with full suite green + dogfood run before stages 2/3. |
+| FR-10.4 | **ClaudeAgentRuntime (stage 2)**: real `claude` CLI via claude-agent-sdk subprocess (shared async-to-sync bridge); ClaudeAgentConfig (login subscription\|key, model, max_turns); no credentials read/stored/intermediated by the engine. |
+| FR-10.5 | **CopilotRuntime (stage 3)**: Codex CLI (openai-codex, pinned) on a Copilot subscription; CopilotConfig (device flow auth, model); engine prints code + URL, user completes in browser, SDK stores OAuth. |
+| FR-10.6 | **Shared tool catalog (engine-owned)**: terminal, file_editor, task_tracker, finish; one definition; `.agent.md` portable across providers; brief agent works everywhere; per-driver bindings (OpenHands = existing SDK tools unchanged; Claude/Copilot = catalog as MCP tools, native harness tools OFF). |
+| FR-10.7 | **SandboxToolBridge (shared, thin-driver/fat-bridge)**: every terminal call routes through one bridge composing SandboxExecutionRequest (argv, cwd, per-step secrets env, timeout, network lane, mount_set, egress_policy, allowlist, forbidden rules); infra-error classification (030) unchanged; bridge results emit the existing on_terminal_result viz events. |
+| FR-10.8 | **CapturedOutput.from_runtime_result**: new classmethod; from_agent_result stays for the OpenHands path (final response read before conv.close()); redaction + artifact write shared; `truncated = status != FINISHED` unchanged, all providers. |
+| FR-10.9 | **Harness hardening (non-negotiable)**: claude `setting_sources: []` + `allowed_tools` locked to catalog + no interactive permission prompts (deny); codex: no project config, no custom tools, engine MCP only; secrets never in harness process env; fail fast if an SDK cannot guarantee a harness execution tool is fully disabled; isolation verification checklist (intent AND blast radius) in the spec. |
+| FR-10.10 | **Authentication UX**: claude = probe session, fail fast with `claude login` guidance; copilot = engine-hosted device flow; never collect/store/intermediate credentials; BYOK documented as future, out of scope. |
+| FR-10.11 | **Dependency handling**: claude-agent-sdk + openai-codex as optional extras `[claude]`/`[copilot]`; configured-but-missing fails fast; COMPAT-SHIMS.md entries + version-guard/canary tests. |
+| FR-10.12 | **Status mapping and budget semantics**: full walkthrough in the detail doc; budget exhaustion is TRUNCATED never a silent FINISHED; claude budget = max_turns; copilot budget = turn limit. |
+| FR-10.13 | **Policy documentation**: claude provider ships with a documented risk note (Anthropic policy gray area, distinction from banned spoofing tools, OpenCode precedent, June 2026 Agent SDK credit model). |
+
+### Non-Functional Requirements
+
+| ID | NFR |
+| --- | --- |
+| NFR-10.1 | **Backward compatibility**: pre-feature configs identical; the FR-10.3 move is provably behaviour-preserving. |
+| NFR-10.2 | **Security (Security Baseline extension)**: FR-10.9 unconditional; sandbox egress policy still governs every executed command; harness model-channel egress unchanged (brain on host); secrets per-step in SandboxExecutionRequest env only. |
+| NFR-10.3 | **Reliability (scoped extension)**: infra-error classification unchanged; subprocess death of claude/codex CLI = STUCK with no engine retry flap (030 policy); LAST_ERROR policy unchanged. |
+| NFR-10.4 | **Testability**: TDD; interface-level fakes for runtimes (unit-3 FD-5 pattern); mocks ONLY at SDK subprocess boundaries; bridge tested against the real Sandbox path; SDK compat tests follow version-guard + canary pattern. |
+| NFR-10.5 | **Maintainability**: drivers thin; catalog + bridge in the engine; one new package (proposed src/agentic_dev_loop/engine/runtimes/). |
+| NFR-10.6 | **Repo hygiene**: all new files ASCII-only (no U+2014); consumer name ban applies. |
+| NFR-10.7 | **Fail fast**: no silent fallbacks (missing package, missing session, un-disableable tool, unknown provider value all raise with named, actionable errors). |
