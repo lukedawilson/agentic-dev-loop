@@ -7,6 +7,8 @@ trusted actions - and `agentic-dev-loop` runs it end to end: agent and command s
 kernel-level sandboxing via Docker, verdicts route the graph, every boundary is
 checkpointed, and nothing gets committed until every gate passes.
 
+![The live graph view - pipeline graph with fail loopbacks, summary tiles, per-stage consoles, and event log](https://raw.githubusercontent.com/lukedawilson/agentic-dev-loop/main/docs/viz-screenshot.png)
+
 ```mermaid
 flowchart LR
     dev["agent: dev"] --> test{{"test gate"}} --> review["agent: review"] --> qa["agent: qa"] --> commit["action: commit"]
@@ -130,8 +132,6 @@ the next startup retries it. Pass
 `--state-dir` to point at a custom `isolation.state_dir`.
 
 **What a run looks like** (the shipped self-loop example):
-
-![The live graph view - pipeline stages with verdict badges, retry cycles, and per-stage consoles](docs/viz-screenshot.png)
 
 1. **dev** - the dev agent works with full context (loaded docs + shared files).
    Its edits are untracked; only declared `produces:` files are hygiene-tracked.
