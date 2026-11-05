@@ -71,6 +71,17 @@ PROVIDERS = {
 }
 
 
+# provider arg -> (SDK module the engine process imports, extra name to
+# install it). The harness SDK is a HOST-side requirement: the engine process
+# constructs the runtime and spawns the harness CLI, while the sandbox venv
+# (built by the pipeline's deps step) never imports it.
+PROVIDER_SDK = {
+    "claude": ("claude_agent_sdk", "claude"),
+    "codex": ("openai_codex", "copilot"),
+    "copilot": ("openai_codex", "copilot"),
+}
+
+
 def free_port() -> int:
     """A port that is free right now (best effort, race-free enough)."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -81,6 +92,26 @@ def free_port() -> int:
 def fail(message: str, code: int = 2) -> None:
     print(f"smoke_provider: {message}", file=sys.stderr)
     sys.exit(code)
+
+
+def check_provider_sdk(engine_python: Path, provider_arg: str) -> None:
+    """Pre-flight: the engine python must be able to import the provider's
+    harness SDK. Fail fast with the exact install command before any work
+    (worktree, sandbox, deps install) starts."""
+    entry = PROVIDER_SDK.get(provider_arg)
+    if entry is None:
+        return  # openhands: openhands-sdk is a core dependency of the engine
+    module, extra = entry
+    result = subprocess.run(
+        [str(engine_python), "-c", f"import {module}"],
+        capture_output=True, text=True, check=False)
+    if result.returncode == 0:
+        return
+    fail(
+        f"provider '{provider_arg}' needs {module!r} in the engine python "
+        f"({engine_python}); install the extra from the repo root:\n"
+        f"  {engine_python} -m pip install -e '.[{extra}]'", 1)
+
 
 
 def check_assets_clean(plan_doc: Path, assets_dir: Path) -> None:
@@ -197,6 +228,7 @@ def main() -> int:
     if not (assets_dir / "agents" / "dev.agent.md").is_file():
         fail(f"dev agent not found: {assets_dir / 'agents' / 'dev.agent.md'}")
 
+    check_provider_sdk(engine_python, args.provider)
     check_assets_clean(plan_doc, assets_dir)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
