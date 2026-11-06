@@ -625,3 +625,41 @@
 **AI Response**: aidlc-state.md updated: Current Stage -> CONSTRUCTION paused, unit-10 WONTSHIP/WONTDO; stage-progress unit-10 lines replaced with one WONTSHIP line; both unit-10 sections consolidated into one WONTSHIP section (unit-4 precedent style) with the revert record (526c802 mechanical revert of 4a00257, full suite green post-revert) and the 058 direction note; unit-10 intent doc gained a WONTSHIP status note. Smoke assets moved via git mv: tools/smoke_provider.py -> tests/smoke/run_smoke.py; planning-docs/057-viz-persists-after-run.md -> tests/smoke/viz-keepalive/plan.md; planning-docs/057-viz-persists-after-run/smoke/{pipeline.yaml,agents/dev.agent.md} -> tests/smoke/viz-keepalive/{pipeline.yaml,agents/dev.agent.md}. run_smoke.py rewritten: provider parameter, provider-block injection, and SDK pre-flight check removed; required config_dir argument instead; pipeline.yaml template carries its own llm block (deepseek/OPENAI_API_KEY); plan.md run instructions rewritten for the config-dir invocation.
 **Context**: unit-10 code was reverted by the user (526c802) so the smoke script's provider injection targeted a config key that no longer exists. tests/smoke is not collected by pytest (default test_*.py patterns; no pytest config pins python_files). All moved/edited files remain ASCII (em dash ban; tests/test_repo_ascii.py scans tracked files).
 ---
+
+## 058 Copilot-as-endpoint implementation
+
+**Timestamp**: 2026-11-06T10:39:54Z
+**User Input**: "You are working on plan 058-copilot-as-endpoint.md."
+**AI Response**: Implemented the 058 direction TDD-style in the dev lane. Config gained `LlmConfig.headers`, optional `api_key_env` plus `api_key_secret` with an exactly-one validator, and `SecretSpec.json_key` for the new `file` secret provider. Engine gained FileProvider (JSON key selection, fail-fast messages naming `copilot-login`), file-backed key resolution and `extra_headers` forwarding in build_llm, LLM key values merged into the run redaction set, a re-added stdlib-only copilot_auth.py (device flow with scope `copilot`, overridable client id, /models probe), and `copilot-login` / `copilot-models` CLI subcommands. run_smoke.py gained a regex credential pre-flight and a pinned-model probe before worktree creation, with committed smoke config dirs for the Copilot endpoint and standard OpenAI. README and docs/setup.md updated. Full suite green (1295 passed, 50 skipped); real-token gates remain user-run.
+**Context**: planning-docs/058 Copilot-as-endpoint (post unit-10 WONTSHIP)
+
+---
+
+## Smoke provider/plan decoupling (user-directed)
+
+**Timestamp**: 2026-11-06
+**User Input**: "Something has gone horribly wrong here - the provider and
+the target config/plan directory are independent. They have NOTHING to do
+with each other. ... Extend smoke_test.py to take a provider parameter and
+a config directory. Then write the run-smoke.sh wrapper. Then clean up the
+example config dirs."
+**AI Response**: Restored the decoupled design in tests/smoke/run_smoke.py:
+a required `--provider {openhands,copilot}` argument plus a
+`PROVIDER_BLOCKS` registry; `inject_provider_block` inserts the matching
+llm block into the config dir's provider-free template (after the name
+line, or at the top) and raises SmokePreflightError when a template still
+carries its own `llm:` block (no silent winner-picking). preflight_llm and
+preflight_copilot_model now take the assembled text; build_pipeline takes
+the template text. TDD: tests/test_smoke_preflight.py rewritten with
+TestProviderInjection (registry, injection placement, llm-carrying template
+rejection, per-provider pre-flights) plus text-based credential/model
+pre-flight tests (17 red -> 17 green). Deleted tests/smoke/copilot-endpoint/
+and tests/smoke/openai-endpoint/ (git rm); tests/smoke/viz-keepalive/
+pipeline.yaml is now the provider-free template. Added root-level
+run-smoke.sh (`./run-smoke.sh <provider> <config-dir> [run_smoke.py
+args...]`; validates provider, config dir + pipeline.yaml, and the repo
+venv, then execs run_smoke.py). Docs: setup.md, CHANGELOG.md,
+aidlc-state.md, and a D9 reversal note in planning-docs/058.
+**Context**: 058's D9 three-config-dir shape coupled provider to plan; the
+pre-058 tools/smoke_provider.py (7ebccaf) already had the decoupled
+provider-injection design, which this change restores.

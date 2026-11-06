@@ -1,9 +1,9 @@
 # Postmortem: Unit-10 multi-provider runtime (2026-11-05)
 
-Status: DRAFT. Batch 1 (TL;DR, Impact, Timeline) and Batch 2 (root-cause
-analysis, Actions, What went well, Where we got lucky) approved by the user
-with corrections; Phase 3 appendices (A: validated model, B: repair scripts)
-appended and awaiting review; Phase 4 propagation to follow.
+Status: FINAL (2026-11-06). Batches 1 and 2 approved by the user with
+corrections; Phase 3 appendices (A: validated model, B: repair scripts)
+approved (committed in 150ad1c); Phase 4 propagation applied - see the
+Propagation section below.
 
 Time convention: git and PyPI times are authoritative and quoted in UTC.
 Session-record times carried a "Z" suffix but are consistent with local time
@@ -352,3 +352,44 @@ rm ~/.agentic-dev-loop/auth/copilot.json
 5. The pre-flight SDK check (commit 80a04d0) died with the restructure; its
    job is superseded by 058 D10 (run_smoke.py llm pre-flight scanning
    pipeline.yaml for api_key_env / api_key_secret).
+
+## Propagation (Phase 4)
+
+Applied 2026-11-06 by user directive ("Do phase 4 propagation"). One change
+per Action; Actions with no file target yet state their status.
+
+- **A2 - premise-probe rule** -> `AGENTS.md` "Reverse engineering
+  undocumented systems": section intro now names both incidents; new
+  Prevent bullet: never build an architecture on an unvalidated
+  external-SDK capability claim (probe the pinned artifact, record the
+  validated-model table, docs are not facts, driver code only against a
+  probed interface).
+- **A5 - AI-DLC external-surface extension** -> new rule set
+  `.aidlc/aidlc-rules/aws-aidlc-rule-details/extensions/design/external-surfaces/`
+  (`external-surfaces.md` + `external-surfaces.opt-in.md`, EXTSRF-01..04:
+  pinned-version evaluation, claims are not facts, gap -> spike loudly with
+  the spike result as a design-stage completion condition, validated-model
+  record) and registered as enabled in `aidlc-docs/aidlc-state.md`
+  Extension Configuration.
+- **D1 - QA verdict semantics** -> `agentic-dev-loop/sdk_agents/qa.agent.md`
+  OUTPUT rules: PASS now requires the plan's headline feature to be
+  verified; an unverifiable headline feature forces VERDICT: UNVERIFIABLE
+  naming the feature and its blocking reason. OPEN: the dogfood pipeline's
+  qa step still routes `on_unverifiable: commit`, so the new verdict does
+  not yet block a commit - changing that routing is a one-line
+  `agentic-dev-loop/pipeline.yaml` edit awaiting the user's decision.
+- **A1 (premise probe as process gate)** - superseded by A2 + A5 (the probe
+  obligation now lives in both the agent instructions and the AI-DLC rule
+  set); no separate change.
+- **A3 (SDK presence for driver code)** - absorbed into A2's "driver code
+  is written only against a probed interface"; no separate change.
+- **A4 (brainstorming scope discipline)** -> `.opencode/skills/brainstorming/SKILL.md`: new "Scope Boundary: Ideas, Not Validated Designs" section - brainstorming produces design options, never commits unverified external-surface claims as architecture, and defers validation of those claims to the design stage (EXTSRF gate).
+- **D3 (real-token smoke)** - already queued and implemented via
+  planning-docs/058-copilot-as-endpoint.md (D9/D10) and the smoke config
+  dirs; nothing further.
+- **P1 (completion definition)** - enforced by D1's verdict rule once the
+  pipeline routing question above is resolved; open until then.
+- **P2 (vigilance is not a control)** - same queue as D3; closed with 058's
+  real-token gates.
+- **P3 (QA evidence persistence)** - unowned and unscheduled; the QA report
+  and review findings still live only in the ephemeral run directory.

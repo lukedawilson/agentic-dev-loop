@@ -80,10 +80,16 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
 
 ```
 # From the repo root, with the smoke assets committed (git status clean):
-./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive
+./run-smoke.sh openhands tests/smoke/viz-keepalive
+# or, without the wrapper:
+./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive --provider copilot
 ```
 
-- The argument is a config directory: `pipeline.yaml` (the pipeline the run
+- The two arguments are independent: `--provider` (openhands | copilot)
+  picks the llm block that run_smoke.py injects into the pipeline template;
+  the config directory is the plan only, and its `pipeline.yaml` must be
+  provider-free (a template carrying its own `llm:` block is rejected).
+- The config directory holds `pipeline.yaml` (the pipeline the run
   executes), `agents/dev.agent.md` (the agent definition), and optionally
   `plan.md` (fed to the run as an additional file).
 - The engine runs FROM SOURCE (`PYTHONPATH=src`, no wheel, no pip install) in
@@ -91,7 +97,9 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
   source tree (host-boundary check stays green). The pipeline is
   deps -> dev -> test (the test step runs the keepalive test selection).
 - Preconditions: Docker running; `.venv` exists; assets committed;
-  `OPENAI_API_KEY` exported (the template uses DeepSeek via that env var).
+  `OPENAI_API_KEY` exported for `openhands` (DeepSeek via that env var), or
+  the token file from `agentic-dev-loop copilot-login` plus a tier-listed
+  model for `copilot`.
 - The script streams the engine output, waits for the keep-alive line,
   probes the viz endpoint, sends ctrl+c, and reports PASS/FAIL plus the
   files the agent changed in the worktree. Pass `--keep-worktree` to inspect

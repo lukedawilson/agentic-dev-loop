@@ -31,6 +31,7 @@
 - **Resiliency Baseline**: Yes (scoped) - enabled as directional guidance, desktop-tool scope (retries/recovery in; server load/HA/DR out) (Requirements Analysis, 2026-10-17)
 - **Security Baseline**: Yes - enabled (Requirements Analysis, 2026-10-17)
 - **Property-Based Testing**: Yes (Partial) - pure functions + serialization round-trips only (Requirements Analysis, 2026-10-17)
+- **External Surfaces Validation**: Yes - enabled (rule set from the unit-10 postmortem, 2026-11-06; applies whenever the design depends on an SDK, external API, or auth flow)
 
 ## Stage Progress
 - [x] Workspace Detection - 2026-10-17T10:58:41Z
@@ -149,3 +150,22 @@ Withdrawn by user directive 2026-11-06 ("Mark unit 10 as wontship", after the us
 - KEEP from unit-10: Copilot device flow (copilot_auth.py, ~167 lines, self-contained, stdlib-only) - re-added with the scope fix (scope: copilot, not read:user) and overridable client_id as part of the 058 direction
 - Superseded by: the 058 Copilot-as-endpoint direction - Copilot runs as an OpenAI-compatible endpoint (api.githubcopilot.com) on the existing OpenHands runtime, not a separate driver (planning-docs/058-copilot-as-endpoint.md, written 2026-11-06)
 - Historical docs (requirements FR-10.x/NFR-10.x, FD/NFR/ID artifacts, intent doc, audit trail) remain as history
+
+### 058 Copilot-as-endpoint direction (2026-11-06)
+
+planning-docs/058-copilot-as-endpoint.md is written and implemented: Copilot
+runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
+
+- Config: `LlmConfig.headers` (forwarded as `extra_headers`), `api_key_env`
+  optional plus `api_key_secret`, exactly-one validator; `SecretSpec.json_key`
+  for the new `file` secret provider.
+- Engine: FileProvider (secrets.py), file-backed key resolution and header
+  forwarding in build_llm, re-added copilot_auth.py (scope `copilot`, env
+  client-id override), `copilot-login` and `copilot-models` CLI subcommands.
+- Smoke: run_smoke.py llm credential pre-flight plus a pinned-model probe;
+  the provider argument (openhands|copilot) injects the llm block into a
+  provider-free plan dir (tests/smoke/viz-keepalive); run-smoke.sh wraps
+  the invocation.
+- Non-token gates are green (full suite, ASCII check). Real-token gates
+  (device flow, model probe, tool-call round trip, both smokes) remain
+  user-run.

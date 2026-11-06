@@ -171,11 +171,14 @@ Start your final response with a `VERDICT:` line on its own line, then the
 check table and findings. Each check row carries either a probe result or a
 citation (`covered by <test>` or `gate record`). The verdict rules are:
 
-- `VERDICT: PASS` when every reachable acceptance check passes. Checks that
-  could not be verified are recorded as `UNVERIFIABLE` in the report, not
-  treated as failures.
+- `VERDICT: PASS` when every reachable acceptance check passes and the
+  plan's headline feature is verified. The headline feature is the primary
+  behavior the change ships; if it cannot be verified in this sandbox, PASS
+  is forbidden (see next bullet).
 - `VERDICT: UNVERIFIABLE` when the acceptance checks cannot be touched at
-  all, or none of them can be verified in this sandbox.
+  all, none of them can be verified in this sandbox, or the plan's headline
+  feature cannot be verified here. Name the headline feature and its
+  blocking reason in the `## UNVERIFIABLE` section.
 - `VERDICT: ENV` when the verification environment itself is broken mid-run
   and PASS/FAIL/UNVERIFIABLE cannot be determined (see ENV above).
 - `VERDICT: FAIL` on any genuine defect, as always.

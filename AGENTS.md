@@ -133,11 +133,12 @@ causation from co-occurrence; adjacent timing is not proof.
 
 ## Reverse engineering undocumented systems
 
-Rules born from the 2026-09-29 Framer incident - a Delete button built on an invented store model severed 18 live component definitions.
+Rules born from two incidents: the 2026-09-29 Framer incident (a Delete button built on an invented store model severed 18 live component definitions) and the 2026-11-05 unit-10 incident (a provider driver built on an unprobed SDK capability claim shipped unusable and was reverted in whole).
 
 **Prevent**
 
 - **Never design destructive operations against an unvalidated model of an external system.** Before any mutation ships, record the *validated model* - each fact with the probe that established it - alongside the code that relies on it. If a fact was assumed rather than probed, it is not a fact.
+- **Never build an architecture on an unvalidated external-SDK capability claim.** Before a design that depends on an external SDK, API, or auth flow is approved, probe the pinned artifact: install the exact version and invoke the real interface (or hit the real endpoint), and record each fact with the probe that established it (validated-model table, see docs/incidents/2026-11-05-unit-10-false-premise.md Appendix A). Docs, blog posts, and intuition are not facts until a probe establishes them. Driver code is written only against a probed interface.
 - **Test fixtures must be built from real system dumps**, not from the developer's mental model. Fixtures encoding a fiction make wrong predicates pass their own tests.
 - **Prove the undo path before enabling the do path.** A delete ships after its restore is demonstrated working, not before.
 

@@ -347,6 +347,12 @@ steps:
   engine-written output - captured step output, retry notes, artifacts, and
   `state_dir` files. (Hygiene: the declaring step's agent has already seen
   the value in its own env.)
+- **File provider and LLM keys.** `from: file` reads a host file (`key` is the
+  path, optional `json_key` selects a JSON field). The `llm:` block accepts
+  exactly one of `api_key_env` or `api_key_secret`; the resolved key joins the
+  redaction set. See [Copilot as an endpoint](docs/setup.md#copilot-subscription-endpoint-058)
+  for the GitHub Copilot subscription profile (`copilot-login` device flow,
+  `copilot-models` probe, and the required endpoint headers).
 
 ### Per-stage networking
 

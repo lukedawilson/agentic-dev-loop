@@ -1,11 +1,9 @@
 name: smoke-viz-keepalive
 profile: python
-# agents_dir and additional_files are rewritten by tests/smoke/run_smoke.py
-# to absolute paths inside the disposable worktree.
-llm:
-  model: openai/deepseek-v4-pro
-  base_url: https://api.deepseek.com
-  api_key_env: OPENAI_API_KEY
+# Provider-free template: run_smoke.py injects the llm block for its
+# --provider argument (openhands or copilot). agents_dir and
+# additional_files are rewritten by tests/smoke/run_smoke.py to absolute
+# paths inside the disposable worktree.
 agents_dir: agents
 additional_files: []
 deps_policy: open

@@ -18,6 +18,10 @@ prints "Pipeline finished: press ctrl+c to exit". This script streams the
 engine output, waits for that line, probes the viz endpoint, sends ctrl+c,
 and reports PASS/FAIL plus the files the agent changed in the worktree.
 
+Provider and plan are independent: the --provider argument injects the
+matching llm block (PROVIDER_BLOCKS) into the config dir's pipeline
+template, which must be provider-free.
+
 On-demand local tooling: never run in CI.
 """
 
@@ -45,6 +49,32 @@ SRC_DIR = REPO_ROOT / "src"
 
 KEEPALIVE_MARKER = "Pipeline finished: press ctrl+c to exit"
 
+# provider argument -> the llm block injected into the config dir's template.
+# The config dir is provider-free (the provider owns the llm block), so the
+# same plan runs against any provider without editing yaml.
+PROVIDER_BLOCKS = {
+    "openhands": (
+        "llm:\n"
+        "  model: openai/deepseek-v4-pro\n"
+        "  base_url: https://api.deepseek.com\n"
+        "  api_key_env: OPENAI_API_KEY\n"
+    ),
+    "copilot": (
+        "llm:\n"
+        "  model: gpt-4o-mini\n"
+        "  base_url: https://api.githubcopilot.com\n"
+        "  api_key_secret:\n"
+        "    from: file\n"
+        "    key: ~/.agentic-dev-loop/auth/copilot.json\n"
+        "    json_key: access_token\n"
+        "  headers:\n"
+        "    Copilot-Integration-Id: vscode-chat\n"
+        "    Editor-Version: vscode/1.94.0\n"
+        "    Openai-Intent: conversation-panel\n"
+        "    X-GitHub-Api-Version: \"2022-11-28\"\n"
+    ),
+}
+
 
 class SmokePreflightError(RuntimeError):
     """A loud pre-flight failure naming the operator's next command."""
@@ -71,12 +101,31 @@ def _field(block: str, name: str) -> str | None:
     return match.group(1).strip("\"'") if match else None
 
 
-def preflight_llm(config_dir: Path,
+def inject_provider_block(template: str, provider: str) -> str:
+    """Inject the provider's llm block into a provider-free template.
+
+    The block lands after the ``name:`` line (or at the top when the
+    template has none). A template that still carries its own ``llm:``
+    block is a config error: the provider argument owns the llm block, and
+    silently picking a winner would hide the stale coupling.
+    """
+    if re.search(r"^\s*llm:\s*(#.*)?$", template, re.MULTILINE):
+        raise SmokePreflightError(
+            "the config dir's pipeline.yaml still carries an 'llm:' block - "
+            "the --provider argument owns the llm block; remove the 'llm:' "
+            "block from the template")
+    block = PROVIDER_BLOCKS[provider]
+    match = re.search(r"^name:\s*\S+.*$", template, re.MULTILINE)
+    if match is None:
+        return block + template
+    return template[:match.end()] + "\n" + block + template[match.end():]
+
+
+def preflight_llm(text: str,
                   environ: dict[str, str] | None = None) -> None:
-    """Fail in seconds, before a worktree and deps build, when the config
-    dir's llm credentials are absent. Regex-based and stdlib-only: the
+    """Fail in seconds, before a worktree and deps build, when the pipeline
+    template's llm credentials are absent. Regex-based and stdlib-only: the
     pipeline yaml is a template, not a loaded config."""
-    text = (Path(config_dir) / "pipeline.yaml").read_text(encoding="utf-8")
     environ = os.environ if environ is None else environ
     for match in re.finditer(r"^\s*api_key_env:\s*(\S+)\s*$", text,
                              re.MULTILINE):
@@ -105,11 +154,10 @@ def _engine_auth():
     return copilot_auth
 
 
-def preflight_copilot_model(config_dir: Path, *, token_reader=None,
+def preflight_copilot_model(text: str, *, token_reader=None,
                             models_lister=None) -> None:
     """For a file-backed Copilot config, probe /models and confirm the pinned
     model exists for this token's tier. Non-Copilot configs are a no-op."""
-    text = (Path(config_dir) / "pipeline.yaml").read_text(encoding="utf-8")
     block = _secret_block(text)
     if block is None or _field(block, "from") != "file":
         return
@@ -174,16 +222,16 @@ def remove_worktree(worktree_dir: Path) -> None:
         cwd=REPO_ROOT, capture_output=True, text=True, check=False)
 
 
-def build_pipeline(worktree: Path, config_dir: Path, tmpdir: Path) -> Path:
-    """Copy the template pipeline into a temp dir with absolute paths.
+def build_pipeline(worktree: Path, config_dir: Path, template_text: str,
+                   tmpdir: Path) -> Path:
+    """Write the template into a temp dir with absolute paths.
 
     agents_dir and additional_files become ABSOLUTE worktree paths (the
     loader resolves pipeline-dir-relative paths, and absolute paths pass
     through; they must resolve inside the workspace and be clean). The
-    template carries the full provider config already (no injection).
+    template already carries the injected provider block.
     """
-    template = (config_dir / "pipeline.yaml").read_text(encoding="utf-8")
-    text = template
+    text = template_text
     agents_in_worktree = worktree / config_dir.relative_to(REPO_ROOT) / "agents"
     text = text.replace(
         "agents_dir: agents\n",
@@ -216,7 +264,13 @@ def main() -> int:
         "config_dir", type=Path,
         help="smoke config directory containing pipeline.yaml and "
              "agents/dev.agent.md (and optionally plan.md, fed to the run "
-             "as an additional file)")
+             "as an additional file); the pipeline.yaml must be "
+             "provider-free (the --provider argument owns the llm block)")
+    parser.add_argument(
+        "--provider", required=True, choices=sorted(PROVIDER_BLOCKS),
+        help="llm backend for this run: the matching block from "
+             "PROVIDER_BLOCKS is injected into the config dir's pipeline "
+             "template")
     parser.add_argument(
         "--worktree-dir", type=Path, default=None,
         help="worktree path (default: ~/.agentic-dev-loop/smoke/worktrees/"
@@ -250,8 +304,10 @@ def main() -> int:
         fail(f"dev agent not found: {config_dir / 'agents' / 'dev.agent.md'}")
 
     try:
-        preflight_llm(config_dir)
-        preflight_copilot_model(config_dir)
+        template = (config_dir / "pipeline.yaml").read_text(encoding="utf-8")
+        text = inject_provider_block(template, args.provider)
+        preflight_llm(text)
+        preflight_copilot_model(text)
     except SmokePreflightError as e:
         fail(str(e))
 
@@ -267,13 +323,14 @@ def main() -> int:
     port = args.viz_port or free_port()
 
     print(f"[smoke] config dir: {config_dir}")
+    print(f"[smoke] provider: {args.provider}")
     print(f"[smoke] worktree: {worktree}")
     print(f"[smoke] viz port: {port}")
     print("[smoke] creating worktree from HEAD...")
     create_worktree(worktree)
     try:
         tmpdir = Path(tempfile.mkdtemp(prefix="run-smoke-"))
-        pipeline = build_pipeline(worktree, config_dir, tmpdir)
+        pipeline = build_pipeline(worktree, config_dir, text, tmpdir)
         print(f"[smoke] pipeline: {pipeline}")
 
         bootstrap = (

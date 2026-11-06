@@ -13,6 +13,22 @@ Start by understanding the current project context, then ask questions one at a 
 Do NOT invoke any implementation skill, write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it. This applies to EVERY project regardless of perceived simplicity.
 </HARD-GATE>
 
+## Scope Boundary: Ideas, Not Validated Designs
+
+This skill explores intent and produces design OPTIONS. It is not the
+authority on how external systems actually work. When the discussion
+touches an external system (an SDK, a CLI harness, an API, an auth flow):
+
+- Treat every capability claim as UNVERIFIED until a probe establishes it
+  (install the pinned version and invoke the real interface, or hit the
+  real endpoint). Docs, blog posts, and intuition are not facts.
+- Never write a spec that commits to an unverified claim as architecture.
+- When the idea graduates to an AI-DLC unit (or any formal design stage),
+  the design stage owns validating external-surface claims against the
+  pinned artifact before approval - brainstorming does not replace that
+  gate. For AI-DLC units, the External Surface Validation extension
+  (EXTSRF-01..04) enforces it.
+
 ## Anti-Pattern: "This Is Too Simple To Need A Design"
 
 Every project goes through this process. A todo list, a single-function utility, a config change - all of them. "Simple" projects are where unexamined assumptions cause the most wasted work. The design can be short (a few sentences for truly simple projects), but you MUST present it and get approval.

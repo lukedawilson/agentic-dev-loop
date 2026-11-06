@@ -1,6 +1,6 @@
 # 058 - Copilot as endpoint
 
-Status: PROPOSED (planning doc)
+> **Status: COMPLETED**
 
 ## Background
 
@@ -115,6 +115,17 @@ SDK, no extras.
 **D9 - The smoke test supports three llm backends via config dirs.**
 run_smoke.py stays llm-agnostic (it copies the config dir's pipeline.yaml
 verbatim); backend support ships as committed config dirs:
+
+> **Reversed 2026-11-06 (user directive).** Provider and plan directory are
+> independent: run_smoke.py takes a required `--provider`
+> (`openhands|copilot`) and injects the matching llm block from
+> `PROVIDER_BLOCKS` into a provider-free template, rejecting templates that
+> still carry their own `llm:` block. `tests/smoke/copilot-endpoint/` and
+> `tests/smoke/openai-endpoint/` were deleted;
+> `tests/smoke/viz-keepalive/` is the single provider-free plan dir, and
+> `run-smoke.sh <provider> <config-dir>` wraps the invocation. A template
+> carrying an `llm:` block is now a pre-flight error, never silently
+> overridden.
 
 - tests/smoke/viz-keepalive/ - DeepSeek (existing default; api_key_env
   OPENAI_API_KEY, base_url https://api.deepseek.com)

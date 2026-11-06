@@ -420,8 +420,13 @@ llm:
   `agentic-dev-loop copilot-login`. The 401/403 fail-fast names this fix.
 - `model:` stays required. Confirm the model with `copilot-models` before a
   run; base models are the supported claim, premium models vary by plan.
-- `tests/smoke/copilot-endpoint/` is the end-to-end smoke config dir;
-  `tests/smoke/openai-endpoint/` is the standard OpenAI equivalent.
+- The smoke harness takes a provider and a plan directory independently:
+  `./run-smoke.sh openhands tests/smoke/viz-keepalive` (or
+  `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive
+  --provider copilot`). The `--provider` argument (`openhands` or
+  `copilot`) injects the llm block into the plan's provider-free
+  pipeline.yaml, so the same plan runs against any provider without
+  editing the plan.
 
 ### Migration checklist (consumer)
 
