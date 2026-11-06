@@ -213,3 +213,60 @@ class TestReasoningPassback:
         (out,) = llm.format_messages_for_llm([msg])
 
         assert "reasoning_content" not in out
+
+
+class TestFileBackedKeyAndHeaders:
+    """058 (D2/D3): a file-backed api_key_secret resolves host-side and
+    headers forward verbatim as ``extra_headers``."""
+
+    HEADERS = {
+        "Copilot-Integration-Id": "vscode-chat",
+        "Editor-Version": "vscode/1.94.0",
+        "Openai-Intent": "conversation-panel",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    def _secret_cfg(self, token_path, **kw):
+        return LlmConfig(
+            model="gpt-4o-mini",
+            base_url="https://api.githubcopilot.com",
+            api_key_secret={
+                "from": "file", "key": str(token_path),
+                "json_key": "access_token"},
+            headers=self.HEADERS,
+            **kw)
+
+    def _write_token(self, tmp_path):
+        path = tmp_path / "auth" / "copilot.json"
+        path.parent.mkdir(parents=True)
+        path.write_text('{"access_token": "ghu_test"}', encoding="utf-8")
+        return path
+
+    def test_file_secret_resolves_to_api_key(self, tmp_path):
+        cfg = self._secret_cfg(self._write_token(tmp_path))
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(cfg)
+        assert mock_cls.call_args.kwargs["api_key"] == "ghu_test"
+
+    def test_missing_secret_file_names_login_command(self, tmp_path):
+        cfg = self._secret_cfg(tmp_path / "missing.json")
+        with pytest.raises(RuntimeError, match="copilot-login"):
+            build_llm(cfg)
+
+    def test_headers_forwarded_verbatim(self, tmp_path):
+        cfg = self._secret_cfg(self._write_token(tmp_path))
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(cfg)
+        assert mock_cls.call_args.kwargs["extra_headers"] == self.HEADERS
+
+    def test_default_headers_are_empty(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg())
+        assert mock_cls.call_args.kwargs["extra_headers"] == {}
+
+    def test_env_key_still_works_without_secret(self, monkeypatch):
+        monkeypatch.setenv(KEY, "sk-test")
+        with patch("agentic_dev_loop.engine.llm.LLM") as mock_cls:
+            build_llm(_cfg())
+        assert mock_cls.call_args.kwargs["api_key"] == "sk-test"

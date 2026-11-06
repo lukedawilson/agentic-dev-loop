@@ -27,6 +27,7 @@ import argparse
 import json
 import os
 import queue
+import re
 import signal
 import socket
 import subprocess
@@ -43,6 +44,92 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
 
 KEEPALIVE_MARKER = "Pipeline finished: press ctrl+c to exit"
+
+
+class SmokePreflightError(RuntimeError):
+    """A loud pre-flight failure naming the operator's next command."""
+
+
+def _secret_block(text: str) -> str | None:
+    """The indented body of an ``api_key_secret:`` mapping, if present."""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if re.match(r"^\s*api_key_secret:\s*$", line):
+            indent = len(line) - len(line.lstrip())
+            block = []
+            for following in lines[index + 1:]:
+                if (following.strip()
+                        and len(following) - len(following.lstrip()) <= indent):
+                    break
+                block.append(following)
+            return "\n".join(block)
+    return None
+
+
+def _field(block: str, name: str) -> str | None:
+    match = re.search(rf"^\s*{name}:\s*(\S+)\s*$", block, re.MULTILINE)
+    return match.group(1).strip("\"'") if match else None
+
+
+def preflight_llm(config_dir: Path,
+                  environ: dict[str, str] | None = None) -> None:
+    """Fail in seconds, before a worktree and deps build, when the config
+    dir's llm credentials are absent. Regex-based and stdlib-only: the
+    pipeline yaml is a template, not a loaded config."""
+    text = (Path(config_dir) / "pipeline.yaml").read_text(encoding="utf-8")
+    environ = os.environ if environ is None else environ
+    for match in re.finditer(r"^\s*api_key_env:\s*(\S+)\s*$", text,
+                             re.MULTILINE):
+        variable = match.group(1).strip("\"'")
+        if variable not in environ:
+            raise SmokePreflightError(
+                f"llm api_key_env {variable} is not set - run "
+                f"`export {variable}=...` before this smoke test")
+    block = _secret_block(text)
+    if block is not None and _field(block, "from") == "file":
+        key = _field(block, "key")
+        if not key:
+            raise SmokePreflightError(
+                "llm api_key_secret has no 'key' file path")
+        path = Path(key).expanduser()
+        if not path.is_file():
+            raise SmokePreflightError(
+                f"llm api_key_secret file not found: {path} - run "
+                "`agentic-dev-loop copilot-login` first")
+
+
+def _engine_auth():
+    if str(SRC_DIR) not in sys.path:
+        sys.path.insert(0, str(SRC_DIR))
+    from agentic_dev_loop.engine import copilot_auth
+    return copilot_auth
+
+
+def preflight_copilot_model(config_dir: Path, *, token_reader=None,
+                            models_lister=None) -> None:
+    """For a file-backed Copilot config, probe /models and confirm the pinned
+    model exists for this token's tier. Non-Copilot configs are a no-op."""
+    text = (Path(config_dir) / "pipeline.yaml").read_text(encoding="utf-8")
+    block = _secret_block(text)
+    if block is None or _field(block, "from") != "file":
+        return
+    match = re.search(r"^\s*model:\s*(\S+)\s*$", text, re.MULTILINE)
+    key = _field(block, "key")
+    if match is None or not key:
+        return
+    model = match.group(1).strip("\"'")
+    module = _engine_auth()
+    token_reader = token_reader or module.read_token
+    models_lister = models_lister or module.list_copilot_models
+    try:
+        models = models_lister(token_reader(Path(key).expanduser()))
+    except module.CopilotAuthError as e:
+        raise SmokePreflightError(str(e)) from e
+    if model not in models:
+        raise SmokePreflightError(
+            f"model {model!r} is not in this token's Copilot model list "
+            f"({', '.join(models)}) - run `agentic-dev-loop copilot-models` "
+            "and pin an available base model")
 
 
 def free_port() -> int:
@@ -161,6 +248,12 @@ def main() -> int:
         fail(f"pipeline template not found: {config_dir / 'pipeline.yaml'}")
     if not (config_dir / "agents" / "dev.agent.md").is_file():
         fail(f"dev agent not found: {config_dir / 'agents' / 'dev.agent.md'}")
+
+    try:
+        preflight_llm(config_dir)
+        preflight_copilot_model(config_dir)
+    except SmokePreflightError as e:
+        fail(str(e))
 
     check_assets_clean(config_dir)
 

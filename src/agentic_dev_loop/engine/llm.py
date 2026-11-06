@@ -6,6 +6,8 @@ import os
 from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import LlmConfig
+from agentic_dev_loop.engine.secrets import (
+    SecretResolutionError, resolve_secret_spec)
 
 # 054 (D8): reasoning passback is config-gated, never name-list-gated. The
 # SDK gates reasoning_content passback on a closed model-name list
@@ -82,10 +84,22 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
     LLM.format_messages_for_llm = _config_gated_reasoning_serializer
 
 
-def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
+def resolve_api_key(cfg: LlmConfig, environ=None) -> str:
+    """Resolve the configured host-side key: the existing env mechanism, or
+    the file-backed secret spec. Missing values fail fast naming the fix."""
+    if cfg.api_key_secret is not None:
+        try:
+            return resolve_secret_spec(cfg.api_key_secret, environ)
+        except SecretResolutionError as e:
+            raise RuntimeError(f"llm api_key_secret: {e}") from e
     api_key = os.environ.get(cfg.api_key_env)
     if not api_key:
         raise RuntimeError(f"{cfg.api_key_env} environment variable is required")
+    return api_key
+
+
+def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
+    api_key = resolve_api_key(cfg)
     # 054 (D6): a step's value wins, else the effective profile's value, else
     # off. reasoning_effort is always passed (None when unset) so the SDK
     # "high" default cannot engage; absent effort = reasoning off.
@@ -96,6 +110,7 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
         base_url=cfg.base_url,
         timeout=cfg.timeout,  # policy: no LLM timeout unless explicitly set
         reasoning_effort=effort,
+        extra_headers=dict(cfg.headers),
     )
     llm._agentic_dev_loop_reasoning_effort = effort
     return llm

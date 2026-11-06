@@ -5,7 +5,7 @@ import yaml
 from pydantic import ValidationError
 
 from agentic_dev_loop.core.config import (BRIEF_MAX_ITERATIONS,
-                                        BRIEF_PRODUCES, Route,
+                                        BRIEF_PRODUCES, Route, SecretSpec,
                                         default_state_dir, load_config)
 
 # The plan's reference pipeline (consumer-equivalent) (009, YAML schema section),
@@ -827,3 +827,67 @@ class TestLlmProfiles:
         step = _load(tmp_path, data).steps[0]
         assert step.kind == "brief"
         assert step.llm == "review"
+
+
+class TestLlmHeadersAndKeyMechanisms:
+    """058 (D2/D3): headers passthrough and exactly-one key mechanism."""
+
+    def test_headers_default_to_empty(self, tmp_path):
+        assert _load(tmp_path, _base()).llm.headers == {}
+
+    def test_headers_round_trip(self, tmp_path):
+        data = _base()
+        data["llm"]["headers"] = {
+            "Copilot-Integration-Id": "vscode-chat",
+            "Editor-Version": "vscode/1.94.0",
+        }
+        cfg = _load(tmp_path, data)
+        assert cfg.llm.headers == data["llm"]["headers"]
+
+    def test_neither_key_mechanism_rejected(self, tmp_path):
+        data = _base()
+        del data["llm"]["api_key_env"]
+        with pytest.raises(ValidationError, match="api_key_env.*api_key_secret"):
+            _load(tmp_path, data)
+
+    def test_both_key_mechanisms_rejected(self, tmp_path):
+        data = _base()
+        data["llm"]["api_key_secret"] = {
+            "from": "file", "key": "~/.agentic-dev-loop/auth/copilot.json",
+            "json_key": "access_token"}
+        with pytest.raises(ValidationError, match="exactly one"):
+            _load(tmp_path, data)
+
+    def test_api_key_secret_round_trip(self, tmp_path):
+        data = _base()
+        del data["llm"]["api_key_env"]
+        data["llm"]["api_key_secret"] = {
+            "from": "file", "key": "~/.agentic-dev-loop/auth/copilot.json",
+            "json_key": "access_token"}
+        cfg = _load(tmp_path, data)
+        assert cfg.llm.api_key_env is None
+        assert cfg.llm.api_key_secret.from_ == "file"
+        assert cfg.llm.api_key_secret.json_key == "access_token"
+
+
+class TestSecretSpecJsonKey:
+    """058 (D3): json_key is file-provider-only."""
+
+    def test_file_provider_json_key_round_trips(self):
+        spec = SecretSpec.model_validate(
+            {"from": "file", "key": "/tmp/t.json", "json_key": "access_token"})
+        assert spec.json_key == "access_token"
+
+    def test_file_provider_json_key_optional(self):
+        spec = SecretSpec.model_validate({"from": "file", "key": "/tmp/t.txt"})
+        assert spec.json_key is None
+
+    def test_json_key_rejected_for_env_provider(self):
+        with pytest.raises(ValidationError, match="json_key"):
+            SecretSpec.model_validate(
+                {"from": "env", "key": "K", "json_key": "access_token"})
+
+    def test_empty_json_key_rejected(self):
+        with pytest.raises(ValidationError, match="json_key"):
+            SecretSpec.model_validate(
+                {"from": "file", "key": "/tmp/t.json", "json_key": "  "})

@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
+from .copilot_auth import (TOKEN_PATH, CopilotAuthError, list_copilot_models,
+                           login, read_token)
 from .containers import containers_report
 from .isolation import isolation_state_dir, reap_orphaned_containers
 from .loaders import mark_plan_completed
@@ -149,6 +151,52 @@ def _print_containers_report(report) -> None:
               f"run={run} pid={pid_s}")
 
 
+def _token_path(value: str | None) -> Path:
+    return Path(value).expanduser() if value else TOKEN_PATH.expanduser()
+
+
+def _run_copilot_login(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="agentic-dev-loop copilot-login",
+        description="Run the GitHub device flow and store the Copilot OAuth "
+                    "token (~/.agentic-dev-loop/auth/copilot.json, mode 600).")
+    parser.add_argument("--token-file", default=None,
+                        help="token path (default: "
+                             "~/.agentic-dev-loop/auth/copilot.json)")
+    args = parser.parse_args(argv)
+    path = _token_path(args.token_file)
+    try:
+        login(token_path=path)
+    except CopilotAuthError as e:
+        print(f"copilot-login: {e}", file=sys.stderr)
+        return 1
+    print(f"Copilot token written to {path}")
+    return 0
+
+
+def _run_copilot_models(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="agentic-dev-loop copilot-models",
+        description="List the Copilot models available to this token's tier.")
+    parser.add_argument("--token-file", default=None,
+                        help="token path (default: "
+                             "~/.agentic-dev-loop/auth/copilot.json)")
+    parser.add_argument("--json", action="store_true",
+                        help="emit the model list as JSON")
+    args = parser.parse_args(argv)
+    try:
+        models = list_copilot_models(read_token(_token_path(args.token_file)))
+    except CopilotAuthError as e:
+        print(f"copilot-models: {e}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps({"models": models}, sort_keys=True))
+    else:
+        for model in models:
+            print(model)
+    return 0
+
+
 def build_parser(cfg_path) -> argparse.ArgumentParser:
     """The full parser for one pipeline: core flags + loader-contributed."""
     registry, _ = _registry_for(cfg_path)
@@ -165,6 +213,10 @@ def main(argv: list[str] | None = None) -> int:
         argv = list(argv)
     if argv and argv[0] == "containers":
         return _run_containers(argv[1:])
+    if argv and argv[0] == "copilot-login":
+        return _run_copilot_login(argv[1:])
+    if argv and argv[0] == "copilot-models":
+        return _run_copilot_models(argv[1:])
     if argv and argv[0] == "init":
         from .onboarding.init import run_init
         return run_init(argv[1:])

@@ -14,8 +14,8 @@ from agentic_dev_loop.core.config import (PipelineConfig, SecretSpec,
                                           load_config)
 from agentic_dev_loop.engine.isolation import resolve_sandbox_env
 from agentic_dev_loop.engine.secrets import (
-    REDACTED, EnvProvider, SecretResolutionError, redact_values,
-    resolve_secrets, scan_env_files, step_secret_env)
+    REDACTED, EnvProvider, FileProvider, SecretResolutionError,
+    redact_values, resolve_secrets, scan_env_files, step_secret_env)
 
 
 def _base() -> dict:
@@ -211,3 +211,115 @@ class TestRedactValues:
 
     def test_deduplicates_and_sorts(self):
         assert redact_values("a-x-b", ["x", "x"]) == "a-[REDACTED]-b"
+
+
+class TestFileProvider:
+    """058 (D3): the file provider reads a locator path, with an optional
+    JSON key selection; every failure names the fix."""
+
+    def _json(self, tmp_path, payload):
+        path = tmp_path / "copilot.json"
+        path.write_text(payload, encoding="utf-8")
+        return path
+
+    def test_reads_whole_file_without_json_key(self, tmp_path):
+        path = tmp_path / "token.txt"
+        path.write_text("  token-value\n", encoding="utf-8")
+        assert FileProvider().resolve([str(path)])[str(path)] == "token-value"
+
+    def test_reads_json_key(self, tmp_path):
+        path = self._json(
+            tmp_path,
+            '{"access_token": "ghu_x", "scope": "copilot"}')
+        resolved = FileProvider().resolve(
+            [str(path)], {str(path): "access_token"})
+        assert resolved[str(path)] == "ghu_x"
+
+    def test_missing_file_names_login_command(self, tmp_path):
+        with pytest.raises(SecretResolutionError, match="copilot-login"):
+            FileProvider().resolve([str(tmp_path / "missing.json")])
+
+    def test_invalid_json_fails_loudly(self, tmp_path):
+        path = self._json(tmp_path, "not json")
+        with pytest.raises(SecretResolutionError, match="not valid JSON"):
+            FileProvider().resolve([str(path)], {str(path): "access_token"})
+
+    def test_missing_json_key_names_the_key(self, tmp_path):
+        path = self._json(tmp_path, '{"other": "x"}')
+        with pytest.raises(SecretResolutionError, match="access_token"):
+            FileProvider().resolve([str(path)], {str(path): "access_token"})
+
+    def test_non_string_json_value_rejected(self, tmp_path):
+        path = self._json(tmp_path, '{"access_token": 123}')
+        with pytest.raises(SecretResolutionError, match="access_token"):
+            FileProvider().resolve([str(path)], {str(path): "access_token"})
+
+
+class TestFileSecretResolution:
+    def test_resolve_secrets_routes_json_key_selection(self, tmp_path):
+        token = tmp_path / "copilot.json"
+        token.write_text('{"access_token": "ghu_x"}', encoding="utf-8")
+        data = _base()
+        data["secrets"] = {
+            "copilot-token": {
+                "from": "file", "key": str(token),
+                "json_key": "access_token"}}
+        data["steps"] = [
+            {"name": "dev", "agent": "dev", "secrets": ["copilot-token"],
+             "on_pass": "success"},
+        ]
+        cfg = _load(tmp_path, data)
+        assert resolve_secrets(cfg) == {"copilot-token": "ghu_x"}
+        assert resolve_secrets(cfg, {}) == {"copilot-token": "ghu_x"}
+
+
+class TestLlmSecretRedactionSet:
+    """058 (D3): a file-backed llm key joins the run redaction set."""
+
+    def test_llm_file_key_is_resolved_for_redaction(self, tmp_path):
+        token = tmp_path / "copilot.json"
+        token.write_text('{"access_token": "ghu_redact_me"}',
+                         encoding="utf-8")
+        pipeline = tmp_path / "pipeline.yaml"
+        pipeline.write_text(f"""\
+name: redaction
+llm:
+  model: gpt-4o-mini
+  api_key_secret:
+    from: file
+    key: {token}
+    json_key: access_token
+agents_dir: sdk_agents
+deps_policy: open
+steps:
+  - name: dev
+    agent: dev
+    on_pass: success
+""", encoding="utf-8")
+        cfg = load_config(pipeline)
+        resolved = resolve_secrets(cfg)
+        assert resolved["llm-api-key:llm"] == "ghu_redact_me"
+
+    def test_unreferenced_profile_key_is_not_resolved(self, tmp_path):
+        pipeline = tmp_path / "pipeline.yaml"
+        pipeline.write_text("""\
+name: redaction
+llm:
+  model: m
+  api_key_env: K
+llms:
+  review:
+    model: m
+    api_key_secret:
+      from: file
+      key: /does/not/exist.json
+      json_key: access_token
+agents_dir: sdk_agents
+deps_policy: open
+steps:
+  - name: dev
+    agent: dev
+    on_pass: success
+""", encoding="utf-8")
+        cfg = load_config(pipeline)
+        assert resolve_secrets(cfg, {"K": "v"}) == {}

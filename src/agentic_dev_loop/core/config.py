@@ -10,12 +10,13 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (BaseModel, ConfigDict, Field, field_validator,
+                      model_serializer, model_validator)
 
 from agentic_dev_loop.core.paths import _has_wildcards, path_excluded, relative_parts
 
 TERMINALS = frozenset({"success", "failure"})
-KNOWN_SECRET_PROVIDERS = frozenset({"env"})
+KNOWN_SECRET_PROVIDERS = frozenset({"env", "file"})
 MOUNT_MODES = frozenset({"rw", "ro"})
 # The egress preset names the engine ships (BR-9). Config validates the
 # name here; the target data lives in engine/presets.py (preset data,
@@ -183,14 +184,17 @@ def route_target(route: RouteTarget | None) -> str | None:
 
 class SecretSpec(BaseModel):
     """One ``secrets:`` ref - the locator only, never a value. ``from`` names
-    the provider (``env`` first); ``key`` is that provider's locator (for
+    the provider (``env`` or ``file``); ``key`` is that provider's locator (for
     ``env``, the host environment variable to read and the step env name to
-    inject). Unknown keys fail at load (extra="forbid")."""
+    inject; for ``file``, the JSON file path). ``json_key`` selects a key
+    inside the JSON file and is file-provider-only. Unknown keys fail at load
+    (extra="forbid")."""
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     from_: str = Field(alias="from")
     key: str
+    json_key: str | None = None
 
     @field_validator("from_")
     @classmethod
@@ -207,6 +211,28 @@ class SecretSpec(BaseModel):
         if not v.strip():
             raise ValueError("secret key must be a non-empty string")
         return v
+
+    @field_validator("json_key")
+    @classmethod
+    def _nonempty_json_key(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("secret json_key must be a non-empty string")
+        return v
+
+    @model_validator(mode="after")
+    def _json_key_only_for_file(self) -> "SecretSpec":
+        if self.json_key is not None and self.from_ != "file":
+            raise ValueError(
+                "secret json_key is only valid with the 'file' provider")
+        return self
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_json_key(self, handler):
+        """Keep the pre-058 env-provider dump shape byte-identical."""
+        data = handler(self)
+        if data.get("json_key") is None:
+            data.pop("json_key", None)
+        return data
 
 
 class IsolationConfig(BaseModel):
@@ -600,12 +626,28 @@ class LlmConfig(BaseModel):
 
     model: str
     base_url: str | None = None
-    api_key_env: str
+    # 058 (D3): exactly one host-side key mechanism - an environment variable
+    # (the existing shape) or a file-backed secret spec.
+    api_key_env: str | None = None
+    api_key_secret: SecretSpec | None = None
+    # 058 (D2): extra HTTP headers forwarded verbatim to the SDK LLM
+    # (``extra_headers``). Empty = no change for every existing pipeline.
+    headers: dict[str, str] = Field(default_factory=dict)
     timeout: float | None = None  # omitted → opinionated no-timeout default
     # 047 (D1) / 054 (D6): opt-in passthrough; unset means reasoning is off
     # (the engine forwards none and strips reasoning passback). The SDK
     # "high" default never engages because build_llm always passes the value.
     reasoning_effort: ReasoningEffort | None = None
+
+    @model_validator(mode="after")
+    def _exactly_one_api_key_mechanism(self) -> "LlmConfig":
+        has_env = self.api_key_env is not None
+        has_secret = self.api_key_secret is not None
+        if has_env == has_secret:
+            raise ValueError(
+                "set exactly one of 'api_key_env' or 'api_key_secret' on the "
+                "llm block (neither or both are invalid)")
+        return self
 
 
 class PipelineConfig(BaseModel):

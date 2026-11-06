@@ -365,9 +365,16 @@ steps:
   when that step lists the ref - the same `resolve_sandbox_env` path step
   `env:` uses today. It never reaches the provision container, `state_dir`, an
   agent's context, or any other step.
-- **Providers.** Only `env` ships. Later providers (`keychain`, `op`, `sops`)
+- **Providers.** `env` and `file` ship. The `file` provider reads a host file:
+  `key` is the file path and `json_key` selects one string field (the whole
+  file content when absent). A missing file fails fast naming
+  `agentic-dev-loop copilot-login`. Later providers (`keychain`, `op`, `sops`)
   implement the same `resolve(keys) -> {key: value}` interface - that interface
   is the compatibility contract.
+- **LLM keys.** The `llm:` block takes exactly one of `api_key_env` (the
+  existing shape) or `api_key_secret` (a `SecretSpec`, file provider usable).
+  Neither or both fails at load. The resolved LLM key joins the run's
+  redaction set.
 - **`.env*` ban.** Before anything else runs, the workspace root is scanned for
   `.env*` files. Any hit fails fast, naming the files, with the remedy text
   ("move these values into `secrets:` refs / host env and delete the files").
@@ -378,6 +385,43 @@ steps:
   output, retry notes, artifacts, and `state_dir` files before they are written.
   This is hygiene, not a control: the declaring step's agent has already seen
   the value in its own env.
+
+### Copilot subscription endpoint (058)
+
+Copilot runs as an OpenAI-compatible endpoint on the existing runtime - no new
+driver, no MCP, no subprocess. Log in once, then point an `llm:` block at the
+endpoint:
+
+```bash
+agentic-dev-loop copilot-login    # device flow; writes the token (mode 600)
+agentic-dev-loop copilot-models   # the models this token's tier can use
+```
+
+```yaml
+llm:
+  model: gpt-4o-mini              # a base model; premium models are plan-gated
+  base_url: https://api.githubcopilot.com
+  api_key_secret:
+    from: file
+    key: ~/.agentic-dev-loop/auth/copilot.json
+    json_key: access_token
+  headers:
+    Copilot-Integration-Id: vscode-chat
+    Editor-Version: vscode/1.94.0
+    Openai-Intent: conversation-panel
+    X-GitHub-Api-Version: "2022-11-28"
+```
+
+- The token is the Copilot subscription credential; the pinned OAuth client id
+  belongs to OpenCode's app and is overridable with
+  `AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID`.
+- A token created before the scope fix (scope `read:user`) must be deleted and
+  re-created: `rm ~/.agentic-dev-loop/auth/copilot.json` then
+  `agentic-dev-loop copilot-login`. The 401/403 fail-fast names this fix.
+- `model:` stays required. Confirm the model with `copilot-models` before a
+  run; base models are the supported claim, premium models vary by plan.
+- `tests/smoke/copilot-endpoint/` is the end-to-end smoke config dir;
+  `tests/smoke/openai-endpoint/` is the standard OpenAI equivalent.
 
 ### Migration checklist (consumer)
 
