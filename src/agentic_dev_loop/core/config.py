@@ -45,11 +45,6 @@ BRIEF_MAX_ITERATIONS = 12
 # provider accepts every value (notably "none") is operator risk (D3).
 ReasoningEffort = Literal["low", "medium", "high", "xhigh", "none"]
 
-# Unit 10: whole-pipeline provider selection (Q1=A). Absent = "openhands",
-# which keeps every existing pipeline byte-identical.
-Provider = Literal["openhands", "claude", "copilot"]
-KNOWN_PROVIDERS = ("openhands", "claude", "copilot")
-
 
 def _validate_mount_path(path: str) -> str:
     """Validate one repo-relative mount path (BR-1.3).
@@ -613,27 +608,6 @@ class LlmConfig(BaseModel):
     reasoning_effort: ReasoningEffort | None = None
 
 
-class ClaudeAgentConfig(BaseModel):
-    """The `claude:` block (unit 10). Present only when provider is claude;
-    every key is a harness control, never a pipeline secret."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    login: Literal["subscription", "key"]
-    model: str | None = None
-    max_turns: int | None = Field(default=None, gt=0)
-
-
-class CopilotConfig(BaseModel):
-    """The `copilot:` block (unit 10). `auth` exists so future modes are
-    additive; the credential itself never appears here."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    auth: Literal["device"] = "device"
-    model: str | None = None
-
-
 class PipelineConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -646,10 +620,7 @@ class PipelineConfig(BaseModel):
     # host process.
     extensions_dir: str = "~/.agentic-dev-loop/extensions"
     env_allowlist: list[str] = []
-    # Unit 10: whole-pipeline runtime selection. "openhands" (default) keeps
-    # today's behavior; claude/copilot move the harness behind their blocks.
-    provider: Provider = "openhands"
-    llm: LlmConfig | None = None
+    llm: LlmConfig
     # 054 (D1): named LLM profiles, each a strict LlmConfig. Optional and
     # purely additive - the `llm:` block above remains the default.
     llms: dict[str, LlmConfig] = {}
@@ -680,17 +651,6 @@ class PipelineConfig(BaseModel):
     # 055: the toolchain profile resolved at load time. Kept on the validated
     # config so the run records which profile supplied its defaults.
     profile: str | None = None
-    claude: ClaudeAgentConfig | None = None
-    copilot: CopilotConfig | None = None
-
-    @field_validator("provider", mode="before")
-    @classmethod
-    def _known_provider(cls, v: Any) -> Any:
-        if v not in KNOWN_PROVIDERS:
-            raise ValueError(
-                f"provider must be one of {', '.join(repr(p) for p in KNOWN_PROVIDERS)}, "
-                f"got {v!r}")
-        return v
 
     @field_validator("deps_policy")
     @classmethod
@@ -741,57 +701,6 @@ class PipelineConfig(BaseModel):
                     "{from: ..., key: ...}, not a literal value - secret "
                     "values never belong in the pipeline yaml")
         return v
-
-    @model_validator(mode="after")
-    def _check_provider(self) -> "PipelineConfig":
-        """Unit 10 rule zero + strictness (BR-10.1/BR-10.2).
-
-        openhands (the default) requires `llm:` and forbids the harness
-        blocks; claude/copilot require their matching block, forbid `llm:`,
-        `llms:`, per-step `llm:`, and per-step `reasoning_effort` (they are
-        OpenHands-only controls), and refuse a block that does not match
-        `provider` (dead config)."""
-        if self.provider == "openhands":
-            if self.llm is None:
-                raise ValueError(
-                    "llm: is required when provider is 'openhands'")
-            for name in ("claude", "copilot"):
-                if getattr(self, name) is not None:
-                    raise ValueError(
-                        f"pipeline declares a {name + ':'!r} block but provider "
-                        f"is 'openhands' - set provider: {name} or remove the "
-                        f"{name + ':'!r} block")
-            return self
-
-        if self.llm is not None:
-            raise ValueError(
-                f"llm: is openhands-only and forbidden when provider is "
-                f"{self.provider!r}")
-        if self.llms:
-            raise ValueError(
-                f"llms: is openhands-only and forbidden when provider is "
-                f"{self.provider!r}")
-        for step in self.steps:
-            if step.llm is not None:
-                raise ValueError(
-                    f"step {step.name!r}: llm: is openhands-only and forbidden "
-                    f"when provider is {self.provider!r}")
-            if step.reasoning_effort is not None:
-                raise ValueError(
-                    f"step {step.name!r}: reasoning_effort is openhands-only "
-                    f"and forbidden when provider is {self.provider!r}")
-        for name in ("claude", "copilot"):
-            block = getattr(self, name)
-            if block is not None and name != self.provider:
-                raise ValueError(
-                    f"pipeline declares a {name + ':'!r} block but provider is "
-                    f"{self.provider!r} - set provider: {name} or remove the "
-                    f"{name + ':'!r} block")
-        if getattr(self, self.provider) is None:
-            raise ValueError(
-                f"provider {self.provider!r} requires a {self.provider + ':'!r} "
-                "block")
-        return self
 
     @model_validator(mode="after")
     def _locked_requires_lockfiles(self) -> "PipelineConfig":

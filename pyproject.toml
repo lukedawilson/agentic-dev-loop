@@ -70,10 +70,6 @@ dev = [
     "pip-audit>=2.0",
     "pre-commit>=3.0",
 ]
-# Unit 10 optional harnesses. The base install stays extras-free; selecting a
-# provider whose extra is absent fails fast with these install instructions.
-claude = ["claude-agent-sdk>=0.1.0"]
-copilot = ["openai-codex>=0.1.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

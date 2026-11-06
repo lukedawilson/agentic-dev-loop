@@ -251,12 +251,11 @@ def collect_checks(profile: Profile | None, pipeline, installed: str,
                 "re-run agentic-dev-loop init or restore the file"))
 
     if pipeline is not None:
-        if pipeline.llm is not None:
-            key_env = pipeline.llm.api_key_env
-            checks.append(_warn(
-                f"llm-key:{key_env}", bool(os.environ.get(key_env)),
-                f"LLM key env var not set: {key_env}",
-                f"export {key_env}=..."))
+        key_env = pipeline.llm.api_key_env
+        checks.append(_warn(
+            f"llm-key:{key_env}", bool(os.environ.get(key_env)),
+            f"LLM key env var not set: {key_env}",
+            f"export {key_env}=..."))
         for ref, spec in pipeline.secrets.items():
             checks.append(_warn(
                 f"secret:{ref}", bool(os.environ.get(spec.key)),
