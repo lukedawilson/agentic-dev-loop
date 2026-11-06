@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `run-smoke.sh`; the config dir is the plan only, the provider owns the
   llm block). No new dependencies and no runtime change.
 
+## [0.12.0] - 2026-11-06
+
+### Changed
+
+- Support the GitHub Copilot subscription endpoint as an LLM backend: `copilot-login` authenticates a device flow, `copilot-models` lists the tier, and the `llm:` block accepts the Copilot base URL with a file-backed access token and the required Copilot headers. Probe-validated pins: `gpt-5.6-luna` (Responses API) and `gpt-4.1` (chat); see docs/setup.md for configuration details and known limitations.
+- Completed runs now keep the visualization server alive and wait for ctrl+c after printing `Pipeline finished: press ctrl+c to exit` (skip with `--no-viz` or `--dry-run`).
+
 ## [0.11.1] - 2026-11-05
 
 ### Changed
