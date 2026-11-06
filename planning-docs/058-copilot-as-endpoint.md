@@ -262,6 +262,14 @@ Real-token gates (user-run):
   - kimi-k3: REJECTED - effort values [low, high, max] only; the engine's
     effort set is low/medium/high/xhigh/none.
   - gpt-4o/gpt-4.1: REJECTED - hard-400 on any reasoning_effort.
+  Wire-format note (2026-11-06): the pins carry an `openai/` prefix. The
+  first mirror smoke run died on the brief step with "missing required
+  Authorization header": litellm routes a bare `claude-*` name through its
+  Anthropic provider path (x-api-key wire format), which the gateway
+  rejects. The `openai/` prefix forces the OpenAI-compatible route (Bearer
+  auth, chat/completions, bare name in the body); probe-reproduced:
+  `litellm.completion(model="claude-sonnet-5.5", api_base=copilot)` fails,
+  the same call with `openai/claude-sonnet-5.5` returns OK.
 - O2: Client id override mechanism. Recommendation: the
   AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID env var (host-side, never in yaml);
   alternative: a field in the llm block (but the client id is an operator

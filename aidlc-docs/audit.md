@@ -731,3 +731,28 @@ planning-docs/058 (O1 reversal), and aidlc-state.md updated.
 probed against the live endpoint before pins ship; community/registry
 numbers are not facts.
 
+## Copilot wire-format fix: openai/ prefix on claude pins
+
+**Timestamp**: 2026-11-06
+**User Input**: second real smoke run died on the brief step:
+"litellm.BadRequestError: AnthropicException - bad request: missing
+required Authorization header" ("Tried running it again - it died on the
+brief step").
+**AI Response**: The traceback showed litellm mapping the error through
+`_map_anthropic_exception` - litellm routed the bare `claude-*` model name
+through its Anthropic provider path (x-api-key wire format), which the
+Copilot gateway rejects. Reproduced the failure and the fix with a live
+litellm probe: `litellm.completion(model="claude-sonnet-5.5",
+api_base=copilot)` fails with the exact error; the same call with
+`openai/claude-sonnet-5.5` returns OK (Bearer auth, chat/completions, bare
+name in the body). Applied: both copilot pins in PROVIDER_BLOCKS and the
+docs/setup.md example now carry the openai/ prefix; preflight_copilot_model
+strips the prefix before comparing pinned models to the tier list; the
+provenance comment in run_smoke.py records the probe.
+**Context**: the same prefix idiom the repo's DeepSeek pins
+(openai/deepseek-v4-pro) already used. Lesson recorded: urllib probes of
+the gateway prove nothing about litellm's provider routing - the earlier
+model probes bypassed litellm and missed this until the real run hit it.
+Model-pin probes must go through litellm (or the engine's exact call
+path).
+

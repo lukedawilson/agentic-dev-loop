@@ -399,7 +399,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: claude-opus-5.5           # pro default; probe-validated (see below)
+  model: openai/claude-opus-5.5    # pro default; probe-validated (see below)
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -411,7 +411,7 @@ llm:
     Openai-Intent: conversation-panel
 llms:
   flash:
-    model: claude-sonnet-5.5       # the fast tier for brief/dev steps
+    model: openai/claude-sonnet-5.5 # the fast tier for brief/dev steps
     base_url: https://api.githubcopilot.com
     api_key_secret:
       from: file
@@ -431,6 +431,12 @@ llms:
   12288 tokens, which overran on the first smoke run) and `claude-opus-4.8`
   (two choices on the non-streamed path the engine uses; the surfaced one
   carries no tool calls).
+- The `openai/` prefix on the model names is required. litellm routes a
+  bare `claude-*` name through its Anthropic provider path, which speaks
+  Anthropic's wire format and dies at the gateway with "missing required
+  Authorization header" (observed on the brief step of the first mirror
+  smoke run). The prefix forces the OpenAI-compatible route: Bearer auth,
+  chat/completions, bare model name in the body.
 - These three headers are probe-validated against the live endpoint
   (2026-11-06): accepted at `/models` and `/chat/completions`. Do not add
   `X-GitHub-Api-Version: 2022-11-28`; the live endpoint rejects it with

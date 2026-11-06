@@ -177,4 +177,8 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   example configs: claude-opus-5.5 (pro) and claude-sonnet-5.5 (flash);
   gpt-4o-mini was dropped (Copilot chat context caps at 12288 tokens and
   killed the first smoke run) and claude-opus-4.8 was rejected (two-choice
-  non-streamed responses break tool calling on the engine's path).
+  non-streamed responses break tool calling on the engine's path). The
+  Copilot pins carry an openai/ prefix: the first mirror smoke run died on
+  the brief step with "missing required Authorization header" because
+  litellm routes a bare claude-* name through its Anthropic wire format;
+  the openai/ prefix forces the OpenAI-compatible route (probe-reproduced).

@@ -59,6 +59,15 @@ SRC_DIR = REPO_ROOT / "src"
 #   (Copilot returns two choices on the non-streamed path the engine
 #   uses: the litellm-surfaced one has finish_reason tool_calls with
 #   tool_calls=None), kimi-k3 (effort values [low, high, max] only).
+# - Copilot pins carry the openai/ prefix on purpose: litellm routes a
+#   bare "claude-*" model name through its Anthropic provider path, which
+#   speaks Anthropic's wire format (x-api-key) to the gateway and dies
+#   with "missing required Authorization header" (observed on the brief
+#   step of the first mirror smoke run, 2026-11-06). The openai/ prefix
+#   forces litellm's OpenAI-compatible route: Authorization Bearer plus
+#   chat/completions, with the bare model name in the body. Probe:
+#   litellm.completion(model="claude-sonnet-5.5", api_base=copilot)
+#   failed; the same call with "openai/claude-sonnet-5.5" returned OK.
 PROVIDER_BLOCKS = {
     "openhands": (
         "llm:\n"
@@ -74,7 +83,7 @@ PROVIDER_BLOCKS = {
     ),
     "copilot": (
         "llm:\n"
-        "  model: claude-opus-5.5\n"
+        "  model: openai/claude-opus-5.5\n"
         "  base_url: https://api.githubcopilot.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -86,7 +95,7 @@ PROVIDER_BLOCKS = {
         "    Openai-Intent: conversation-panel\n"
         "llms:\n"
         "  flash:\n"
-        "    model: claude-sonnet-5.5\n"
+        "    model: openai/claude-sonnet-5.5\n"
         "    base_url: https://api.githubcopilot.com\n"
         "    api_key_secret:\n"
         "      from: file\n"
@@ -195,6 +204,11 @@ def preflight_copilot_model(text: str, *, token_reader=None,
                                        re.MULTILINE)}
     if not pinned:
         return
+    # The tier list holds bare model names; a litellm provider prefix
+    # ("openai/claude-opus-5.5") is a wire-format routing hint, not part
+    # of the model's name, so strip it before comparing.
+    bare = {name.split("/", 1)[1] if "/" in name else name
+            for name in pinned}
     module = _engine_auth()
     token_reader = token_reader or module.read_token
     models_lister = models_lister or module.list_copilot_models
@@ -202,7 +216,7 @@ def preflight_copilot_model(text: str, *, token_reader=None,
         models = models_lister(token_reader(Path(key).expanduser()))
     except module.CopilotAuthError as e:
         raise SmokePreflightError(str(e)) from e
-    missing = sorted(model for model in pinned if model not in models)
+    missing = sorted(model for model in bare if model not in models)
     if missing:
         raise SmokePreflightError(
             f"model(s) {', '.join(repr(m) for m in missing)} not in this "
