@@ -850,3 +850,54 @@ probing through the engine's exact path before shipping. Lesson: an
 external gateway can accept a request and still drop part of it; wire-
 level capture of BOTH the working and broken shapes is what isolated the
 difference.
+
+## Copilot smoke models re-pinned: gpt-5.6-luna (pro) + gpt-4.1 (lite)
+
+**Timestamp**: 2026-11-06.
+**User input**: "Now edit the copilot smoke models, replace kimi with
+gpt-4.1 (lite) and gpt-5.6 (pro) - pick a sensible effort for each".
+**AI response**: Probe first (probe_repin.py, engine path, real
+endpoint). gpt-4.1 (lite, flash profile) makes clean tool calls on the
+chat path with string tool content, and hard-400s on ANY
+reasoning_effort, so the brief and dev steps set none (the copilot
+flash profile carries none; the openhands flash profile keeps medium).
+gpt-5.6-luna (pro) routes through the Responses API (SDK
+auto-detection; the openai/ prefixed name routes correctly), accepts
+xhigh, acts on the review message, and returned "VERDICT: NEEDS
+CHANGES" with two real findings against the recovered 057
+implementation. "gpt-5.6" alone is not a Copilot tier entry
+(luna/sol/terra are), so the pro pin is gpt-5.6-luna. Edited:
+tests/smoke/run_smoke.py PROVIDER_BLOCKS + provenance comment,
+tests/smoke/viz-keepalive/pipeline.yaml (brief/dev effort lines
+removed, review high -> xhigh), tests/smoke/viz-keepalive/plan.md,
+docs/setup.md copilot example + bullets, planning-docs/058 + 059
+notes, aidlc-docs/aidlc-state.md.
+**Context**: kimi-k3 stays dropped even though its wire-format failure
+is fixed (provider_wire.py): the gpt pair restores a real pro/lite
+gradient that kimi (one model for both profiles) never provided. Both
+new pins were validated through the engine's exact path (wire spy +
+RecordingSandbox) before the yaml changed, per the probe-first rule.
+
+## Smoke brief step moved to the pro model: no-effort gpt-4.1 fails the 041 coverage gate
+
+**Timestamp**: 2026-11-06.
+**User input**: "Died immediately" (run 9d3f0fca20ea, the first smoke
+after the gpt re-pin) and "Brief on pro at medium" (the chosen fix).
+**AI response**: decoded the run: all three attempts died at the brief
+step (verdict None, retry_target brief, max_attempts exhausted). The
+041 coverage gate is mechanical: the digest must line-anchor 23 items
+(4 section headings, 8 coding-standards category names,
+enforcement_levels, 14 AGENTS.md ## headings, 3 env facts). No-effort
+gpt-4.1 oscillated 15 -> 7 -> 15 missing anchors because the coverage
+note lists only the currently-missing items, so the model replaced
+instead of augmented. Probed the fix through the engine path
+(probe_brief_pro.py): gpt-5.6-luna at reasoning_effort medium covers
+all 23 anchors on the first attempt. Template edit: the brief step
+drops llm: flash and sets reasoning_effort: medium, so it runs the
+default pro model for both providers; dev stays on flash with no step
+effort; review stays pro at xhigh.
+**Context**: the coverage gate treats the brief digest as a contract
+with the include files, and a lite model at no effort cannot carry the
+23-anchor enumeration. The pro model at medium is valid for both
+DeepSeek pro and gpt-5.6-luna, so the provider-free template stays
+consistent.

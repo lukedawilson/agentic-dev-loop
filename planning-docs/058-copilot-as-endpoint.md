@@ -277,6 +277,22 @@ Real-token gates (user-run):
   reproduced). The pins are now kimi-k3 for both pro and flash, every
   step at reasoning_effort high (kimi accepts [low, high, max] only).
   Details: planning-docs/059.
+  REVERSED AGAIN (second time) 2026-11-06 (user directive): kimi-k3
+  proved unusable in agent loops: the Copilot gateway silently drops
+  ARRAY-encoded tool-result content, which the openhands SDK sends for
+  kimi by default (probe-bisected: string tool content is seen by the
+  model, array tool content is not; see the force_string_serializer
+  policy in src/agentic_dev_loop/engine/provider_wire.py). The pins are
+  now gpt-5.6-luna (pro, Responses API) and gpt-4.1 (lite, no
+  reasoning_effort; gpt-4.1 hard-400s any effort). Engine-path probe of
+  both pins (2026-11-06): gpt-4.1 makes clean tool calls with string
+  tool content on the chat path, and gpt-5.6-luna acts on the review
+  message and returns a real verdict at xhigh. Details: planning-docs/059.
+  Adjustment same day: the smoke brief step now runs the default pro
+  model at reasoning_effort medium instead of flash - no-effort gpt-4.1
+  cannot satisfy the mechanical 041 coverage gate (run 9d3f0fca20ea
+  burned all three attempts at brief); dev stays on flash with no
+  effort, review pro at xhigh.
 - O2: Client id override mechanism. Recommendation: the
   AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID env var (host-side, never in yaml);
   alternative: a field in the llm block (but the client id is an operator

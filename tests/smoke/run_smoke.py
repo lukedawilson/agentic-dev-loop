@@ -51,22 +51,26 @@ SRC_DIR = REPO_ROOT / "src"
 # Model pins (probed 2026-11-06 against the real endpoints):
 # - openhands = DeepSeek: pro deepseek-v4-pro, flash deepseek-flash with
 #   reasoning_effort medium (mirrors agentic-dev-loop/pipeline.yaml).
-# - copilot = Kimi (see planning-docs/059): the Anthropic pins
-#   (claude-opus-5.5 pro / claude-sonnet-5.5 flash) collapsed on agent
-#   steps: both review attempts of runs 27d01d65f858 and 91fc26500788
-#   ended in one tool-less narration with no verdict, and a live probe
-#   through the engine's own path showed opus-5.5 ignores even a direct
-#   nudge to inspect the workspace (zero terminal requests). Replaced
-#   with kimi-k3 for both pro and flash. kimi-k3 is the only usable Kimi
-#   tier entry (kimi-k3-base and kimi-k3-copilot return 400
-#   model_not_supported) and accepts reasoning_effort [low, high, max]
-#   only, so every step runs effort high (brief/review used medium/xhigh
-#   under Anthropic, both hard-400 on kimi). Rejected on earlier rounds:
-#   gpt-4o-mini (Copilot's real chat context is 12288 tokens - the dev
-#   agent overran it on the first smoke run), claude-opus-4.8 (Copilot
-#   returns two choices on the non-streamed path the engine uses: the
-#   litellm-surfaced one has finish_reason tool_calls with
-#   tool_calls=None).
+# - copilot = gpt-5.6-luna (pro) / gpt-4.1 (lite, flash profile).
+#   History: the Anthropic pins (claude-opus-5.5 pro / claude-sonnet-5.5
+#   flash) collapsed on agent steps (see planning-docs/059), and
+#   kimi-k3 was unusable in agent loops because the Copilot gateway
+#   silently drops ARRAY-encoded tool-result content, which the
+#   openhands SDK sends by default for kimi (the dev agent worked blind;
+#   see the force_string_serializer policy in
+#   src/agentic_dev_loop/engine/provider_wire.py, still applied to
+#   every Copilot config). Engine-path probe of the new pins
+#   (2026-11-06): gpt-4.1 on the chat path makes clean tool calls with
+#   string tool content and no reasoning_effort (any effort hard-400s
+#   on gpt-4.1), and gpt-5.6-luna routes through the Responses API
+#   (SDK auto-detection), accepts xhigh, acts on the review message,
+#   and returns a real verdict. gpt-5.6-luna is Responses-API-only:
+#   bare "gpt-5.6" is not a tier entry (tier has luna/sol/terra).
+#   Rejected on earlier rounds: gpt-4o-mini (Copilot's real chat context
+#   is 12288 tokens - the dev agent overran it on the first smoke run),
+#   claude-opus-4.8 (Copilot returns two choices on the non-streamed
+#   path the engine uses: the litellm-surfaced one has finish_reason
+#   tool_calls with tool_calls=None).
 # - Copilot pins carry the openai/ prefix on purpose. Probe (2026-11-06):
 #   litellm.completion(model="claude-sonnet-5.5", api_base=copilot)
 #   failed: litellm routed the bare name through its Anthropic provider
@@ -75,10 +79,8 @@ SRC_DIR = REPO_ROOT / "src"
 #   (observed on the brief step of the first mirror smoke run). The
 #   openai/ prefix forces litellm's OpenAI-compatible route:
 #   Authorization Bearer plus chat/completions, with the bare model name
-#   in the body. The same rule applies to kimi: bare "kimi-k3" makes
-#   litellm refuse outright ("LLM Provider NOT provided"). Probe:
-#   openai/kimi-k3 through litellm = clean non-streamed tool call and
-#   roundtrip, effort low/high OK, medium/xhigh 400.
+#   in the body. The same rule covers the gpt pins here (bare gpt names
+#   would skip the Copilot gateway routing).
 PROVIDER_BLOCKS = {
     "openhands": (
         "llm:\n"
@@ -94,7 +96,7 @@ PROVIDER_BLOCKS = {
     ),
     "copilot": (
         "llm:\n"
-        "  model: openai/kimi-k3\n"
+        "  model: openai/gpt-5.6-luna\n"
         "  base_url: https://api.githubcopilot.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -106,7 +108,7 @@ PROVIDER_BLOCKS = {
         "    Openai-Intent: conversation-panel\n"
         "llms:\n"
         "  flash:\n"
-        "    model: openai/kimi-k3\n"
+        "    model: openai/gpt-4.1\n"
         "    base_url: https://api.githubcopilot.com\n"
         "    api_key_secret:\n"
         "      from: file\n"
@@ -116,7 +118,6 @@ PROVIDER_BLOCKS = {
         "      Copilot-Integration-Id: vscode-chat\n"
         "      Editor-Version: vscode/1.94.0\n"
         "      Openai-Intent: conversation-panel\n"
-        "    reasoning_effort: high\n"
     ),
 }
 

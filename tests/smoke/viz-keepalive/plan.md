@@ -107,12 +107,17 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
   source tree (host-boundary check stays green). The pipeline mirrors the
   real one: brief -> deps -> dev -> test -> review (the restore, qa, and
   commit steps are omitted; the test step runs the keepalive test
-  selection). The dev step runs the provider's flash profile; the brief and
-  review steps run flash and the default pro model respectively, matching
-  agentic-dev-loop/pipeline.yaml. Copilot pins are kimi-k3 for both
-  profiles with reasoning_effort high on every step (kimi accepts
-  [low, high, max] only; the Anthropic pins collapsed on review, see
-  planning-docs/059).
+  selection). The brief step runs the default pro model at
+  reasoning_effort medium (no-effort gpt-4.1 cannot satisfy the mechanical
+  041 brief-coverage gate; observed run 9d3f0fca20ea). The dev step runs
+  the provider's flash profile with no step effort (gpt-4.1 hard-400s on
+  any reasoning_effort; the openhands flash profile carries medium). The
+  review step runs the pro model at xhigh (accepted by both DeepSeek pro
+  and gpt-5.6-luna). Copilot pins are gpt-5.6-luna (pro, Responses API)
+  and gpt-4.1 (lite, flash profile). Prior pins failed: the Anthropic
+  pair collapsed on review (planning-docs/059) and kimi-k3 worked blind
+  (the Copilot gateway drops ARRAY-encoded tool results; see
+  src/agentic_dev_loop/engine/provider_wire.py).
 - Preconditions: Docker running on the host (the sandbox has no docker,
   and the engine refuses any sandbox command containing the word docker);
   `.venv` exists; assets committed;

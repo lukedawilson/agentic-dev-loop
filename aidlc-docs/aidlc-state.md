@@ -187,3 +187,14 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   27d01d65f858 and 91fc26500788, probe reproduced), so the pins are now
   kimi-k3 for both pro and flash with reasoning_effort high on every step
   (kimi accepts [low, high, max] only); see planning-docs/059.
+  Fourth round same day: kimi-k3 failed end-to-end (run c278697c9263)
+  because the Copilot gateway drops ARRAY-encoded tool results (fixed in
+  the engine: force_string_serializer policy,
+  src/agentic_dev_loop/engine/provider_wire.py). The pins are now
+  gpt-5.6-luna (pro, Responses API) and gpt-4.1 (lite, no
+  reasoning_effort: any effort hard-400s on gpt-4.1), both engine-path
+  probed; see planning-docs/059.
+  Fifth adjustment same day: the smoke brief step now runs the default
+  pro model at reasoning_effort medium (no-effort gpt-4.1 fails the
+  mechanical 041 coverage gate, run 9d3f0fca20ea); dev stays on flash
+  with no step effort, review pro at xhigh.

@@ -13,19 +13,20 @@ deps_policy: open
 max_attempts: 3
 steps:
   - name: brief
-    llm: flash
-    reasoning_effort: high
+    reasoning_effort: medium
     # Native brief step (049): brief_inputs is the type discriminator; the
     # prompt, capture file (attempt-brief.md), and iteration cap are
     # engine-owned. include: resolves relative to the workspace root (the
     # disposable worktree). The plan doc (plan.md) reaches the brief agent
     # through the loader context (additional_files).
-    # Effort note (planning-docs/059): the template is provider-free, so
-    # each effort must be valid for EVERY provider. kimi-k3 (copilot)
-    # accepts [low, high, max] only: medium and xhigh hard-400. high is
-    # the shared valid value, so brief and review run high here for both
-    # providers (DeepSeek accepts high; the real pipeline's medium/xhigh
-    # cannot appear in a provider-free template).
+    # Model/effort note: brief runs the DEFAULT pro model (no llm: line)
+    # at medium. No-effort gpt-4.1 cannot satisfy the mechanical 041
+    # coverage gate (observed run 9d3f0fca20ea), and medium is valid for
+    # both DeepSeek pro and gpt-5.6-luna. dev stays on the flash profile
+    # with no step effort (gpt-4.1 hard-400s any effort; the openhands
+    # flash profile carries medium). review runs the default pro at xhigh
+    # (accepted by both DeepSeek pro and gpt-5.6-luna; the real
+    # pipeline's review effort).
     brief_inputs:
       include: [AGENTS.md, coding-standards-ddd.yaml]
       sections: [Repo rules digest, Unit scope digest, Environment facts, Open risks]
@@ -55,7 +56,6 @@ steps:
   - name: dev
     agent: dev
     llm: flash
-    reasoning_effort: high
     max_iterations: 150
     finalize_nudge_turns: 10
     produces: implementation-summary.md
@@ -79,7 +79,7 @@ steps:
 
   - name: review
     agent: review
-    reasoning_effort: high
+    reasoning_effort: xhigh
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     mounts: [{path: ".", mode: ro}]

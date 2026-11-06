@@ -399,7 +399,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: openai/kimi-k3           # pro default; probe-validated (see below)
+  model: openai/gpt-5.6-luna      # pro default; probe-validated (see below)
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -411,7 +411,7 @@ llm:
     Openai-Intent: conversation-panel
 llms:
   flash:
-    model: openai/kimi-k3         # same model for the fast tier
+    model: openai/gpt-4.1         # lite tier; no reasoning_effort (see below)
     base_url: https://api.githubcopilot.com
     api_key_secret:
       from: file
@@ -421,22 +421,25 @@ llms:
       Copilot-Integration-Id: vscode-chat
       Editor-Version: vscode/1.94.0
       Openai-Intent: conversation-panel
-    reasoning_effort: high
 ```
 
 - The model pins are probe-validated against the live endpoint (2026-11-06):
-  `kimi-k3` returns clean single-choice non-streamed tool calls with a
-  proper roundtrip, and is the only usable Kimi tier entry
-  (`kimi-k3-base`/`kimi-k3-copilot` return 400 model_not_supported). It
-  accepts reasoning effort `low`/`high` only (`medium` and `xhigh` are
-  hard-400), so every agent step runs `high`. The earlier Anthropic pins
-  (`claude-opus-5.5`/`claude-sonnet-5.5`) collapsed on the review step:
-  one tool-less narration, no verdict, and opus-5.5 ignored even a direct
-  nudge to inspect the workspace (see planning-docs/059). Also avoid
+  `gpt-5.6-luna` (pro) routes through the Responses API, which the
+  openhands SDK switches to automatically; it accepts `xhigh`, acts on the
+  review message, and returns a real verdict. `gpt-4.1` (lite) makes clean
+  tool calls on the chat path with string tool content. `gpt-4.1` hard-400s
+  on ANY reasoning_effort, so lite-tier steps set none (the dev step runs
+  the flash profile with no step effort). The brief step runs the pro
+  model at `medium`: no-effort gpt-4.1 cannot satisfy the mechanical
+  brief-coverage gate (run 9d3f0fca20ea burned all three attempts on the
+  brief digest). Also avoid:
   `gpt-4o-mini` (Copilot caps its chat context at 12288 tokens, which
-  overran on the first smoke run) and `claude-opus-4.8` (two choices on
-  the non-streamed path the engine uses; the surfaced one carries no tool
-  calls).
+  overran on the first smoke run), `claude-opus-4.8` (two choices on the
+  non-streamed path the engine uses; the surfaced one carries no tool
+  calls), the claude pins in general (they collapse on the review step,
+  see planning-docs/059), and `kimi-k3` (the Copilot gateway silently
+  drops the ARRAY-encoded tool results the SDK sends for it, leaving the
+  agent blind).
 - The `openai/` prefix on the model names is required. litellm routes a
   bare `claude-*` name through its Anthropic provider path, which speaks
   Anthropic's wire format and dies at the gateway with "missing required

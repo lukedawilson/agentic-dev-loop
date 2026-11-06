@@ -52,6 +52,23 @@ same broken review.
     provided"); the openai/ prefix is required, same as the claude pins.
   - every smoke step runs reasoning_effort high (brief and review used
     medium/xhigh under Anthropic; both are rejected by kimi).
+- Second re-pin (2026-11-06): kimi-k3 failed end-to-end (run
+  c278697c9263): the Copilot gateway silently drops ARRAY-encoded
+  tool-result content, so the dev agent worked blind. The wire shape is
+  fixed in the engine (force_string_serializer policy,
+  src/agentic_dev_loop/engine/provider_wire.py), and the pins are now
+  gpt-5.6-luna (pro, Responses API) and gpt-4.1 (lite, no
+  reasoning_effort: any effort hard-400s on gpt-4.1). Engine-path probe
+  of both pins: gpt-4.1 makes clean tool calls with string tool content;
+  gpt-5.6-luna acts on the review message and returns a real verdict at
+  xhigh.
+- Brief-step adjustment (same day): the smoke brief step now runs the
+  default pro model at reasoning_effort medium. No-effort gpt-4.1 cannot
+  satisfy the mechanical 041 coverage gate (run 9d3f0fca20ea oscillated
+  15 -> 7 -> 15 missing anchors across three attempts and burned the
+  pipeline attempt budget). Engine-path probe of the fix: gpt-5.6-luna
+  at medium covers all 23 anchors on the first attempt. dev stays on
+  flash (no step effort); review stays pro at xhigh.
 
 ## Open questions (this plan is NOT READY)
 
@@ -61,12 +78,15 @@ same broken review.
    model instruction-following drift, or something in the message
    composition the probes have not isolated yet. Until this is understood,
    the Anthropic pins must not come back.
-2. Does kimi-k3 hold up over the full smoke pipeline (brief digest quality,
-   dev implementation, review verdict discipline)? The single-turn probes
-   passed; the end-to-end run is the next gate.
-3. Is there a long-term pro/flash pair on Copilot that mirrors DeepSeek
-   pro/flash (two distinct models with a real effort gradient)? Today both
-   profiles point at kimi-k3, which weakens the mirror.
+2. Does the gpt pair (gpt-5.6-luna pro / gpt-4.1 lite) hold up over the
+   full smoke pipeline (brief digest quality, dev implementation, review
+   verdict discipline)? The engine-path probes passed; the end-to-end
+   smoke run is the next gate.
+3. gpt-5.6-luna rides the Responses API while gpt-4.1 rides the chat
+   path: two different wire paths in one pipeline. The
+   force_string_serializer policy is chat-path-only; the Responses path
+   proved clean without it. Long-term stability of that split is
+   unverified.
 
 ## Evidence
 
