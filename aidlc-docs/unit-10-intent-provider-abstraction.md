@@ -1,9 +1,14 @@
 # Unit 10 Intent - Multi-provider runtime (OpenHands + Claude Agent + Copilot)
 
-> **Status**: STARTED 2026-11-05. Design produced and approved in a brainstorming
-> session the same day ("OK, I agree with the design. STart a new AI-DLC unit and
-> feed this into it"). This document records the intent, the verified facts, and
-> the approved design that the AI-DLC unit feeds on. No code written yet.
+> **Status**: WONTSHIP 2026-11-06. The unit-10 code was reverted by the user
+> (commit 526c802; see the unit-10 section of aidlc-docs/aidlc-state.md). The
+> Copilot path is superseded by the 058 Copilot-as-endpoint direction (planning
+> doc not yet written). This document remains as the historical record.
+>
+> STARTED 2026-11-05. Design produced and approved in a brainstorming session
+> the same day ("OK, I agree with the design. STart a new AI-DLC unit and feed
+> this into it"). This document records the intent, the verified facts, and the
+> approved design that the AI-DLC unit fed on. No code written yet.
 
 ## Raw intent (user, verbatim, 2026-11-05)
 

@@ -14,7 +14,7 @@ Hard rules:
   test name must contain "keepalive".
 - Implement only in src/agentic_dev_loop/engine/cli.py and
   tests/test_055_cli.py, exactly per the plan's Decisions and Scope. Do not
-  touch graph.py, run_pipeline, viz/server.py, tools/, or planning-docs/.
+  touch graph.py, run_pipeline, viz/server.py, or tests/smoke/.
 - The exact message string is "Pipeline finished: press ctrl+c to exit".
 - ASCII only in every file you write or edit (no em dash U+2014, no smart
   quotes).

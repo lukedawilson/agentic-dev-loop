@@ -72,31 +72,26 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
 
 - Unit: `.venv-sandbox/bin/python -m pytest tests/test_055_cli.py -q -m "not docker" -k keepalive`
 - Regression: `.venv-sandbox/bin/python -m pytest tests/test_055_cli.py -q -m "not docker"`
-- Smoke: `tools/smoke_provider.py` (below) - the engine run must end with the
+- Smoke: `tests/smoke/run_smoke.py` (below) - the engine run must end with the
   keep-alive line, the viz endpoint must respond after completion, and ctrl+c
   must exit cleanly with the run's exit code.
 
 ## How to run the smoke test
 
 ```
-# 1. From the repo root, with the smoke assets committed (git status clean):
-./.venv/bin/python tools/smoke_provider.py --provider openhands
-./.venv/bin/python tools/smoke_provider.py --provider claude
-./.venv/bin/python tools/smoke_provider.py --provider codex
+# From the repo root, with the smoke assets committed (git status clean):
+./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive
 ```
 
-- `--provider` is required: `openhands`, `claude`, or `codex` (alias
-  `copilot`). The provider config block is injected into a generated pipeline
-  (BR-10.2: only the active provider's block may exist).
+- The argument is a config directory: `pipeline.yaml` (the pipeline the run
+  executes), `agents/dev.agent.md` (the agent definition), and optionally
+  `plan.md` (fed to the run as an additional file).
 - The engine runs FROM SOURCE (`PYTHONPATH=src`, no wheel, no pip install) in
   a disposable git worktree of this repo, so the workspace is never the
-  source tree (host-boundary check stays green). The plan doc above arrives
-  as an additional file; the pipeline is deps -> dev -> test (the test step
-  runs the keepalive test selection).
+  source tree (host-boundary check stays green). The pipeline is
+  deps -> dev -> test (the test step runs the keepalive test selection).
 - Preconditions: Docker running; `.venv` exists; assets committed;
-  `OPENAI_API_KEY` exported (openhands only); `claude login` done (claude
-  only); codex runs GitHub's device flow interactively in the terminal
-  (follow the printed code + URL).
+  `OPENAI_API_KEY` exported (the template uses DeepSeek via that env var).
 - The script streams the engine output, waits for the keep-alive line,
   probes the viz endpoint, sends ctrl+c, and reports PASS/FAIL plus the
   files the agent changed in the worktree. Pass `--keep-worktree` to inspect

@@ -1,8 +1,11 @@
 name: smoke-viz-keepalive
 profile: python
-# Provider config is injected by tools/smoke_provider.py (BR-10.2: only the
-# active provider's block may exist). This template deliberately carries no
-# provider/llm/claude/copilot block.
+# agents_dir and additional_files are rewritten by tests/smoke/run_smoke.py
+# to absolute paths inside the disposable worktree.
+llm:
+  model: openai/deepseek-v4-pro
+  base_url: https://api.deepseek.com
+  api_key_env: OPENAI_API_KEY
 agents_dir: agents
 additional_files: []
 deps_policy: open

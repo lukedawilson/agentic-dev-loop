@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
-"""Smoke-test the agentic-dev-loop engine FROM SOURCE against one provider.
+"""Smoke-test the agentic-dev-loop engine FROM SOURCE against a smoke plan.
 
 Runs the engine straight from this repository's source tree (PYTHONPATH=src,
 no wheel, no pip install) in a DISPOSABLE GIT WORKTREE of this repo, so the
 workspace is never the source tree (the host-boundary check stays green and
-the main checkout is never touched). The plan at
-planning-docs/057-viz-persists-after-run.md arrives as an additional file;
-the pipeline is deps -> dev -> test, where the test step runs the plan's
-own "keepalive" test selection.
+the main checkout is never touched). The run is driven by a config directory:
 
-The run is expected to end with the keep-alive line
-"Pipeline finished: press ctrl+c to exit" (the change this plan implements).
-This script streams the engine output, waits for that line, probes the viz
-endpoint, sends ctrl+c, and reports PASS/FAIL plus the files the agent
-changed in the worktree.
+    <config-dir>/
+        pipeline.yaml          pipeline template (deps -> dev -> test)
+        agents/dev.agent.md    the agent definition used by the dev step
+        plan.md                optional plan document (fed as an additional
+                               file when present)
+
+The plan this repo ships (tests/smoke/viz-keepalive/) implements the keep-
+alive change: the viz server keeps serving after the run ends and the engine
+prints "Pipeline finished: press ctrl+c to exit". This script streams the
+engine output, waits for that line, probes the viz endpoint, sends ctrl+c,
+and reports PASS/FAIL plus the files the agent changed in the worktree.
 
 On-demand local tooling: never run in CI.
 """
@@ -36,50 +39,10 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-DEFAULT_PLAN_DOC = (
-    REPO_ROOT / "planning-docs" / "057-viz-persists-after-run.md")
 
 KEEPALIVE_MARKER = "Pipeline finished: press ctrl+c to exit"
-
-# provider arg -> (config literal, yaml block to inject). BR-10.2: only the
-# active provider's block may exist, so the template carries none.
-PROVIDERS = {
-    "openhands": (
-        "openhands",
-        "llm:\n"
-        "  model: openai/deepseek-v4-pro\n"
-        "  base_url: https://api.deepseek.com\n"
-        "  api_key_env: OPENAI_API_KEY\n",
-    ),
-    "claude": (
-        "claude",
-        "claude:\n"
-        "  login: subscription\n",
-    ),
-    "codex": (
-        "copilot",
-        "copilot:\n"
-        "  auth: device\n",
-    ),
-    "copilot": (
-        "copilot",
-        "copilot:\n"
-        "  auth: device\n",
-    ),
-}
-
-
-# provider arg -> (SDK module the engine process imports, extra name to
-# install it). The harness SDK is a HOST-side requirement: the engine process
-# constructs the runtime and spawns the harness CLI, while the sandbox venv
-# (built by the pipeline's deps step) never imports it.
-PROVIDER_SDK = {
-    "claude": ("claude_agent_sdk", "claude"),
-    "codex": ("openai_codex", "copilot"),
-    "copilot": ("openai_codex", "copilot"),
-}
 
 
 def free_port() -> int:
@@ -90,48 +53,23 @@ def free_port() -> int:
 
 
 def fail(message: str, code: int = 2) -> None:
-    print(f"smoke_provider: {message}", file=sys.stderr)
+    print(f"run_smoke: {message}", file=sys.stderr)
     sys.exit(code)
 
 
-def check_provider_sdk(engine_python: Path, provider_arg: str) -> None:
-    """Pre-flight: the engine python must be able to import the provider's
-    harness SDK. Fail fast with the exact install command before any work
-    (worktree, sandbox, deps install) starts."""
-    entry = PROVIDER_SDK.get(provider_arg)
-    if entry is None:
-        return  # openhands: openhands-sdk is a core dependency of the engine
-    module, extra = entry
-    result = subprocess.run(
-        [str(engine_python), "-c", f"import {module}"],
-        capture_output=True, text=True, check=False)
-    if result.returncode == 0:
-        return
-    fail(
-        f"provider '{provider_arg}' needs {module!r} in the engine python "
-        f"({engine_python}); install the extra from the repo root:\n"
-        f"  {engine_python} -m pip install -e '.[{extra}]'", 1)
-
-
-
-def check_assets_clean(plan_doc: Path, assets_dir: Path) -> None:
+def check_assets_clean(config_dir: Path) -> None:
     """The smoke assets must be committed (tooling-integrity refuses dirty
     tooling paths; a fresh worktree only carries committed files)."""
-    paths = [
-        str(plan_doc.relative_to(REPO_ROOT)),
-        str(assets_dir.relative_to(REPO_ROOT)),
-        "tools",
-    ]
     result = subprocess.run(
-        ["git", "status", "--porcelain", "--", *paths],
+        ["git", "status", "--porcelain", "--", str(config_dir)],
         cwd=REPO_ROOT, capture_output=True, text=True, check=False)
     if result.returncode != 0:
         fail(f"git status failed: {result.stderr.strip()}", 1)
     if result.stdout.strip():
         fail(
-            "smoke assets are dirty relative to HEAD - commit them first "
-            "(the engine refuses dirty tooling paths and a worktree only "
-            "carries committed files):\n" + result.stdout, 1)
+            f"smoke assets are dirty relative to HEAD - commit them first "
+            f"(the engine refuses dirty tooling paths and a worktree only "
+            f"carries committed files):\n" + result.stdout, 1)
 
 
 def create_worktree(worktree_dir: Path) -> None:
@@ -149,27 +87,27 @@ def remove_worktree(worktree_dir: Path) -> None:
         cwd=REPO_ROOT, capture_output=True, text=True, check=False)
 
 
-def build_pipeline(worktree: Path, plan_doc: Path, assets_dir: Path,
-                   provider_arg: str, tmpdir: Path) -> Path:
-    """Inject the provider block and absolute paths into a temp pipeline.
+def build_pipeline(worktree: Path, config_dir: Path, tmpdir: Path) -> Path:
+    """Copy the template pipeline into a temp dir with absolute paths.
 
     agents_dir and additional_files become ABSOLUTE worktree paths (the
     loader resolves pipeline-dir-relative paths, and absolute paths pass
-    through; they must resolve inside the workspace and be clean).
+    through; they must resolve inside the workspace and be clean). The
+    template carries the full provider config already (no injection).
     """
-    template = (assets_dir / "pipeline.yaml").read_text(encoding="utf-8")
-    literal, block = PROVIDERS[provider_arg]
-    text = f"provider: {literal}\n" + block + template
-    agents_in_worktree = worktree / assets_dir.relative_to(REPO_ROOT) / "agents"
-    plan_in_worktree = worktree / plan_doc.relative_to(REPO_ROOT)
+    template = (config_dir / "pipeline.yaml").read_text(encoding="utf-8")
+    text = template
+    agents_in_worktree = worktree / config_dir.relative_to(REPO_ROOT) / "agents"
     text = text.replace(
         "agents_dir: agents\n",
         f"agents_dir: {json.dumps(str(agents_in_worktree))}\n",
         1)
-    text = text.replace(
-        "additional_files: []\n",
-        f"additional_files: [{json.dumps(str(plan_in_worktree))}]\n",
-        1)
+    plan_in_worktree = worktree / config_dir.relative_to(REPO_ROOT) / "plan.md"
+    if (config_dir / "plan.md").is_file():
+        text = text.replace(
+            "additional_files: []\n",
+            f"additional_files: [{json.dumps(str(plan_in_worktree))}]\n",
+            1)
     pipeline = tmpdir / "pipeline.yaml"
     pipeline.write_text(text, encoding="utf-8")
     return pipeline
@@ -186,19 +124,16 @@ def probe_viz(port: int) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Smoke-test the engine from source against one provider.")
+        description="Smoke-test the engine from source against a smoke plan.")
     parser.add_argument(
-        "--provider", required=True, choices=sorted(PROVIDERS),
-        help="provider target: openhands, claude, or codex (alias copilot)")
-    parser.add_argument(
-        "--plan-doc", type=Path, default=DEFAULT_PLAN_DOC,
-        help="plan document fed to the run (default: the 057 keep-alive "
-             "plan); the pipeline template and agents live in "
-             "<plan-doc-without-.md>/smoke/")
+        "config_dir", type=Path,
+        help="smoke config directory containing pipeline.yaml and "
+             "agents/dev.agent.md (and optionally plan.md, fed to the run "
+             "as an additional file)")
     parser.add_argument(
         "--worktree-dir", type=Path, default=None,
         help="worktree path (default: ~/.agentic-dev-loop/smoke/worktrees/"
-             "viz-keepalive-<timestamp>)")
+             "<config-dir-name>-<timestamp>)")
     parser.add_argument(
         "--keep-worktree", action="store_true",
         help="keep the worktree after the run for inspection")
@@ -219,36 +154,33 @@ def main() -> int:
     if not engine_python.is_file():
         fail(f"engine python not found: {engine_python} "
              "(build the repo venv or pass --engine-python)")
-    plan_doc = args.plan_doc
-    if not plan_doc.is_file():
-        fail(f"plan doc not found: {plan_doc}")
-    assets_dir = plan_doc.with_suffix("") / "smoke"
-    if not (assets_dir / "pipeline.yaml").is_file():
-        fail(f"pipeline template not found: {assets_dir / 'pipeline.yaml'}")
-    if not (assets_dir / "agents" / "dev.agent.md").is_file():
-        fail(f"dev agent not found: {assets_dir / 'agents' / 'dev.agent.md'}")
+    config_dir = args.config_dir.expanduser().resolve()
+    if not config_dir.is_dir():
+        fail(f"config directory not found: {config_dir}")
+    if not (config_dir / "pipeline.yaml").is_file():
+        fail(f"pipeline template not found: {config_dir / 'pipeline.yaml'}")
+    if not (config_dir / "agents" / "dev.agent.md").is_file():
+        fail(f"dev agent not found: {config_dir / 'agents' / 'dev.agent.md'}")
 
-    check_provider_sdk(engine_python, args.provider)
-    check_assets_clean(plan_doc, assets_dir)
+    check_assets_clean(config_dir)
 
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     worktree = args.worktree_dir or (
         Path("~/.agentic-dev-loop/smoke/worktrees").expanduser()
-        / f"viz-keepalive-{stamp}")
+        / f"{config_dir.name}-{stamp}")
     if worktree.exists():
         fail(f"worktree already exists: {worktree}")
 
     port = args.viz_port or free_port()
 
-    print(f"[smoke] provider: {args.provider}")
+    print(f"[smoke] config dir: {config_dir}")
     print(f"[smoke] worktree: {worktree}")
     print(f"[smoke] viz port: {port}")
-    print(f"[smoke] creating worktree from HEAD...")
+    print("[smoke] creating worktree from HEAD...")
     create_worktree(worktree)
     try:
-        tmpdir = Path(tempfile.mkdtemp(prefix="smoke-provider-"))
-        pipeline = build_pipeline(
-            worktree, plan_doc, assets_dir, args.provider, tmpdir)
+        tmpdir = Path(tempfile.mkdtemp(prefix="run-smoke-"))
+        pipeline = build_pipeline(worktree, config_dir, tmpdir)
         print(f"[smoke] pipeline: {pipeline}")
 
         bootstrap = (
