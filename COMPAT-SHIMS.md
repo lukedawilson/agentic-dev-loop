@@ -83,3 +83,25 @@ above), so it is pinned here.
 - **Pinning test**: `tests/test_sdk_compat.py::test_canary_sdk_turn_level_pause_seam_still_present`
   fails loudly when the callback kwarg, the `on_event=self._on_event` wiring,
   or the PAUSED break disappears.
+
+## Provider wire-format policy (Copilot gateway)
+
+The Copilot gateway silently drops ARRAY-encoded tool-result content (HTTP 200,
+the model never sees it; probe-proven 2026-11-06, see aidlc-docs/audit.md).
+The remedy is the SDK's documented `LLM.force_string_serializer` field
+(`llm.py:347`): `provider_wire.py` holds the policy (which gateway base URL
+requires string content) and `build_llm` applies it per instance. This is a
+reliance on a documented SDK field, not a monkeypatch, so it is pinned here as
+a seam.
+
+- **Version range**: `openhands-sdk==1.17.0` (tested).
+- **Removal criterion**: the Copilot gateway honors array-encoded tool
+  content (the policy can then be removed), or the SDK renames/removes the
+  `force_string_serializer` field (pydantic then fails loudly at LLM
+  construction - replace with an engine-owned serializer or a new SDK
+  equivalent).
+- **Pinning tests**: `tests/test_provider_wire.py::TestStringWirePolicy`
+  (Copilot config must serialize tool content as a string, non-Copilot configs
+  keep the SDK default) and
+  `tests/test_provider_wire.py::TestBuildLlmPolicy` (the field is set for
+  Copilot instances only).

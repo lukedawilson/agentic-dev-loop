@@ -6,6 +6,7 @@ import os
 from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import LlmConfig
+from agentic_dev_loop.engine.provider_wire import adapter_for
 from agentic_dev_loop.engine.secrets import (
     SecretResolutionError, resolve_secret_spec)
 
@@ -104,6 +105,11 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
     # off. reasoning_effort is always passed (None when unset) so the SDK
     # "high" default cannot engage; absent effort = reasoning off.
     effort = reasoning_effort if reasoning_effort is not None else cfg.reasoning_effort
+    # Copilot gateway policy (provider_wire.py): the gateway silently drops
+    # ARRAY-encoded tool-result content, so Copilot-configured instances
+    # force the SDK's documented string content serializer. Every other
+    # gateway keeps the SDK default (None = auto-detect by model registry).
+    adapter = adapter_for(cfg.base_url)
     llm = LLM(
         model=cfg.model,
         api_key=api_key,
@@ -111,6 +117,7 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
         timeout=cfg.timeout,  # policy: no LLM timeout unless explicitly set
         reasoning_effort=effort,
         extra_headers=dict(cfg.headers),
+        force_string_serializer=adapter.force_string_serializer if adapter else None,
     )
     llm._agentic_dev_loop_reasoning_effort = effort
     return llm

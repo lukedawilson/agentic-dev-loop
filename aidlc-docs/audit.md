@@ -816,3 +816,37 @@ probe of the nudge itself; the live probe after shipping proved the model
 will not act even when directly ordered to inspect. Lesson: for model-
 behavior fixes, probe the FIX through the engine path before shipping, not
 just the failure.
+
+## Copilot gateway drops array-encoded tool results: string-content policy fix
+
+**Timestamp**: 2026-11-06.
+**User input**: "Re-ran, still fails on review" (superseded); then run
+c278697c9263: "ANOTHER FUCKING FAILURE" (kimi dev reported every terminal
+action returned empty output) and, for the fix design: "Instead of a shim,
+how about introducing an adapter that serves the response in the format the
+provider requires? Basically adding an abstraction, rather than an
+if-statement + monkey-patch".
+**AI response**: Run c278697c9263 decoded: the sandbox audit trail proves
+every dev command executed via docker with real exit codes; wire capture
+proves the SDK sent correct tool-result messages; yet kimi escalated
+blindly ("echo hello" returned nothing). Probes isolated the wire shape:
+with STRING-encoded tool content kimi answers the roundtrip correctly;
+with ARRAY-encoded tool content (the SDK's shape whenever a model supports
+native tool calling) the gateway accepts the request (HTTP 200) but the
+model never sees the tool results (R1b vs R1c/d/e, probe_c278d). DeepSeek
+was never affected because litellm's registry marks deepseek models
+force_string_serializer=True. Fix: policy, not patch - a WireAdapter
+registry (engine/provider_wire.py) maps a gateway base URL to a wire
+shape, and build_llm applies it via the SDK's own documented
+LLM.force_string_serializer field (set True for Copilot-configured
+instances, None = SDK auto-detect elsewhere). Zero monkeypatch; COMPAT-
+SHIMS.md pins the field reliance. Proven end-to-end before shipping
+(probe_c278h): real build_llm, wire shows all-string content, kimi reads
+the canned sandbox observations and reports honestly instead of coding
+blind.
+**Context**: the gateway's silent content drop is a validated-model fact
+(each probe recorded); the fix design honors the validated-model rule by
+probing through the engine's exact path before shipping. Lesson: an
+external gateway can accept a request and still drop part of it; wire-
+level capture of BOTH the working and broken shapes is what isolated the
+difference.
