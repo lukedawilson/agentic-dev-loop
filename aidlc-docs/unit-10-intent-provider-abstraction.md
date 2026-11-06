@@ -2,8 +2,9 @@
 
 > **Status**: WONTSHIP 2026-11-06. The unit-10 code was reverted by the user
 > (commit 526c802; see the unit-10 section of aidlc-docs/aidlc-state.md). The
-> Copilot path is superseded by the 058 Copilot-as-endpoint direction (planning
-> doc not yet written). This document remains as the historical record.
+> Copilot path is superseded by the 058 Copilot-as-endpoint direction
+> (planning-docs/058-copilot-as-endpoint.md). This document remains as the
+> historical record.
 >
 > STARTED 2026-11-05. Design produced and approved in a brainstorming session
 > the same day ("OK, I agree with the design. STart a new AI-DLC unit and feed

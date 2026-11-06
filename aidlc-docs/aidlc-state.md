@@ -147,5 +147,5 @@ Withdrawn by user directive 2026-11-06 ("Mark unit 10 as wontship", after the us
 - Revert: commit 526c802 "Revert feat: construct unit unit-10 (agent dev loop)" (mechanical, zero conflicts, exactly the 31 unit-10 files removed; full suite green at 1277 passed post-revert)
 - Not reverted: e31f40f "Unit 10 docs" (aidlc construction docs + audit trail remain as history) and a9a0351 "release: v0.11.1" (pyproject/engine-version/CHANGELOG match the last published wheel)
 - KEEP from unit-10: Copilot device flow (copilot_auth.py, ~167 lines, self-contained, stdlib-only) - re-added with the scope fix (scope: copilot, not read:user) and overridable client_id as part of the 058 direction
-- Superseded by: the 058 Copilot-as-endpoint direction - Copilot runs as an OpenAI-compatible endpoint (api.githubcopilot.com) on the existing OpenHands runtime, not a separate driver (planning doc 058 not yet written)
+- Superseded by: the 058 Copilot-as-endpoint direction - Copilot runs as an OpenAI-compatible endpoint (api.githubcopilot.com) on the existing OpenHands runtime, not a separate driver (planning-docs/058-copilot-as-endpoint.md, written 2026-11-06)
 - Historical docs (requirements FR-10.x/NFR-10.x, FD/NFR/ID artifacts, intent doc, audit trail) remain as history
