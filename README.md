@@ -424,6 +424,76 @@ lines, the sandbox's new lines are appended in order, both sides converge, and
 the run continues with `[isolation] merged concurrent edits: ...` on the
 console.
 
+### Copilot subscription endpoint
+
+GitHub Copilot subscriptions work as an OpenAI-compatible LLM endpoint: log in
+once, then point an `llm:` block at it. The smoke harness runs the same plan
+against both the Copilot endpoint and a standard OpenAI-compatible endpoint,
+so the provider choice is independent of the pipeline design.
+
+```bash
+agentic-dev-loop copilot-login    # device flow; writes the token (mode 600)
+agentic-dev-loop copilot-models   # the models this token's tier can use
+```
+
+```yaml
+llm:
+  model: openai/gpt-5.6-luna      # pro default; probe-validated (see below)
+  base_url: https://api.githubcopilot.com
+  api_key_secret:
+    from: file
+    key: ~/.agentic-dev-loop/auth/copilot.json
+    json_key: access_token
+  headers:
+    Copilot-Integration-Id: vscode-chat
+    Editor-Version: vscode/1.94.0
+    Openai-Intent: conversation-panel
+llms:
+  flash:
+    model: openai/gpt-4.1         # lite tier; no reasoning_effort (see below)
+    base_url: https://api.githubcopilot.com
+    api_key_secret:
+      from: file
+      key: ~/.agentic-dev-loop/auth/copilot.json
+      json_key: access_token
+    headers:
+      Copilot-Integration-Id: vscode-chat
+      Editor-Version: vscode/1.94.0
+      Openai-Intent: conversation-panel
+```
+
+- The `openai/` prefix on model names is required: litellm otherwise routes a
+  bare `claude-*` name through Anthropic's wire format, which the gateway
+  rejects. The prefix forces the OpenAI-compatible route.
+- The model pins are probe-validated against the live endpoint (2026-11-06).
+  `gpt-5.6-luna` routes through the Responses API (the SDK switches
+  automatically), accepts `xhigh`, and returns real verdicts on the review
+  step. `gpt-4.1` tool-calls cleanly on the chat path but hard-400s on any
+  `reasoning_effort`, so lite-tier steps set none.
+- The brief step runs on the pro model at `medium`: no-effort `gpt-4.1`
+  cannot satisfy the mechanical brief-coverage gate.
+- The engine forces string-encoded message content for Copilot configs: the
+  gateway silently drops ARRAY-encoded tool results, which would leave an
+  agent blind to its own terminal output.
+
+Known limitations (probe-validated, not speculation):
+
+- Anthropic models are unusable for agent steps on this endpoint: the claude
+  pins collapse to tool-less narration on review (planning-docs/059), and
+  claude-opus-4.8 returns two choices on the non-streamed path the engine
+  uses.
+- `gpt-4o-mini` caps chat context at 12288 tokens (it overran on the first
+  smoke run).
+- `gpt-4o` and `gpt-4.1` reject any `reasoning_effort` on the chat path.
+- `gpt-5.x` models are Responses-API-only.
+- kimi-k3 accepts only `low`/`high`/`max` effort, and its tool results were
+  dropped by the gateway until the string-content policy above.
+- `gpt-4.1` carries a gateway "utility model" rate limit that a sustained dev
+  loop can trip; it resets within minutes.
+
+See [docs/setup.md](docs/setup.md#copilot-subscription-endpoint-058) for the
+token lifecycle, the probe-validated headers, and the full details.
+
 
 ## Authoring a loop for your own repo
 
