@@ -182,3 +182,8 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   the brief step with "missing required Authorization header" because
   litellm routes a bare claude-* name through its Anthropic wire format;
   the openai/ prefix forces the OpenAI-compatible route (probe-reproduced).
+  Third round same day: the Anthropic pins collapsed on the review step
+  (tool-less narration, no verdict, ignored a direct nudge - runs
+  27d01d65f858 and 91fc26500788, probe reproduced), so the pins are now
+  kimi-k3 for both pro and flash with reasoning_effort high on every step
+  (kimi accepts [low, high, max] only); see planning-docs/059.

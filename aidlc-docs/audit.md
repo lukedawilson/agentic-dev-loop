@@ -791,3 +791,28 @@ changed. Lesson: a section's semantics ("Stage artifacts" = other
 steps' outputs) must hold for the actual dict the state carries; the
 accumulate-per-step reducer plus the model's prompt rules made the
 section self-referential on retry.
+
+## Zero-tool-call nudge and self-retry round: probed, failed, reverted
+
+**Timestamp**: 2026-11-06 (reverted same day).
+**User input**: "Re-ran, still fails on review / 1. Ascertain whether it's the
+same issue / 2. If it is: a) revert your failed fix b) write up the problem
+in planning-docs/NNN.md - just detail the problem, and give the plan a NOT
+READY status c) set the smoke models to something that isn't Anthropic".
+**AI response**: Ascertained SAME issue via the engine's exact path: a live
+probe of the review message (openai/claude-opus-5.5, effort xhigh, dogfood
+review agent, canned FakeSandbox) reproduced the collapse 1/1: first turn
+tool-less narration, FINISHED; the zero-tool-call nudge FIRED and the model
+ignored it (second turn: another tool-less narration, zero terminal
+requests, no verdict). The self-retry change worked mechanically
+(retry_target: 'review' observed in run 91fc26500788) but only re-runs the
+same broken review. Both engine changes reverted to the pre-round state
+(git checkout 8ea4f07, the own-artifact filter fix remains); the problem is
+documented in planning-docs/059 with Status: NOT READY; smoke copilot pins
+moved off Anthropic models.
+**Context**: the nudge was designed from probe evidence (collapse signature
+= zero-tool-call FINISH) but was validated only as a hypothesis, not as a
+probe of the nudge itself; the live probe after shipping proved the model
+will not act even when directly ordered to inspect. Lesson: for model-
+behavior fixes, probe the FIX through the engine path before shipping, not
+just the failure.

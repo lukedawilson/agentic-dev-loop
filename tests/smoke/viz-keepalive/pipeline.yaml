@@ -14,12 +14,18 @@ max_attempts: 3
 steps:
   - name: brief
     llm: flash
-    reasoning_effort: medium
+    reasoning_effort: high
     # Native brief step (049): brief_inputs is the type discriminator; the
     # prompt, capture file (attempt-brief.md), and iteration cap are
     # engine-owned. include: resolves relative to the workspace root (the
     # disposable worktree). The plan doc (plan.md) reaches the brief agent
     # through the loader context (additional_files).
+    # Effort note (planning-docs/059): the template is provider-free, so
+    # each effort must be valid for EVERY provider. kimi-k3 (copilot)
+    # accepts [low, high, max] only: medium and xhigh hard-400. high is
+    # the shared valid value, so brief and review run high here for both
+    # providers (DeepSeek accepts high; the real pipeline's medium/xhigh
+    # cannot appear in a provider-free template).
     brief_inputs:
       include: [AGENTS.md, coding-standards-ddd.yaml]
       sections: [Repo rules digest, Unit scope digest, Environment facts, Open risks]
@@ -73,7 +79,7 @@ steps:
 
   - name: review
     agent: review
-    reasoning_effort: xhigh
+    reasoning_effort: high
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     mounts: [{path: ".", mode: ro}]

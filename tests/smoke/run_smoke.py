@@ -51,23 +51,34 @@ SRC_DIR = REPO_ROOT / "src"
 # Model pins (probed 2026-11-06 against the real endpoints):
 # - openhands = DeepSeek: pro deepseek-v4-pro, flash deepseek-flash with
 #   reasoning_effort medium (mirrors agentic-dev-loop/pipeline.yaml).
-# - copilot: pro claude-opus-5.5 (non-streamed tool calls single-choice,
-#   effort medium/xhigh accepted, 65K-token context OK), flash
-#   claude-sonnet-5.5 (effort medium/high accepted, tool roundtrip OK).
-#   Rejected: gpt-4o-mini (Copilot's real chat context is 12288 tokens -
-#   the dev agent overran it on the first smoke run), claude-opus-4.8
-#   (Copilot returns two choices on the non-streamed path the engine
-#   uses: the litellm-surfaced one has finish_reason tool_calls with
-#   tool_calls=None), kimi-k3 (effort values [low, high, max] only).
-# - Copilot pins carry the openai/ prefix on purpose: litellm routes a
-#   bare "claude-*" model name through its Anthropic provider path, which
-#   speaks Anthropic's wire format (x-api-key) to the gateway and dies
-#   with "missing required Authorization header" (observed on the brief
-#   step of the first mirror smoke run, 2026-11-06). The openai/ prefix
-#   forces litellm's OpenAI-compatible route: Authorization Bearer plus
-#   chat/completions, with the bare model name in the body. Probe:
+# - copilot = Kimi (see planning-docs/059): the Anthropic pins
+#   (claude-opus-5.5 pro / claude-sonnet-5.5 flash) collapsed on agent
+#   steps: both review attempts of runs 27d01d65f858 and 91fc26500788
+#   ended in one tool-less narration with no verdict, and a live probe
+#   through the engine's own path showed opus-5.5 ignores even a direct
+#   nudge to inspect the workspace (zero terminal requests). Replaced
+#   with kimi-k3 for both pro and flash. kimi-k3 is the only usable Kimi
+#   tier entry (kimi-k3-base and kimi-k3-copilot return 400
+#   model_not_supported) and accepts reasoning_effort [low, high, max]
+#   only, so every step runs effort high (brief/review used medium/xhigh
+#   under Anthropic, both hard-400 on kimi). Rejected on earlier rounds:
+#   gpt-4o-mini (Copilot's real chat context is 12288 tokens - the dev
+#   agent overran it on the first smoke run), claude-opus-4.8 (Copilot
+#   returns two choices on the non-streamed path the engine uses: the
+#   litellm-surfaced one has finish_reason tool_calls with
+#   tool_calls=None).
+# - Copilot pins carry the openai/ prefix on purpose. Probe (2026-11-06):
 #   litellm.completion(model="claude-sonnet-5.5", api_base=copilot)
-#   failed; the same call with "openai/claude-sonnet-5.5" returned OK.
+#   failed: litellm routed the bare name through its Anthropic provider
+#   path, which speaks Anthropic's wire format (x-api-key) to the
+#   gateway and dies with "missing required Authorization header"
+#   (observed on the brief step of the first mirror smoke run). The
+#   openai/ prefix forces litellm's OpenAI-compatible route:
+#   Authorization Bearer plus chat/completions, with the bare model name
+#   in the body. The same rule applies to kimi: bare "kimi-k3" makes
+#   litellm refuse outright ("LLM Provider NOT provided"). Probe:
+#   openai/kimi-k3 through litellm = clean non-streamed tool call and
+#   roundtrip, effort low/high OK, medium/xhigh 400.
 PROVIDER_BLOCKS = {
     "openhands": (
         "llm:\n"
@@ -83,7 +94,7 @@ PROVIDER_BLOCKS = {
     ),
     "copilot": (
         "llm:\n"
-        "  model: openai/claude-opus-5.5\n"
+        "  model: openai/kimi-k3\n"
         "  base_url: https://api.githubcopilot.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -95,7 +106,7 @@ PROVIDER_BLOCKS = {
         "    Openai-Intent: conversation-panel\n"
         "llms:\n"
         "  flash:\n"
-        "    model: openai/claude-sonnet-5.5\n"
+        "    model: openai/kimi-k3\n"
         "    base_url: https://api.githubcopilot.com\n"
         "    api_key_secret:\n"
         "      from: file\n"
@@ -105,7 +116,7 @@ PROVIDER_BLOCKS = {
         "      Copilot-Integration-Id: vscode-chat\n"
         "      Editor-Version: vscode/1.94.0\n"
         "      Openai-Intent: conversation-panel\n"
-        "    reasoning_effort: medium\n"
+        "    reasoning_effort: high\n"
     ),
 }
 

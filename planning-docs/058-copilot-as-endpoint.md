@@ -269,7 +269,14 @@ Real-token gates (user-run):
   rejects. The `openai/` prefix forces the OpenAI-compatible route (Bearer
   auth, chat/completions, bare name in the body); probe-reproduced:
   `litellm.completion(model="claude-sonnet-5.5", api_base=copilot)` fails,
-  the same call with `openai/claude-sonnet-5.5` returns OK.
+  the same call with `openai/claude-sonnet-5.5` returns OK. A bare
+  `kimi-k3` fails the same way ("LLM Provider NOT provided").
+  REVERSED AGAIN 2026-11-06 (user directive): the Anthropic pins collapsed
+  on the review step (tool-less narration, no verdict, ignored even a
+  direct nudge to inspect; runs 27d01d65f858 and 91fc26500788, probe
+  reproduced). The pins are now kimi-k3 for both pro and flash, every
+  step at reasoning_effort high (kimi accepts [low, high, max] only).
+  Details: planning-docs/059.
 - O2: Client id override mechanism. Recommendation: the
   AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID env var (host-side, never in yaml);
   alternative: a field in the llm block (but the client id is an operator

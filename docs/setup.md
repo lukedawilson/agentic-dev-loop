@@ -399,7 +399,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: openai/claude-opus-5.5    # pro default; probe-validated (see below)
+  model: openai/kimi-k3           # pro default; probe-validated (see below)
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -411,7 +411,7 @@ llm:
     Openai-Intent: conversation-panel
 llms:
   flash:
-    model: openai/claude-sonnet-5.5 # the fast tier for brief/dev steps
+    model: openai/kimi-k3         # same model for the fast tier
     base_url: https://api.githubcopilot.com
     api_key_secret:
       from: file
@@ -421,22 +421,29 @@ llms:
       Copilot-Integration-Id: vscode-chat
       Editor-Version: vscode/1.94.0
       Openai-Intent: conversation-panel
-    reasoning_effort: medium
+    reasoning_effort: high
 ```
 
 - The model pins are probe-validated against the live endpoint (2026-11-06):
-  `claude-opus-5.5` returns clean single-choice non-streamed tool calls and
-  accepts reasoning effort `medium`/`xhigh`; `claude-sonnet-5.5` accepts
-  `medium`/`high`. Avoid `gpt-4o-mini` (Copilot caps its chat context at
-  12288 tokens, which overran on the first smoke run) and `claude-opus-4.8`
-  (two choices on the non-streamed path the engine uses; the surfaced one
-  carries no tool calls).
+  `kimi-k3` returns clean single-choice non-streamed tool calls with a
+  proper roundtrip, and is the only usable Kimi tier entry
+  (`kimi-k3-base`/`kimi-k3-copilot` return 400 model_not_supported). It
+  accepts reasoning effort `low`/`high` only (`medium` and `xhigh` are
+  hard-400), so every agent step runs `high`. The earlier Anthropic pins
+  (`claude-opus-5.5`/`claude-sonnet-5.5`) collapsed on the review step:
+  one tool-less narration, no verdict, and opus-5.5 ignored even a direct
+  nudge to inspect the workspace (see planning-docs/059). Also avoid
+  `gpt-4o-mini` (Copilot caps its chat context at 12288 tokens, which
+  overran on the first smoke run) and `claude-opus-4.8` (two choices on
+  the non-streamed path the engine uses; the surfaced one carries no tool
+  calls).
 - The `openai/` prefix on the model names is required. litellm routes a
   bare `claude-*` name through its Anthropic provider path, which speaks
   Anthropic's wire format and dies at the gateway with "missing required
   Authorization header" (observed on the brief step of the first mirror
-  smoke run). The prefix forces the OpenAI-compatible route: Bearer auth,
-  chat/completions, bare model name in the body.
+  smoke run); a bare `kimi-k3` makes litellm refuse outright ("LLM
+  Provider NOT provided"). The prefix forces the OpenAI-compatible route:
+  Bearer auth, chat/completions, bare model name in the body.
 - These three headers are probe-validated against the live endpoint
   (2026-11-06): accepted at `/models` and `/chat/completions`. Do not add
   `X-GitHub-Api-Version: 2022-11-28`; the live endpoint rejects it with

@@ -109,7 +109,10 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
   commit steps are omitted; the test step runs the keepalive test
   selection). The dev step runs the provider's flash profile; the brief and
   review steps run flash and the default pro model respectively, matching
-  agentic-dev-loop/pipeline.yaml.
+  agentic-dev-loop/pipeline.yaml. Copilot pins are kimi-k3 for both
+  profiles with reasoning_effort high on every step (kimi accepts
+  [low, high, max] only; the Anthropic pins collapsed on review, see
+  planning-docs/059).
 - Preconditions: Docker running on the host (the sandbox has no docker,
   and the engine refuses any sandbox command containing the word docker);
   `.venv` exists; assets committed;
