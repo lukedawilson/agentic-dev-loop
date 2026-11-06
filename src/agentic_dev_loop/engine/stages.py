@@ -705,7 +705,9 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
             return {"failed": True, "failed_step": step.name}
         message = build_context(runtime, state["docs"], state["subject"],
                                 state["notes"],
-                                artifacts=state.get("artifacts", {}),
+                                artifacts={k: v for k, v in
+                                           state.get("artifacts", {}).items()
+                                           if k != step.name},
                                 custom_prompt=step.custom_prompt)
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
         result = runtime.run_agent(step.agent, message,

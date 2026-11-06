@@ -198,8 +198,8 @@ class TestRunPipeline:
         assert (ok, attempts) == (True, 2)
         second_dev = fake_agents.messages_for("dev")[1]
         assert "## Stage artifacts" in second_dev
-        assert "built it" in second_dev          # dev's own attempt-1 artifact
-        assert "fix the thing" in second_dev      # review artifact + fail note
+        assert "built it" not in second_dev   # own attempt-1 artifact is not a stage artifact for itself
+        assert "fix the thing" in second_dev  # review artifact + fail note
         assert "## Previous attempt feedback" in second_dev
 
     def test_exhaustion_fails(self, repo, fake_agents):

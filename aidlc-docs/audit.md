@@ -756,3 +756,38 @@ model probes bypassed litellm and missed this until the real run hit it.
 Model-pin probes must go through litellm (or the engine's exact call
 path).
 
+
+## Retry no-op: own previous response injected as a stage artifact
+
+**Timestamp**: 2026-11-06
+**User Input**: "No, investigate why the retry is failing. This is a
+likely candidate for a genuine code bug with the copilot integration"
+(after four smoke runs where the dev retry collapsed to a single
+tool-less message).
+**AI Response**: Decoded the engine retry path and reproduced it live.
+On retry the message built by make_agent_node carries the retried step's
+OWN previous final response under "## Stage artifacts" (state artifacts
+accumulate per step; the dev step's capture replaces the brief digest).
+Probe: the exact production retry message through the engine's own path
+(build_context + load_agent + build_llm openai/claude-sonnet-5.5 effort
+high + one SDK turn) reproduced the tool-less no-op 5/5 ("I'll start by
+looking at..."), while the real attempt-1 message made a tool call 2/2.
+Bisection isolated the trigger: with the own-summary present, claude-
+sonnet-5.5 narrates and never issues a tool call; the SDK ends the
+conversation on a tool-less turn. The dogfood dev.agent.md rule 3
+(prior-attempt residue: "If the touchpoints are already at target
+state, do not re-implement") makes the model read its own last message
+as evidence the work is done. Feedback alone (without the own-summary)
+is harmless. Dogfood never hits it because deepseek-flash does not
+finish on a narration turn - the message composition is the bug; the
+model choice exposes it. Fix (TDD, red then green): make_agent_node
+filters the current step's own entry out of the artifacts passed to
+build_context, so a step's own previous output is never presented as a
+stage artifact for itself. tests/test_graph.py updated to assert the
+own entry is absent from the retry message. Full suite 1324 passed.
+**Context**: validated-model rule: the hypothesis was probed against
+the live endpoint with the exact production message before any code
+changed. Lesson: a section's semantics ("Stage artifacts" = other
+steps' outputs) must hold for the actual dict the state carries; the
+accumulate-per-step reducer plus the model's prompt rules made the
+section self-referential on retry.
