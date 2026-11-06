@@ -399,7 +399,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: gpt-4o-mini              # a base model; premium models are plan-gated
+  model: claude-opus-5.5           # pro default; probe-validated (see below)
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -409,8 +409,28 @@ llm:
     Copilot-Integration-Id: vscode-chat
     Editor-Version: vscode/1.94.0
     Openai-Intent: conversation-panel
+llms:
+  flash:
+    model: claude-sonnet-5.5       # the fast tier for brief/dev steps
+    base_url: https://api.githubcopilot.com
+    api_key_secret:
+      from: file
+      key: ~/.agentic-dev-loop/auth/copilot.json
+      json_key: access_token
+    headers:
+      Copilot-Integration-Id: vscode-chat
+      Editor-Version: vscode/1.94.0
+      Openai-Intent: conversation-panel
+    reasoning_effort: medium
 ```
 
+- The model pins are probe-validated against the live endpoint (2026-11-06):
+  `claude-opus-5.5` returns clean single-choice non-streamed tool calls and
+  accepts reasoning effort `medium`/`xhigh`; `claude-sonnet-5.5` accepts
+  `medium`/`high`. Avoid `gpt-4o-mini` (Copilot caps its chat context at
+  12288 tokens, which overran on the first smoke run) and `claude-opus-4.8`
+  (two choices on the non-streamed path the engine uses; the surfaced one
+  carries no tool calls).
 - These three headers are probe-validated against the live endpoint
   (2026-11-06): accepted at `/models` and `/chat/completions`. Do not add
   `X-GitHub-Api-Version: 2022-11-28`; the live endpoint rejects it with
@@ -422,8 +442,9 @@ llm:
 - A token created before the scope fix (scope `read:user`) must be deleted and
   re-created: `rm ~/.agentic-dev-loop/auth/copilot.json` then
   `agentic-dev-loop copilot-login`. The 401/403 fail-fast names this fix.
-- `model:` stays required. Confirm the model with `copilot-models` before a
-  run; base models are the supported claim, premium models vary by plan.
+- `model:` stays required. Confirm the models with `copilot-models` before a
+  run; the smoke harness pre-flights every pinned model against the token's
+  tier list.
 - The smoke harness takes a provider and a plan directory independently:
   `./run-smoke.sh openhands tests/smoke/viz-keepalive` (or
   `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive

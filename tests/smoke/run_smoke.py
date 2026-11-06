@@ -47,16 +47,34 @@ SRC_DIR = REPO_ROOT / "src"
 # provider argument -> the llm block injected into the config dir's template.
 # The config dir is provider-free (the provider owns the llm block), so the
 # same plan runs against any provider without editing yaml.
+#
+# Model pins (probed 2026-11-06 against the real endpoints):
+# - openhands = DeepSeek: pro deepseek-v4-pro, flash deepseek-flash with
+#   reasoning_effort medium (mirrors agentic-dev-loop/pipeline.yaml).
+# - copilot: pro claude-opus-5.5 (non-streamed tool calls single-choice,
+#   effort medium/xhigh accepted, 65K-token context OK), flash
+#   claude-sonnet-5.5 (effort medium/high accepted, tool roundtrip OK).
+#   Rejected: gpt-4o-mini (Copilot's real chat context is 12288 tokens -
+#   the dev agent overran it on the first smoke run), claude-opus-4.8
+#   (Copilot returns two choices on the non-streamed path the engine
+#   uses: the litellm-surfaced one has finish_reason tool_calls with
+#   tool_calls=None), kimi-k3 (effort values [low, high, max] only).
 PROVIDER_BLOCKS = {
     "openhands": (
         "llm:\n"
         "  model: openai/deepseek-v4-pro\n"
         "  base_url: https://api.deepseek.com\n"
         "  api_key_env: OPENAI_API_KEY\n"
+        "llms:\n"
+        "  flash:\n"
+        "    model: openai/deepseek-flash\n"
+        "    base_url: https://api.deepseek.com\n"
+        "    api_key_env: OPENAI_API_KEY\n"
+        "    reasoning_effort: medium\n"
     ),
     "copilot": (
         "llm:\n"
-        "  model: gpt-4o-mini\n"
+        "  model: claude-opus-5.5\n"
         "  base_url: https://api.githubcopilot.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -66,6 +84,19 @@ PROVIDER_BLOCKS = {
         "    Copilot-Integration-Id: vscode-chat\n"
         "    Editor-Version: vscode/1.94.0\n"
         "    Openai-Intent: conversation-panel\n"
+        "llms:\n"
+        "  flash:\n"
+        "    model: claude-sonnet-5.5\n"
+        "    base_url: https://api.githubcopilot.com\n"
+        "    api_key_secret:\n"
+        "      from: file\n"
+        "      key: ~/.agentic-dev-loop/auth/copilot.json\n"
+        "      json_key: access_token\n"
+        "    headers:\n"
+        "      Copilot-Integration-Id: vscode-chat\n"
+        "      Editor-Version: vscode/1.94.0\n"
+        "      Openai-Intent: conversation-panel\n"
+        "    reasoning_effort: medium\n"
     ),
 }
 
@@ -150,16 +181,20 @@ def _engine_auth():
 
 def preflight_copilot_model(text: str, *, token_reader=None,
                             models_lister=None) -> None:
-    """For a file-backed Copilot config, probe /models and confirm the pinned
-    model exists for this token's tier. Non-Copilot configs are a no-op."""
+    """For a file-backed Copilot config, probe /models and confirm every
+    pinned model (default llm block plus named profiles) exists for this
+    token's tier. Non-Copilot configs are a no-op."""
     block = _secret_block(text)
     if block is None or _field(block, "from") != "file":
         return
-    match = re.search(r"^\s*model:\s*(\S+)\s*$", text, re.MULTILINE)
     key = _field(block, "key")
-    if match is None or not key:
+    if not key:
         return
-    model = match.group(1).strip("\"'")
+    pinned = {match.group(1).strip("\"'")
+              for match in re.finditer(r"^\s*model:\s*(\S+)\s*$", text,
+                                       re.MULTILINE)}
+    if not pinned:
+        return
     module = _engine_auth()
     token_reader = token_reader or module.read_token
     models_lister = models_lister or module.list_copilot_models
@@ -167,11 +202,12 @@ def preflight_copilot_model(text: str, *, token_reader=None,
         models = models_lister(token_reader(Path(key).expanduser()))
     except module.CopilotAuthError as e:
         raise SmokePreflightError(str(e)) from e
-    if model not in models:
+    missing = sorted(model for model in pinned if model not in models)
+    if missing:
         raise SmokePreflightError(
-            f"model {model!r} is not in this token's Copilot model list "
-            f"({', '.join(models)}) - run `agentic-dev-loop copilot-models` "
-            "and pin an available base model")
+            f"model(s) {', '.join(repr(m) for m in missing)} not in this "
+            f"token's Copilot model list ({', '.join(models)}) - run "
+            "`agentic-dev-loop copilot-models` and pin available models")
 
 
 def free_port() -> int:

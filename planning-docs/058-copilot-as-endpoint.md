@@ -246,6 +246,22 @@ Real-token gates (user-run):
 - O1: Which model does the example profile pin? Recommendation: gpt-4o-mini
   (base model, community-verified with OAuth tokens); premium models only
   after gate 3. ANSWERED: A, pin gpt-4o-mini (user: "A", 2026-11-06).
+  REVERSED 2026-11-06 (user directive): the first real smoke run proved
+  gpt-4o-mini unusable for the agent loop (Copilot caps its chat context at
+  12288 tokens; the dev agent overran it and the run died). Live-endpoint
+  probes then re-pinned the example config to claude-opus-5.5 (default) and
+  claude-sonnet-5.5 (flash profile), per the validated-model rule. Probe
+  record (all 2026-11-06, real token, the three validated headers):
+  - claude-opus-5.5: clean single-choice non-streamed tool calls, effort
+    medium/xhigh accepted, 65K-token context OK - pro pick.
+  - claude-sonnet-5.5: clean non-streamed tool calls, effort medium/high
+    accepted, tool roundtrip OK - flash pick.
+  - claude-opus-4.8: REJECTED - two choices on the non-streamed path the
+    engine uses; the litellm-surfaced choice has finish_reason tool_calls
+    with tool_calls=None.
+  - kimi-k3: REJECTED - effort values [low, high, max] only; the engine's
+    effort set is low/medium/high/xhigh/none.
+  - gpt-4o/gpt-4.1: REJECTED - hard-400 on any reasoning_effort.
 - O2: Client id override mechanism. Recommendation: the
   AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID env var (host-side, never in yaml);
   alternative: a field in the llm block (but the client id is an operator

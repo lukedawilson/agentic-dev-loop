@@ -693,3 +693,41 @@ code.
 **Context**: 058 verification gate 2 (model probe) was never run against a
 real token before shipping; the same class of failure as unit-10 (design
 built on an unprobed external claim).
+
+---
+
+## Copilot smoke model pins re-picked from live probes (gpt-4o-mini dropped)
+
+**Timestamp**: 2026-11-06
+**User Input**: after the first real smoke run died, directed the test
+config to use sensible models that will not hit context limits ("The
+engine shouldn't crash like this for a context reached error"), asked what
+other gpt models exist, and asked for a pick that "mirrors DeepSeek Flash
+vs DeepSeek Pro (with the different effort levels)". Iterated: sonnet ->
+opus 4.8 + gpt-5.6 lite -> opus 4.8 + sonnet 5.5 lite -> considered kimi
+-> settled on "opus 5.5. DO IT", with the smoke pipeline mirroring the
+real steps (brief -> deps -> dev -> test -> review; qa/restore/commit
+omitted).
+**AI Response**: Probed the live endpoint (real token, validated headers).
+Findings: gpt-4o-mini's Copilot chat context caps at 12288 tokens (the
+first smoke run's dev agent overran it; litellm's 128000 registry value is
+the public OpenAI number, which the gateway does not honor).
+claude-opus-4.8 returns TWO choices on the non-streamed path the engine
+uses (SDK stream defaults False); the litellm-surfaced choice carries
+finish_reason tool_calls with tool_calls=None - unusable without an
+engine streaming change (rejected). claude-opus-5.5 is clean on the
+non-streamed path, accepts reasoning effort medium/xhigh, and handles 65K
+tokens - chosen as pro. claude-sonnet-5.5 accepts medium/high with a clean
+tool roundtrip - chosen as flash (effort medium). kimi-k3 accepts only
+[low, high, max], which the engine's effort literal (low/medium/high/
+xhigh/none) cannot express. gpt-4o/gpt-4.1 hard-400 on any effort. Applied:
+PROVIDER_BLOCKS copilot pins swapped in tests/smoke/run_smoke.py (plus an
+openhands flash profile so the smoke template's flash-naming steps work
+for both providers); preflight_copilot_model now checks every pinned model
+against the tier list; the smoke pipeline.yaml restructured to mirror the
+real step shapes with a new agents/review.agent.md; plan.md, docs/setup.md,
+planning-docs/058 (O1 reversal), and aidlc-state.md updated.
+**Context**: validated-model rule (AGENTS.md, unit-10): model claims are
+probed against the live endpoint before pins ship; community/registry
+numbers are not facts.
+

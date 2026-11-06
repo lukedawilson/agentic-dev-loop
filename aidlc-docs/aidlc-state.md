@@ -173,4 +173,8 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   with 400 "invalid apiVersion" at /models and /chat/completions. The
   header was removed everywhere; the remaining three headers (vscode-chat,
   vscode/1.94.0, conversation-panel) are probe-accepted and the probe now
-  passes (51 models, gpt-4o-mini in the tier list).
+  passes (51 models). 2026-11-06 probe round two re-pinned the smoke and
+  example configs: claude-opus-5.5 (pro) and claude-sonnet-5.5 (flash);
+  gpt-4o-mini was dropped (Copilot chat context caps at 12288 tokens and
+  killed the first smoke run) and claude-opus-4.8 was rejected (two-choice
+  non-streamed responses break tool calling on the engine's path).

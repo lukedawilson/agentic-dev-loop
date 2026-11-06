@@ -91,16 +91,22 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
   the config directory is the plan only, and its `pipeline.yaml` must be
   provider-free (a template carrying its own `llm:` block is rejected).
 - The config directory holds `pipeline.yaml` (the pipeline the run
-  executes), `agents/dev.agent.md` (the agent definition), and optionally
-  `plan.md` (fed to the run as an additional file).
+  executes), `agents/dev.agent.md` and `agents/review.agent.md` (the agent
+  definitions), and optionally `plan.md` (fed to the run as an additional
+  file).
 - The engine runs FROM SOURCE (`PYTHONPATH=src`, no wheel, no pip install) in
   a disposable git worktree of this repo, so the workspace is never the
-  source tree (host-boundary check stays green). The pipeline is
-  deps -> dev -> test (the test step runs the keepalive test selection).
+  source tree (host-boundary check stays green). The pipeline mirrors the
+  real one: brief -> deps -> dev -> test -> review (the restore, qa, and
+  commit steps are omitted; the test step runs the keepalive test
+  selection). The dev step runs the provider's flash profile; the brief and
+  review steps run flash and the default pro model respectively, matching
+  agentic-dev-loop/pipeline.yaml.
 - Preconditions: Docker running; `.venv` exists; assets committed;
   `OPENAI_API_KEY` exported for `openhands` (DeepSeek via that env var), or
-  the token file from `agentic-dev-loop copilot-login` plus a tier-listed
-  model for `copilot`.
+  the token file from `agentic-dev-loop copilot-login` for `copilot`
+  (run_smoke.py pre-flights every pinned model against the token's tier
+  list).
 - The script streams the engine output and waits for the engine to exit on
   its own. It does not probe the viz endpoint, does not signal the engine,
   and does not decide pass or fail (the smoke test is human-run and
