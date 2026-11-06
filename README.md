@@ -16,6 +16,10 @@ checkpointed, and nothing gets committed until every gate passes.
   parsed from files, retries are bounded, nothing is best-effort.
 - **Sandboxed by default.** The agent's shell and every command step run inside
   an always-on Docker sandbox. There is no opt-out.
+- **Any OpenAI-compatible model, or your Copilot subscription.** Point
+  `llm.base_url` at any OpenAI-compatible endpoint with an API key, or log in
+  with `agentic-dev-loop copilot-login` and run on Copilot models. See
+  [LLM providers](#llm-providers).
 
 ---
 
@@ -50,6 +54,40 @@ Docker engine does:
 Native Windows (outside WSL2) is not supported: every Windows-specific code
 path and test was removed, and CI runs on Ubuntu only.
 
+## LLM providers
+
+Two ways to run the same pipeline. The engine speaks OpenAI-compatible wire
+format throughout, so every step, profile, and gate works identically on
+either provider style:
+
+| Provider | Setup |
+| --- | --- |
+| **Any OpenAI-compatible endpoint** | API key via `api_key_env` + `base_url` in the `llm:` block: DeepSeek, OpenAI, or any OpenAI-compatible API. Full reference: [pipeline.yaml reference](#pipelineyaml-reference). |
+| **GitHub Copilot subscription** | `agentic-dev-loop copilot-login` once, then point the `llm:` block at `https://api.githubcopilot.com` with the file-backed token. Probe-validated pins: `openai/gpt-5.6-luna` (pro) and `openai/gpt-4.1` (lite). Full config and known limitations: [Copilot subscription endpoint](#copilot-subscription-endpoint). |
+
+```yaml
+# OpenAI-compatible endpoint (any provider)
+llm:
+  model: openai/deepseek-v4-pro
+  base_url: https://api.deepseek.com
+  api_key_env: OPENAI_API_KEY
+```
+
+```yaml
+# GitHub Copilot subscription
+llm:
+  model: openai/gpt-5.6-luna        # pro; probe-validated pin
+  base_url: https://api.githubcopilot.com
+  api_key_secret:
+    from: file
+    key: ~/.agentic-dev-loop/auth/copilot.json
+    json_key: access_token
+  headers:
+    Copilot-Integration-Id: vscode-chat
+    Editor-Version: vscode/1.94.0
+    Openai-Intent: conversation-panel
+```
+
 ## Installation
 
 **Prerequisites**
@@ -58,7 +96,7 @@ path and test was removed, and CI runs on Ubuntu only.
 | --- | --- |
 | Python | ≥ 3.12 |
 | Docker engine | Engine API ≥ 1.43 (Engine 24). Any compliant engine works - Docker Desktop, OrbStack, Colima, Rancher Desktop, podman docker-compat. On Windows, run under WSL2: the repo must live on the WSL filesystem, not /mnt/c. |
-| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. |
+| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription (see [LLM providers](#llm-providers)). |
 
 ```bash
 pip install "agentic-dev-loop==1.0.0a17"
