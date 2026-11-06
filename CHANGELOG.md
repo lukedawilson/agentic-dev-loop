@@ -7,17 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Copilot as an OpenAI-compatible endpoint on the existing runtime: a
-  `file` secret provider (`SecretSpec.json_key`), `LlmConfig.headers`
-  forwarded as `extra_headers`, `api_key_secret` as an alternative to
-  `api_key_env` (exactly one), the `copilot-login` device flow (scope
-  `copilot`), the `copilot-models` tier probe, and a provider-aware smoke
-  harness (`run_smoke.py --provider openhands|copilot`, wrapped by
-  `run-smoke.sh`; the config dir is the plan only, the provider owns the
-  llm block). No new dependencies and no runtime change.
-
 ## [0.12.0] - 2026-11-06
 
 ### Changed
