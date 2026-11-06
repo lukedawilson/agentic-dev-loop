@@ -663,3 +663,33 @@ aidlc-state.md, and a D9 reversal note in planning-docs/058.
 **Context**: 058's D9 three-config-dir shape coupled provider to plan; the
 pre-058 tools/smoke_provider.py (7ebccaf) already had the decoupled
 provider-injection design, which this change restores.
+
+---
+
+## Copilot header probe falsified the X-GitHub-Api-Version claim
+
+**Timestamp**: 2026-11-06
+**User Input**: ran `./run-smoke.sh copilot tests/smoke/viz-keepalive`; the
+pre-flight failed with `GitHub request failed (HTTP 400): Bad Request`.
+**AI Response**: Probed the live endpoint with the host's real token.
+Evidence: GET /models and POST /chat/completions both return 400 "bad
+request: error: invalid apiVersion" when X-GitHub-Api-Version: 2022-11-28
+is sent, and both return 200 when only that header is dropped (the other
+three headers - Copilot-Integration-Id: vscode-chat, Editor-Version:
+vscode/1.94.0, Openai-Intent: conversation-panel - are accepted). The
+header value was an unprobed community claim (docs/incidents/
+2026-11-05-unit-10-false-premise.md line 298 recorded it as "NOT YET
+CONFIRMED against a real token"); the first real probe falsified it. Fixed
+TDD: red tests asserting the probe and the smoke copilot block omit the
+header (tests/test_copilot_auth.py::test_probe_omits_the_api_version_header,
+tests/test_smoke_preflight.py::test_copilot_block_omits_the_api_version_header),
+then removed the header from COPILOT_HEADERS (engine/copilot_auth.py),
+PROVIDER_BLOCKS (tests/smoke/run_smoke.py), the test_llm.py headers
+fixture, docs/setup.md, planning-docs/058, and aidlc-state.md. Verified:
+63 targeted tests green; the fixed list_copilot_models succeeds against the
+live endpoint (51 models, gpt-4o-mini in the tier list). The token file is
+fine; the earlier token-recreation suspicion was wrong - the bug was in the
+code.
+**Context**: 058 verification gate 2 (model probe) was never run against a
+real token before shipping; the same class of failure as unit-10 (design
+built on an unprobed external claim).

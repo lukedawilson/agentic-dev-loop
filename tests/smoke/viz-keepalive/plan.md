@@ -72,9 +72,10 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
 
 - Unit: `.venv-sandbox/bin/python -m pytest tests/test_055_cli.py -q -m "not docker" -k keepalive`
 - Regression: `.venv-sandbox/bin/python -m pytest tests/test_055_cli.py -q -m "not docker"`
-- Smoke: `tests/smoke/run_smoke.py` (below) - the engine run must end with the
-  keep-alive line, the viz endpoint must respond after completion, and ctrl+c
-  must exit cleanly with the run's exit code.
+- Smoke: `tests/smoke/run_smoke.py` (below) - the human watches the
+  streamed run for the keep-alive line, checks the viz endpoint after
+  completion, and presses ctrl+c to exit. The harness does not automate
+  these checks: it just runs the engine and streams the output.
 
 ## How to run the smoke test
 
@@ -100,10 +101,10 @@ viz to serve). `run_pipeline`'s signature and behavior are unchanged.
   `OPENAI_API_KEY` exported for `openhands` (DeepSeek via that env var), or
   the token file from `agentic-dev-loop copilot-login` plus a tier-listed
   model for `copilot`.
-- The script streams the engine output, waits for the keep-alive line,
-  probes the viz endpoint, sends ctrl+c, and reports PASS/FAIL plus the
-  files the agent changed in the worktree. Pass `--keep-worktree` to inspect
-  the worktree afterward.
+- The script streams the engine output and waits for the engine to exit on
+  its own. It does not probe the viz endpoint, does not signal the engine,
+  and does not decide pass or fail (the smoke test is human-run and
+  human-gated). Pass `--keep-worktree` to inspect the worktree afterward.
 
 ## Risks
 

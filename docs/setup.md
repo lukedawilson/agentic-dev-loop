@@ -409,8 +409,12 @@ llm:
     Copilot-Integration-Id: vscode-chat
     Editor-Version: vscode/1.94.0
     Openai-Intent: conversation-panel
-    X-GitHub-Api-Version: "2022-11-28"
 ```
+
+- These three headers are probe-validated against the live endpoint
+  (2026-11-06): accepted at `/models` and `/chat/completions`. Do not add
+  `X-GitHub-Api-Version: 2022-11-28`; the live endpoint rejects it with
+  400 `invalid apiVersion` at both endpoints.
 
 - The token is the Copilot subscription credential; the pinned OAuth client id
   belongs to OpenCode's app and is overridable with

@@ -168,6 +168,19 @@ class TestListCopilotModels:
         assert request.get_header("Authorization") == "Bearer ghu_test"
         assert request.get_header("Copilot-integration-id") == "vscode-chat"
 
+    def test_probe_omits_the_api_version_header(self, monkeypatch):
+        """2026-11-06 live probe: the real endpoint rejects
+        X-GitHub-Api-Version with 400 'invalid apiVersion' at /models and
+        /chat/completions; the other three headers are accepted."""
+        calls = _install(monkeypatch, [
+            {"data": [{"id": "gpt-4o-mini"}]},
+        ])
+        copilot_auth.list_copilot_models("ghu_test")
+        request = calls[0]
+        assert request.get_header("X-github-api-version") is None
+        assert request.get_header("Editor-version") == "vscode/1.94.0"
+        assert request.get_header("Openai-intent") == "conversation-panel"
+
     def test_401_names_the_scope_fix(self, monkeypatch):
         error = urllib.error.HTTPError(
             "https://api.githubcopilot.com/models", 401, "Unauthorized", {}, None)

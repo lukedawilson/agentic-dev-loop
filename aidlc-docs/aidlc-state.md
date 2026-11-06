@@ -168,4 +168,9 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   the invocation.
 - Non-token gates are green (full suite, ASCII check). Real-token gates
   (device flow, model probe, tool-call round trip, both smokes) remain
-  user-run.
+  user-run. The model-probe gate was first run 2026-11-06 and falsified the
+  header set: the live endpoint rejects X-GitHub-Api-Version: 2022-11-28
+  with 400 "invalid apiVersion" at /models and /chat/completions. The
+  header was removed everywhere; the remaining three headers (vscode-chat,
+  vscode/1.94.0, conversation-panel) are probe-accepted and the probe now
+  passes (51 models, gpt-4o-mini in the tier list).

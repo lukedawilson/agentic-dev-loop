@@ -31,11 +31,15 @@ DEFAULT_SCOPE = "copilot"
 CLIENT_ID_ENV = "AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID"
 REQUEST_TIMEOUT = 30
 
+# Copilot endpoint headers, probe-validated 2026-11-06 against a real token:
+# these three are accepted at /models and /chat/completions.
+# X-GitHub-Api-Version: 2022-11-28 is NOT here: the live endpoint rejects it
+# with 400 "invalid apiVersion" at both endpoints (it was an unprobed
+# community value, now falsified - see aidlc-docs/audit.md).
 COPILOT_HEADERS = {
     "Copilot-Integration-Id": "vscode-chat",
     "Editor-Version": "vscode/1.94.0",
     "Openai-Intent": "conversation-panel",
-    "X-GitHub-Api-Version": "2022-11-28",
 }
 
 

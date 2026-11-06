@@ -28,11 +28,15 @@ the OAuth access_token). No new runtime, no MCP, no subprocess.
 - Auth: `Authorization: Bearer <ghu_ OAuth access token>` from the GitHub
   device flow. No OpenAI API key is used. Metering = the Copilot subscription
   chat quota (same bucket as IDE Copilot Chat), NOT a separate meter.
-- Required headers (names verified): Copilot-Integration-Id, Editor-Version,
-  Openai-Intent, X-GitHub-Api-Version. The exact working values are confirmed
-  at the real-token gate. Commonly reported set:
-  Copilot-Integration-Id: vscode-chat, Editor-Version: vscode/1.94.0,
-  Openai-Intent: conversation-panel, X-GitHub-Api-Version: 2022-11-28.
+- Required headers: Copilot-Integration-Id, Editor-Version, Openai-Intent.
+  Working values, probe-validated at the real-token gate on 2026-11-06
+  (accepted at /models and /chat/completions): Copilot-Integration-Id:
+  vscode-chat, Editor-Version: vscode/1.94.0, Openai-Intent:
+  conversation-panel. NOT X-GitHub-Api-Version: the original plan listed
+  X-GitHub-Api-Version: 2022-11-28 as a fourth required header, but the
+  live endpoint rejects it with 400 "invalid apiVersion" at both /models
+  and /chat/completions, so it was removed everywhere (see aidlc-docs/
+  audit.md).
 - openhands-sdk 1.17.0 `LLM` has an `extra_headers: dict[str, str] | None`
   field ("Optional HTTP headers to forward to LiteLLM requests",
   sdk/llm/llm.py line 285). Header forwarding is a config passthrough; no SDK
@@ -160,10 +164,10 @@ llm:
     Copilot-Integration-Id: vscode-chat
     Editor-Version: vscode/1.94.0
     Openai-Intent: conversation-panel
-    X-GitHub-Api-Version: "2022-11-28"
 ```
 
-(Exact header values confirmed at the real-token gate; the model may be
+(Header values probe-validated 2026-11-06 against the live endpoint; no
+X-GitHub-Api-Version, which the live endpoint rejects. The model may be
 updated by the same gate. reasoning_effort is omitted = off, the default.)
 
 ## Scope

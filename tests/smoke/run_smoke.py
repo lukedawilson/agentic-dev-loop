@@ -12,15 +12,17 @@ the main checkout is never touched). The run is driven by a config directory:
         plan.md                optional plan document (fed as an additional
                                file when present)
 
-The plan this repo ships (tests/smoke/viz-keepalive/) implements the keep-
-alive change: the viz server keeps serving after the run ends and the engine
-prints "Pipeline finished: press ctrl+c to exit". This script streams the
-engine output, waits for that line, probes the viz endpoint, sends ctrl+c,
-and reports PASS/FAIL plus the files the agent changed in the worktree.
-
 Provider and plan are independent: the --provider argument injects the
 matching llm block (PROVIDER_BLOCKS) into the config dir's pipeline
 template, which must be provider-free.
+
+The script pre-flights the credentials, creates the worktree, launches the
+engine, streams its output, and waits for the engine to exit on its own.
+That is the whole job: the smoke test is human-run and human-gated. The
+script does not probe endpoints, does not signal the engine, and does not
+decide pass or fail - the human reads the streamed output and presses
+ctrl+c when they have seen enough. The script exits with the engine's exit
+code.
 
 On-demand local tooling: never run in CI.
 """
@@ -30,24 +32,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import queue
 import re
-import signal
 import socket
 import subprocess
 import sys
 import tempfile
 import threading
-import time
-import urllib.error
-import urllib.request
 from datetime import datetime
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SRC_DIR = REPO_ROOT / "src"
-
-KEEPALIVE_MARKER = "Pipeline finished: press ctrl+c to exit"
 
 # provider argument -> the llm block injected into the config dir's template.
 # The config dir is provider-free (the provider owns the llm block), so the
@@ -71,7 +66,6 @@ PROVIDER_BLOCKS = {
         "    Copilot-Integration-Id: vscode-chat\n"
         "    Editor-Version: vscode/1.94.0\n"
         "    Openai-Intent: conversation-panel\n"
-        "    X-GitHub-Api-Version: \"2022-11-28\"\n"
     ),
 }
 
@@ -248,15 +242,6 @@ def build_pipeline(worktree: Path, config_dir: Path, template_text: str,
     return pipeline
 
 
-def probe_viz(port: int) -> bool:
-    url = f"http://127.0.0.1:{port}/topology"
-    try:
-        with urllib.request.urlopen(url, timeout=5) as response:
-            return response.status == 200
-    except (urllib.error.URLError, OSError):
-        return False
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Smoke-test the engine from source against a smoke plan.")
@@ -281,9 +266,6 @@ def main() -> int:
     parser.add_argument(
         "--viz-port", type=int, default=None,
         help="viz port (default: a free port chosen automatically)")
-    parser.add_argument(
-        "--timeout", type=int, default=3600,
-        help="engine run timeout in seconds (default: 3600)")
     parser.add_argument(
         "--engine-python", type=Path,
         default=REPO_ROOT / ".venv" / "bin" / "python",
@@ -350,70 +332,18 @@ def main() -> int:
             cmd, cwd=str(worktree), env=env,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, bufsize=1)
-        lines: "queue.Queue[str]" = queue.Queue()
 
         def pump() -> None:
             assert proc.stdout is not None
             for line in iter(proc.stdout.readline, ""):
                 print(line, end="", flush=True)
-                lines.put(line)
 
         reader = threading.Thread(target=pump, daemon=True)
         reader.start()
 
-        deadline = time.monotonic() + args.timeout
-        marker_seen = False
-        engine_rc = None
-        while time.monotonic() < deadline:
-            if marker_seen:
-                break
-            try:
-                line = lines.get(timeout=0.25)
-            except queue.Empty:
-                if proc.poll() is not None:
-                    engine_rc = proc.wait()
-                    break
-                continue
-            if KEEPALIVE_MARKER in line:
-                marker_seen = True
-
-        if marker_seen:
-            print("[smoke] keep-alive line observed")
-            viz_ok = probe_viz(port)
-            print(f"[smoke] viz /topology reachable after completion: "
-                  f"{'yes' if viz_ok else 'NO'}")
-            proc.send_signal(signal.SIGINT)
-            try:
-                engine_rc = proc.wait(timeout=30)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                engine_rc = proc.wait()
-                print("[smoke] engine did not exit after ctrl+c; killed")
-        else:
-            if engine_rc is None:
-                proc.kill()
-                engine_rc = proc.wait()
-                print(f"[smoke] engine did not finish within "
-                      f"{args.timeout}s; killed")
-            print(f"[smoke] keep-alive line NOT observed (change not "
-                  f"present, or the run failed first); engine exit code "
-                  f"{engine_rc}")
-            viz_ok = probe_viz(port)
-            print(f"[smoke] viz /topology reachable: {'yes' if viz_ok else 'no'}")
-
-        changed = subprocess.run(
-            ["git", "status", "--short"], cwd=worktree,
-            capture_output=True, text=True, check=False).stdout.strip()
-        if changed:
-            print("[smoke] files changed by the run in the worktree:")
-            print(changed)
-        else:
-            print("[smoke] no files changed in the worktree")
-
-        passed = bool(marker_seen and viz_ok and engine_rc == 0)
-        print(f"[smoke] engine exit code: {engine_rc}")
-        print(f"[smoke] RESULT: {'PASS' if passed else 'FAIL'}")
-        return 0 if passed else 1
+        # The script's whole job: stream the run and let the engine exit on
+        # its own. Human-run, human-gated: no probes, no signals, no verdict.
+        return proc.wait()
     finally:
         if args.keep_worktree:
             print(f"[smoke] keeping worktree: {worktree}")

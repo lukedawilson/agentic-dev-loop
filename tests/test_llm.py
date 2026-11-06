@@ -223,7 +223,6 @@ class TestFileBackedKeyAndHeaders:
         "Copilot-Integration-Id": "vscode-chat",
         "Editor-Version": "vscode/1.94.0",
         "Openai-Intent": "conversation-panel",
-        "X-GitHub-Api-Version": "2022-11-28",
     }
 
     def _secret_cfg(self, token_path, **kw):
