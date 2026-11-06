@@ -248,8 +248,9 @@ class TestViz:
 
         stdout_before = sys.stdout
         stderr_before = sys.stderr
-        code = main(["pipeline.yaml", "--plan", "plan.md"])  # served by default
-        assert code == 0  # main returns only when the loop completes - no keep-alive
+        code = main(["pipeline.yaml", "--plan", "plan.md"],  # served by default
+                    keep_alive=False)
+        assert code == 0
         assert sys.stdout is stdout_before
         assert sys.stderr is stderr_before
         assert "dev" in captured["topology"]
@@ -287,7 +288,7 @@ class TestViz:
         opened = []
         monkeypatch.setattr("webbrowser.open", opened.append)
 
-        code = main(["pipeline.yaml", "--plan", "plan.md"])
+        code = main(["pipeline.yaml", "--plan", "plan.md"], keep_alive=False)
         assert code == 0
         assert opened == ["http://127.0.0.1:45123"]
         assert ("viz port 8321 busy - serving on http://127.0.0.1:45123"
@@ -306,7 +307,8 @@ class TestViz:
         opened = []
         monkeypatch.setattr("webbrowser.open", opened.append)
 
-        code = main(["pipeline.yaml", "--plan", "plan.md", "--viz-port", "0"])
+        code = main(["pipeline.yaml", "--plan", "plan.md", "--viz-port", "0"],
+                    keep_alive=False)
         assert code == 0
         assert opened == ["http://127.0.0.1:45123"]
         assert swept == []

@@ -10,6 +10,7 @@ import json
 import os
 import signal
 import sys
+import threading
 from pathlib import Path
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
@@ -46,6 +47,14 @@ def _restore_sigterm_handler(previous) -> None:
     global _sigterm_in_progress
     _sigterm_in_progress = False
     signal.signal(signal.SIGTERM, previous)
+
+
+def _wait_for_interrupt() -> None:
+    """Block until the user presses ctrl+c; a bounded wait keeps the loop
+    responsive to signals without requiring a tty."""
+    idle = threading.Event()
+    while not idle.wait(1.0):
+        pass
 
 
 def _version() -> str:
@@ -206,7 +215,7 @@ def build_parser(cfg_path) -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
     if argv is None:
         argv = sys.argv[1:]
     else:
@@ -259,6 +268,12 @@ def main(argv: list[str] | None = None) -> int:
         if not success:
             print("agentic-dev-loop: pipeline failed - exiting with code 1",
                   file=sys.stderr)
+        if keep_alive and not args.no_viz:
+            print("Pipeline finished: press ctrl+c to exit")
+            try:
+                _wait_for_interrupt()
+            except KeyboardInterrupt:
+                pass
         return 0 if success else 1
     finally:
         _restore_sigterm_handler(previous)
