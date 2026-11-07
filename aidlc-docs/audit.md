@@ -901,3 +901,76 @@ with the include files, and a lite model at no effort cannot carry the
 23-anchor enumeration. The pro model at medium is valid for both
 DeepSeek pro and gpt-5.6-luna, so the provider-free template stays
 consistent.
+
+## Pre-AIDLC investigation request (unit-11 basis)
+**Timestamp**: 2026-11-07T18:48:00Z
+**User Input**: "Read planning-docs/059-copilot-anthropic-review-collapse.md
+This highlighted brittleness in our loop - it can easily be tripped up by model output. The solution is not to patch Anthropic's particular brand of waffle, but to understand why our pipeline is so sensitive to output format, and make it more robust to it"
+**AI Response**: Investigated the pipeline end to end and presented the diagnosis: the loop's control signals derive from the shape and prose of model output at four trust points (L1 completion from turn shape, L2 artifact capture from any agent prose, L3 verdict parsed from a free-text line, L4 model prose re-injected as context fact) plus L5 an unvalidated wire layer. Five robustness directions drafted (A: completion from actions; B: structured verdict channel; C: prose degraded to decoration in context injection; D: wire-shape invariants; E: failure-shape-keyed retry). Evidence base: stages.py, outputs.py, verdict.py, provider_wire.py, llm.py, the openhands-sdk conversation layer, review/dev agent contracts, and the pinned tests.
+**Context**: Pre-AIDLC investigation; this is the intent for unit-11.
+
+---
+
+## AI-DLC workflow opened for unit-11
+**Timestamp**: 2026-11-07T18:50:00Z
+**User Input**: "Open an AIDLC unit, with this as the intent"
+**AI Response**: Resumed the AI-DLC workflow (brownfield, aidlc-state.md present; current stage CONSTRUCTION paused, unit-10 WONTSHIP). Loaded common rules (process-overview, session-continuity, content-validation, question-format-guide, welcome-message) and the enabled extension rule files (Domain Standards, External Surfaces, Resiliency Baseline scoped, Security Baseline, Property-Based Testing partial). Workspace Detection: resume (reverse-engineering artifacts exist but are stale for path references after the repo move; the unit-11 intent is grounded in live code investigation instead, no re-run scheduled). Requirements Analysis at minimal depth (intent recording): created aidlc-docs/unit-11-intent-output-format-robustness.md with the five-layer diagnosis, directions A-E, and open questions.
+**Context**: INCEPTION - Workspace Detection (resume) + Requirements Analysis (minimal depth) for unit-11.
+
+---
+
+## Workspace Detection (resume) - findings
+**Timestamp**: 2026-11-07T18:52:00Z
+**User Input**: "continue"
+**AI Response**: Brownfield project. Existing code: Python library (pyproject, src/agentic_dev_loop), build system uv/pip; tests: pytest suite (1292 passed, 1 skipped at unit-9 close). Workspace root: /Users/luke/dev/work/dev-tooling/agentic-dev-loop. aidlc-state.md present: units 1-3, 5, 9 complete; unit-4 WONTSHIP; units 6-8 intent-only; unit-10 WONTSHIP; 058 Copilot-as-endpoint direction implemented. New unit number: unit-11. Next phase: Requirements Analysis (minimal depth, intent recording).
+**Context**: Workspace Detection for the unit-11 request.
+
+---
+
+## Requirements Analysis - approval gate (unit-11)
+**Timestamp**: 2026-11-07T18:55:10Z
+**User Input**: "Approved"
+**AI Response**: Approval gate passed. Intent document aidlc-docs/unit-11-intent-output-format-robustness.md is the approved record. Q1 (scope) and Q5 (AI-DLC stage plan) re-asked inline in compact form (the first inline question pass was interrupted); Q2 (verdict channel), Q3 (acceptance criteria), Q4 (prose-artifact fate) marked deferred to Functional Design in the intent doc, answerable anytime.
+**Context**: INCEPTION - Requirements Analysis approval for unit-11; Workflow Planning next after Q1/Q5 answers.
+
+---
+
+## Workflow Planning (unit-11)
+**Timestamp**: 2026-11-07T20:06:53Z
+**User Input**: "All five A-E" (Q1) and "3-stage plan (Recommended)" (Q5)
+**AI Response**: Recorded both answers in the intent doc [Answer] tags. Added "Workflow Plan (unit-11)" section to the intent doc: 3-stage plan (Functional Design -> Code Generation -> Build and Test; NFR/Infra N/A) with artifact paths and gates; implementation sequence A -> E -> D -> B -> C; Q2/Q3/Q4 deferred to Functional Design. aidlc-state.md updated.
+**Context**: INCEPTION - Workflow Planning for unit-11; next stage Functional Design (CONSTRUCTION).
+
+---
+
+## Workflow Planning - approval gate (unit-11)
+**Timestamp**: 2026-11-07T20:31:28Z
+**User Input**: "Approved"
+**AI Response**: Workflow planning approved. Proceeding to CONSTRUCTION Functional Design for unit-11. Q2 (verdict channel), Q3 (acceptance criteria), Q4 (prose-artifact fate) are re-opened inline as blocking design inputs for Functional Design.
+**Context**: INCEPTION complete for unit-11; CONSTRUCTION Functional Design next.
+
+---
+
+## Functional Design (unit-11) - blocking design inputs answered
+**Timestamp**: 2026-11-07T20:34:52Z
+**User Input**: "record_verdict tool (Recommended)" (Q2), "A + live smoke re-run" (Q3), "Display-only, never routed (Recommended)" (Q4)
+**AI Response**: Recorded Q2/Q3/Q4 in the intent doc [Answer] tags. Gathered FD evidence from the live codebase: review.agent.md/qa.agent.md verdict-line contracts, dev.agent.md (no verdicts config), pipeline.yaml step configs (review verdicts {APPROVED, NEEDS CHANGES}; qa {PASS, FAIL, UNVERIFIABLE, ENV}; dev none -> stages.py:744-747 no-verdicts steps pass on capture; test/deps/restore/commit are exit-code steps), stages.py verdict routing. Probed the pinned openhands-sdk ~1.17.0: ActionEvent fields (tool_name, action, tool_call, tool_call_id) in event/llm_convertible/action.py; Action = pydantic Schema ABC in tool/schema.py; FinishAction pattern in tool/builtins/finish.py; tool registration via Registry/register_tool in engine/agents.py (FinishTool + ThinkTool auto-added per BR-1; frontmatter tools list is the capability allowlist).
+**Context**: CONSTRUCTION - Functional Design evidence gathering for unit-11; design artifacts next.
+
+---
+
+## Functional Design decisions (unit-11)
+**Timestamp**: 2026-11-07T20:37:17Z
+**User Input**: "Fail fast (Recommended)" (FD-Q1) and "Verdict only (Recommended)" (FD-Q2)
+**AI Response**: Recorded both answers in aidlc-docs/construction/plans/unit-11-functional-design-plan.md [Answer] tags and ticked the checklist item. FD-Q1 = conflicting record_verdict calls fail fast (CONFLICTING_VERDICT, no retry). FD-Q2 = payload is a single required verdict string validated against the step's configured values; human findings stay in prose.
+**Context**: CONSTRUCTION - Functional Design for unit-11; approval gate next, then Code Generation.
+
+---
+
+## Functional Design - approval gate (unit-11)
+**Timestamp**: 2026-11-07T20:38:45Z
+**User Input**: "No, approve, but I'll kick off the agentic dev loop myself. Commit and push the docs"
+**AI Response**: Functional Design APPROVED. Code Generation will be driven by the user via the agentic dev loop (not executed inline). Documentation committed and pushed: aidlc-docs/aidlc-state.md (stage updates), aidlc-docs/audit.md (session log), aidlc-docs/unit-11-intent-output-format-robustness.md (intent + workflow plan + Q1-Q5 answers), aidlc-docs/construction/plans/unit-11-functional-design-plan.md (FD-Q1/QD-Q2 answered), and aidlc-docs/construction/unit-11/functional-design/ (domain-entities, business-rules, business-logic-model, validated-model).
+**Context**: CONSTRUCTION - unit-11 Functional Design approved; Code Generation handed to the user's dev loop.
+
+---

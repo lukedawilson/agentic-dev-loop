@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION paused - Unit unit-10 (multi-provider runtime): WONTSHIP/WONTDO (2026-11-06; code reverted by the user, superseded by the planning-docs/058 Copilot-as-endpoint direction). Prior: unit-9 (viz redesign) COMPLETE (2026-11-04). Units 1-3, 5, 9 complete; units 4 and 10 WONTSHIP; units 6-8 intent-only.
+- **Current Stage**: CONSTRUCTION - Functional Design for unit-11 (output-format robustness) APPROVED 2026-11-07 (FD-Q1 fail fast on conflicts; FD-Q2 verdict-only payload). Code Generation will be driven by the user via the agentic dev loop; docs committed and pushed. All intent Q1-Q5 answered (scope A-E; record_verdict tool; 059-fixture + live smoke acceptance; prose display-only; 3-stage plan). Prior: unit-10 WONTSHIP 2026-11-06 (reverted 526c802, superseded by planning-docs/058). Prior: unit-9 (viz redesign) COMPLETE 2026-11-04. Units 1-3, 5, 9 complete; units 4 and 10 WONTSHIP; units 6-8 intent-only.
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -198,3 +198,22 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   pro model at reasoning_effort medium (no-effort gpt-4.1 fails the
   mechanical 041 coverage gate, run 9d3f0fca20ea); dev stays on flash
   with no step effort, review pro at xhigh.
+
+### unit-11 (output-format robustness) - INTENT RECORDED (2026-11-07)
+
+- Intent document: aidlc-docs/unit-11-intent-output-format-robustness.md
+- Origin: planning-docs/059 (the Copilot Anthropic review collapse) plus a
+  live engine investigation the same day. User directive: the solution is
+  not to patch Anthropic's waffle but to understand why the pipeline is so
+  sensitive to output format and make it robust.
+- Diagnosis: the loop routes on the shape and prose of model output at
+  four control points (L1 completion from turn shape, L2 artifact capture
+  from any agent prose, L3 verdict from a free-text line, L4 prose
+  re-injected as context fact) plus L5 an unvalidated wire layer.
+- Directions: A completion from actions (zero-action FINISHED = distinct
+  failure class), B structured verdict channel, C prose degraded to
+  decoration in context injection, D wire-shape invariants, E
+  failure-shape-keyed retry (fail fast on structural refusals).
+- Status: open questions Q1-Q5 (scope, verdict channel shape, acceptance
+  criteria, prose-artifact fate, AI-DLC stage plan) pending user answers;
+  Functional Design next.
