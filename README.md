@@ -16,29 +16,24 @@ checkpointed, and nothing gets committed until every gate passes.
   parsed from files, retries are bounded, nothing is best-effort.
 - **Sandboxed by default.** The agent's shell and every command step run inside
   an always-on Docker sandbox. There is no opt-out.
-- **Any OpenAI-compatible model, or your Copilot subscription.** Point
-  `llm.base_url` at any OpenAI-compatible endpoint with an API key, or log in
-  with `agentic-dev-loop copilot-login` and run on Copilot models. See
-  [LLM providers](#llm-providers).
 
----
+## How it fits together
 
-## Core features
+The loop is five layers. You author the first two; the engine owns the rest.
 
-| Feature | What it gives you |
-| --- | --- |
-| **Stage-gated agent loop** | Agents do the work, test stages verify it, and the pipeline only advances when each stage passes its gates - looping back with full context when one fails. |
-| **Kernel-level sandboxing** | Agent work and command stages run isolated from your machine: [no network access **by default** - authors opt specific stages in](#per-stage-networking), writes only to declared `mounts:`, and no access to `.git` (steps run against a fresh export). No sandbox available → the run stops instead of degrading. |
-| **Crash-safe resume** | Interrupt a run at any time and pick it up later - finished stages stay finished, and you resume from exactly where it stopped. |
-| **Live graph visualisation** | Follow every run in the browser: stage status, pass/fail verdicts, retry cycles, and live console output as it happens. |
-| **Extensible** | Plug in your own actions, tools, and document loaders to adapt the loop to your projects. |
+| Layer | What it is | Who authors it |
+| --- | --- | --- |
+| **Pipeline** | One `pipeline.yaml` declaring the stage graph: agent steps, mechanical command gates, verdict routing, retry loops, and per-step isolation. | You |
+| **Agent prompts** | Markdown prompt files with YAML frontmatter (`<name>.agent.md`) defining each agent's role, rules, sandbox notes, and tools. | You |
+| **Sandbox** | Every agent shell and command step runs in a Docker container: no network access by default, writes only to declared `mounts:`, and no `.git` - steps run against a fresh export. If no sandbox is available, the run stops instead of degrading. | Engine |
+| **Dev image** | The digest-pinned dev image pulled on first run. The supply-chain check refuses to continue on a digest mismatch. | Engine |
+| **Extensions** | Optional plugins: your own actions, tools, and document loaders, loaded from outside the workspace. | You (optional) |
 
-The fixed policies *are* the product: fail fast on missing config/secrets, no
-silent fallbacks, verdicts only from artifacts, bounded retries, per-attempt
-artifact hygiene, a single clean-worktree-gated commit point, no default LLM
-timeout (agent runs are long), and fail fast on a broken sandbox - daemon-side
-exec failures are classified and stop the run without an agent retry loop,
-while a startup reaper reclaims containers leaked by a crashed run.
+Every run is crash-safe (interrupt and resume from the exact checkpoint),
+watchable in a live browser graph view, and gated: nothing gets committed
+until every stage passes. The fixed policies are part of the product - fail
+fast on missing config or secrets, no silent fallbacks, verdicts only from
+artifacts, bounded retries, and a single clean-worktree-gated commit point.
 
 ## Supported platforms
 
@@ -51,44 +46,7 @@ Docker engine does:
 | **macOS** | Native. Docker Desktop, OrbStack, or Colima. |
 | **Windows** | Via **WSL2** (Ubuntu distro). Enable Docker Desktop's WSL integration (or run Docker Engine inside the distro) and keep the repo on the WSL filesystem (`~/dev/...`), not `/mnt/c` - bind-mounting a 9p path into containers breaks permissions and is slow. |
 
-Native Windows (outside WSL2) is not supported: every Windows-specific code
-path and test was removed, and CI runs on Ubuntu only.
-
-## LLM providers
-
-Two ways to run the same pipeline. The engine speaks OpenAI-compatible wire
-format throughout, so every step, profile, and gate works identically on
-either provider style:
-
-| Provider | Setup |
-| --- | --- |
-| **Any OpenAI-compatible endpoint** | API key via `api_key_env` + `base_url` in the `llm:` block: DeepSeek, OpenAI, or any OpenAI-compatible API. Full reference: [pipeline.yaml reference](#pipelineyaml-reference). |
-| **GitHub Copilot subscription** | `agentic-dev-loop copilot-login` once, then point the `llm:` block at `https://api.githubcopilot.com` with the file-backed token. Probe-validated pins: `openai/gpt-5.6-luna` (pro) and `openai/gpt-4.1` (lite). Full config and known limitations: [Copilot subscription endpoint](#copilot-subscription-endpoint). |
-
-```yaml
-# OpenAI-compatible endpoint (any provider)
-llm:
-  model: openai/deepseek-v4-pro
-  base_url: https://api.deepseek.com
-  api_key_env: OPENAI_API_KEY
-```
-
-```yaml
-# GitHub Copilot subscription
-llm:
-  model: openai/gpt-5.6-luna        # pro; probe-validated pin
-  base_url: https://api.githubcopilot.com
-  api_key_secret:
-    from: file
-    key: ~/.agentic-dev-loop/auth/copilot.json
-    json_key: access_token
-  headers:
-    Copilot-Integration-Id: vscode-chat
-    Editor-Version: vscode/1.94.0
-    Openai-Intent: conversation-panel
-```
-
-## Installation
+## Quick start
 
 **Prerequisites**
 
@@ -99,65 +57,24 @@ llm:
 | LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription (see [LLM providers](#llm-providers)). |
 
 ```bash
-pip install "agentic-dev-loop==1.0.0a17"
+pipx install agentic-dev-loop
 agentic-dev-loop --version
 ```
 
-The canonical consumer install is **pipx**, which puts the engine's venv
-*outside* the workspace - the sandbox mounts only the step's declared `mounts:`
-from a fresh export, so an out-of-workspace install is unmounted and never
-agent-writable:
+Install with **pipx**: the engine's venv lives outside the workspace, so it
+is unmounted from the sandbox and never agent-writable. On the first run the
+engine pulls the digest-pinned dev image and verifies its digest. Setup
+details and troubleshooting live in [docs/setup.md](docs/setup.md).
 
 ```bash
-pipx install "agentic-dev-loop==1.0.0a17"
+cd <your-repo>
+agentic-dev-loop init --profile python                     # writes the pipeline + agents (see below)
+export OPENAI_API_KEY=...                                  # whatever api_key_env names
+agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run  # validate - no LLM, no Docker
+agentic-dev-loop agentic-dev-loop/pipeline.yaml            # run it
 ```
 
-If you install with `uv` shortly after a release, pass `--refresh` - PyPI
-serves the package index with `Cache-Control: max-age=600`, and uv otherwise
-reuses a pre-upload snapshot of the index for up to 10 minutes, reporting
-"no version of agentic-dev-loop==X.Y.Z" for a version that is already live:
-
-```bash
-uv pip install --refresh "agentic-dev-loop==1.0.0a17"
-```
-
-### Inspecting a run
-
-`agentic-dev-loop run-status <pipeline>` renders the latest run for a pipeline
-as a mermaid flowchart with the current step highlighted, plus a bullet
-summary, reading the run-state checkpoint database directly:
-
-```bash
-agentic-dev-loop run-status agentic-dev-loop/pipeline.yaml
-```
-
-To drive that from OpenCode, install the bundled `/run-status` command once into
-your global OpenCode commands directory:
-
-```bash
-agentic-dev-loop run-status --install
-```
-
-This copies the command wrapper to
-`${XDG_CONFIG_HOME:-~/.config}/opencode/commands/run-status.md`; from then on
-`/run-status` in any OpenCode workspace shells out to the subcommand above.
-
-On the first run the engine pulls the **digest-pinned** dev image
-(`ghcr.io/lukedawilson/agentic-dev-loop/dev`) and verifies its digest - the
-supply-chain check refuses to continue on a mismatch. If you're running
-pre-publish tooling, point `AGENTIC_DEV_LOOP_DEV_IMAGE` at your locally built
-image. Engine setup, first-run details, the full `pipeline.yaml` contract, and
-troubleshooting for every fail-fast code live in
-[docs/setup.md](docs/setup.md).
-
-## Usage
-
-```bash
-export OPENAI_API_KEY=...                          # whatever api_key_env names
-agentic-dev-loop pipeline.yaml                     # run it
-agentic-dev-loop pipeline.yaml --dry-run           # validate first - no LLM, no Docker
-agentic-dev-loop pipeline.yaml --resume <thread-id> --max-attempts 5
-```
+## Running a pipeline
 
 | Flag | Effect |
 | --- | --- |
@@ -165,22 +82,20 @@ agentic-dev-loop pipeline.yaml --resume <thread-id> --max-attempts 5
 | `--resume <thread-id>` | Continue the latest checkpoint of a previous run (crash, Ctrl-C, exhaustion) with all accumulated notes intact. |
 | `--max-attempts <n>` | Override the pipeline's `max_attempts`. |
 | `--no-viz` / `--viz-port <port>` | Suppress the live graph view / set a preferred port (default 8321; falls back to a free port when busy). |
-| extension flags | Document-loader flags (e.g. `--plan`, `--aidlc-unit`) appear once the pipeline's extensions are loaded - `agentic-dev-loop PIPELINE --help` shows them. |
 
 Exit code is `0` on pipeline success, `1` otherwise.
 
-`agentic-dev-loop containers` inspects the engine's sandbox containers and
-networks from the host: the default list is read-only and resolves each
-engine-owned object to its owning run and a `live`, `orphaned`,
-`stale-entry`, or `unregistered` verdict; `containers --reap` removes only
-registry-owned orphans whose owner pid is dead (never unregistered names).
-A SIGTERM to a running pipeline still closes the sandbox (the graph's
-`finally` runs); SIGKILL is unhandleable, so its containers are reclaimed by
-the startup reaper on the next run or by `containers --reap`. The reaper
-and `--reap` prune a registry entry only after the daemon confirms the
-object is gone; a surviving object (a failed removal) keeps its entry so
-the next startup retries it. Pass
-`--state-dir` to point at a custom `isolation.state_dir`.
+Other commands:
+
+- `agentic-dev-loop run-status <pipeline>` renders the latest run as a
+  mermaid flowchart with the current step highlighted, reading the run-state
+  checkpoint database directly. `run-status --install` installs the bundled
+  `/run-status` command into OpenCode.
+- `agentic-dev-loop containers` inspects the engine's sandbox containers and
+  networks from the host; `containers --reap` removes registry-owned orphans
+  whose owner process is dead. A SIGTERM to a running pipeline still closes
+  the sandbox; SIGKILLed runs are reclaimed by the startup reaper on the next
+  run or by `containers --reap`.
 
 **What a run looks like** (the shipped self-loop example):
 
@@ -203,7 +118,50 @@ flowchart LR
    the worktree was clean at start.
 5. **success** - committed; or **failure** when attempts are exhausted.
 
-### pipeline.yaml reference
+## LLM providers
+
+The engine speaks OpenAI-compatible wire format throughout, so every step,
+profile, and gate works identically on either provider style:
+
+| Provider | Setup |
+| --- | --- |
+| **Any OpenAI-compatible endpoint** | API key via `api_key_env` + `base_url` in the `llm:` block: DeepSeek, OpenAI, or any OpenAI-compatible API. |
+| **GitHub Copilot subscription** | `agentic-dev-loop copilot-login` once, then point the `llm:` block at `https://api.githubcopilot.com` with the file-backed token. |
+
+```yaml
+# OpenAI-compatible endpoint (any provider)
+llm:
+  model: openai/deepseek-v4-pro
+  base_url: https://api.deepseek.com
+  api_key_env: OPENAI_API_KEY
+```
+
+```yaml
+# GitHub Copilot subscription
+llm:
+  model: openai/gpt-5.6-luna        # pro tier; gpt-4.1 is the lite tier
+  base_url: https://api.githubcopilot.com
+  api_key_secret:
+    from: file
+    key: ~/.agentic-dev-loop/auth/copilot.json
+    json_key: access_token
+  headers:
+    Copilot-Integration-Id: vscode-chat
+    Editor-Version: vscode/1.94.0
+    Openai-Intent: conversation-panel
+```
+
+Copilot specifics:
+
+- The `openai/` prefix on model names is required - it forces the
+  OpenAI-compatible route through the gateway.
+- `gpt-4.1` (lite tier) rejects any `reasoning_effort`, so lite-tier steps
+  set none.
+- Some models on this endpoint do not work for agent steps. The current
+  working set, the token lifecycle, and known endpoint limitations are in
+  [docs/setup.md](docs/setup.md).
+
+## pipeline.yaml
 
 ```yaml
 name: my-construction-loop
@@ -218,10 +176,9 @@ llm:
   api_key_env: OPENAI_API_KEY
   # reasoning_effort: medium                        # optional: low | medium | high | xhigh | none
 
-# Named LLM profiles (054): a step names one with `llm: <name>` to move the
-# whole profile (model, endpoint, key, effort default) together - no partial
-# merges. The `llm:` block above remains the default. Profile keys are
-# host-side: sandbox access still goes through `secrets:`, never a profile key.
+# Named LLM profiles: a step names one with `llm: <name>` to move the whole
+# profile (model, endpoint, key, effort default) together. The `llm:` block
+# above remains the default.
 # llms:
 #   review:
 #     model: openai/deepseek-v4-pro
@@ -260,7 +217,7 @@ steps:
     artifact: review-findings.md
     verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
     # reasoning_effort: xhigh                        # per-step override of the effective profile's effort
-    # llm: review                                    # (054) select a named `llms:` profile for this step
+    # llm: review                                    # select a named `llms:` profile for this step
     on_pass: qa
     on_fail: { goto: dev, retry: true }
 
@@ -280,96 +237,51 @@ steps:
 
 | Key | Notes |
 | --- | --- |
-| `agent:` / `command:` / `action:` / `brief_inputs:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). `brief_inputs:` is a native brief step - see its row below. |
+| `agent:` / `command:` / `action:` / `brief_inputs:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed scripts (see [Host boundary](#host-boundary-security-model)). |
 | `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs structured-verdict routing. The verdict comes from a validated `record_verdict` tool call, never from prose; stale artifacts are deleted at each attempt start. |
-| `brief_inputs:` | The discriminator for a native brief step: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. There is no `agent:`, `produces:`, or `max_iterations:` - the prompt is engine-embedded, the capture file is `attempt-brief.md`, and the iteration cap is 12, all engine-owned. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as the step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). `name` stays free-form, so multiple brief steps are allowed. |
-| `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
-| `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
-| `forbidden_commands:` | Optional per-step list of regex patterns. The sandbox terminal matches them against each agent command before any shell spawn; a match returns a structured `[forbidden: <label>]` observation instead of running. A single string is coerced to a one-item list; an invalid regex fails at load. Defaults are run invariants only (git mutations, docker); tool-specific rules belong to the toolchain profile/recipe or the pipeline author. Command steps are unaffected. See [Banned commands](#banned-commands-forbidden_commands). |
-| `custom_prompt:` | Planned (planning-docs/040). Optional agent-step value: literal text, or a path whose file contents are read at load time, appended verbatim to the agent prompt at context assembly (after the prompt, before the task/artifacts). A value that looks like a path but names no file is a validation error. Agent steps only. |
-| `llms:` (top-level) / step `llm:` | Named LLM profiles, each a full `LlmConfig` (`model`, `base_url`, `api_key_env`, `timeout`, `reasoning_effort`). A step names one with `llm: <profile-name>`; the whole profile moves together (no partial merges). Allowed only on agent and brief steps. The top-level `llm:` block remains the default. Profile keys are host-side - sandbox access still goes through `secrets:`. |
-| `reasoning_effort:` | Optional `low` / `medium` / `high` / `xhigh` / `none`. Set on the `llm` block, a `llms:` profile, or per-step (a step value overrides the effective profile's). Unset anywhere = reasoning off: nothing is forwarded and reasoning is stripped from requests. A thinking model without an effort level is invalid config and fails at the first request (crap in, crap out). See [Reasoning effort](#reasoning-effort-opt-in). |
+| `brief_inputs:` | A native brief step: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. It digests the included docs into an engine-owned `attempt-brief.md` that later agents read, and re-runs only when its inputs change. |
 | `on_pass:` / `on_fail:` | A step name, terminal `success`/`failure`, or `{goto: X, retry: true}`. No loops happen unless you write them. |
-| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` runs fresh at every step boundary in a one-shot provision container targeting the export (command or agent steps; network ON; no stamping); `network: true` lets a command/agent step reach the hosts its `egress:` allowlist names (default off) - see [Per-stage networking](#per-stage-networking). |
-| `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`) and is **strict-by-default** - empty/missing mounts nothing; only declared-rw paths sync back to the repo. `egress:` is `{class, presets, targets}` (`class: browser` = broad-but-logged; otherwise a strict allowlist). See [Per-stage networking](#per-stage-networking) and [docs/setup.md](docs/setup.md). |
-| `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [Secrets](#secrets--refs-only-never-values). |
-| `profile:` (top-level) | Names a bundled toolchain profile (`python`, `dotnet-node`) or a consumer profile file path. `load_config` merges the profile at load time: isolation key-wise with the pipeline winning, caches unioned profile-first. Absent = today's behavior. |
+| `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` runs fresh at every step boundary in a one-shot provision container targeting the export (command or agent steps; network ON); `network: true` grants egress scoped by `egress:` (default off) - see [Per-stage networking](#per-stage-networking). |
+| `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`), strict-by-default: empty/missing mounts nothing, and only declared-rw paths sync back to the repo. `egress:` names the hosts a networked step may reach (`{class, presets, targets}`). See [docs/setup.md](docs/setup.md). |
+| `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [Secrets](#secrets). |
+| `profile:` (top-level) | Names a bundled toolchain profile (`python`, `dotnet-node`) or a consumer profile file path, merged at load time: isolation key-wise with the pipeline winning, caches unioned profile-first. |
 | `isolation:` (optional) | Configures the sandbox - image override, resource caps, `allow_git_mutations`, `seccomp_profile`. It can never disable it. See [browser sandbox](docs/browser-sandbox.md). |
-| `state_dir` | Defaults to `~/.agentic-dev-loop/runs/<pipeline-hash>/` - artifacts and checkpoints live outside the sandbox mount. |
-| `extensions_dir` | Where consumer `extensions:` modules resolve - defaults to `~/.agentic-dev-loop/extensions`, **outside** the workspace. Workspace-resident extension/tool modules are refused at load. |
-| `deps_policy` | `locked` (default) or `open`. `locked` = the human-owned lockfile is the source of truth and the agent may not add dependencies; `open` = the bootstrap protocol (the agent may add exact-pinned manifest entries). See [Dependency policy](#dependency-policy-locked-by-default). |
-| `lockfiles` | The pipeline's declared lockfile names (workspace-relative), injected into agent context and named by the missing-dependency fail-fast. Required (non-empty) when `deps_policy: locked` - a `locked` pipeline with no lockfiles fails fast at load. |
-| `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names repo-relative toolchain cache dirs bind-mounted rw from host-side stores under `{state_dir}/caches/<name>` (auto-created); a `setup:` hook can warm them (the provision container carries the same cache mounts); `sync_excludes:` names non-gitignored scratch paths skipped from both the export copy and sync-back (wildcard `*` spans separators, so `**/bin/**` matches a `/bin/` segment at any depth). Both default to `[]`. See [docs/setup.md](docs/setup.md). |
-| `merge_on_conflict:` | Top-level run-wide list of append-style logs (same path vocabulary as `sync_excludes:`, default `[]`). A concurrent host edit to a listed path is union-merged instead of raising: the host file wins and the sandbox's export-only lines are appended in order; both sides converge and the run continues. See [docs/setup.md](docs/setup.md). |
+| `terminal_timeout:` | Optional agent-step per-action timeout in seconds; overrides the SDK tool default. |
+| `finalize_nudge_turns:` | Optional agent-step final-response nudge; requires `max_iterations:` and must be less than it. |
+| `deps_policy:` / `lockfiles:` | `locked` (default) or `open`. The human-owned lockfile is the source of truth under `locked`; see [Dependency policy](#dependency-policy-locked-by-default). |
+| `caches:` / `sync_excludes:` | Top-level run-wide lists. `caches:` names toolchain cache dirs bind-mounted rw from host-side stores (a `setup:` hook can warm them); `sync_excludes:` names non-gitignored scratch paths skipped from export and sync-back. |
+| `merge_on_conflict:` | Top-level list of append-style logs. A concurrent host edit to a listed path is union-merged instead of raising; see [Sync-back conflicts](#sync-back-conflicts-host-edits-during-a-run). |
+| `llms:` (top-level) / step `llm:` / `reasoning_effort:` | Named LLM profiles, each a full `LlmConfig`; a step selects one whole with `llm: <name>`. `reasoning_effort` (`low`/`medium`/`high`/`xhigh`/`none`) is opt-in on the `llm` block, a profile, or a step. See [Reasoning effort](#reasoning-effort-opt-in). |
 
 ### Banned commands (`forbidden_commands:`)
 
-`forbidden_commands:` is a per-step list of regex patterns. The sandbox
-terminal checks them against every command the agent runs, before any shell
-spawn: a match returns a structured `[forbidden: <label>]` observation instead
-of executing. The engine defaults are run invariants only - git mutations and
-docker - so the deny-list is network-independent by design: `network:` stays a
-docker/egress concern. A single string is coerced to a one-item list; an
-invalid regex is a load error. Command steps bypass the filter by design.
-
-Tool-specific rules are not engine defaults. A toolchain profile or bundled
-recipe declares them per step (for example the `python` recipe denies
-`pip install`, `uv add`, and `pip-compile` on its agent steps), and a
-consumer pipeline authors its own for its toolchain. There is no disable
-escape hatch for the engine defaults.
+`forbidden_commands:` is a per-step list of regex patterns checked against
+every agent command before any shell spawn; a match returns a structured
+`[forbidden: <label>]` observation instead of running. The engine defaults
+(git mutations and docker) always apply and have no disable switch; a
+toolchain profile may add tool-specific rules (for example the `python`
+recipe denies `pip install`, `uv add`, and `pip-compile` on agent steps).
+Command steps bypass the filter by design.
 
 ### Reasoning effort (opt-in)
 
 `reasoning_effort` is an opt-in latency dial on the pipeline `llm` block, a
-named `llms:` profile, and individual agent steps. It takes one of `low`,
-`medium`, `high`, `xhigh`, or `none`; unset means reasoning is off - the
-field is forwarded as none, reasoning is stripped from requests, and a
-thinking model whose history still carries reasoning fails fast with an
-actionable engine error rather than a provider 400. A step's value overrides
-the effective profile's value, so the review lane can hold a higher effort
-than the rest, or a named profile can move an entire lane to a different
-provider.
-
-Reasoning is opt-in and provider-generic: any openai-compatible endpoint
-expressible as an `LlmConfig` works, and reasoning passback is gated on the
-configured effort level, never on a model-name list. A thinking model without
-an effort level (or with `none` where the provider ignores it) is invalid
-config - it still reasons but its API requires the passback the engine strips,
-so the engine raises before the doomed request is sent. Set
-`reasoning_effort` on the step or its profile, or use a non-thinking model.
-The schema rejects unknown effort names at load time, but cannot know provider
-capability; adopt an effort value only after an observed run proves lower
-per-turn latency with a green suite and no provider 400s.
+named `llms:` profile, and individual agent steps. Unset means reasoning is
+off - the field is forwarded as none and reasoning is stripped from requests.
+A thinking model without an effort level is invalid config and fails fast
+with an actionable engine error rather than a provider 400. A step's value
+overrides the effective profile's value.
 
 Recommended lane defaults (guidance only, not enforced):
 
 | Lane | reasoning_effort | Why |
 | --- | --- | --- |
 | brief | medium | digest and classify, no design work |
-| dev | high | hold the line: dev caught a real plan bug and a real sandbox triage this unit |
+| dev | high | the most demanding construction work |
 | qa | medium | classification discipline must stay reliable |
-| review | xhigh | shortest lane, highest stakes: a missed detection sails past the last gate into commit |
+| review | xhigh | highest stakes: a missed detection sails past the last gate into commit |
 
-A `brief_inputs:` step is the per-run context-digestion pattern: it runs once at
-run start (or when its inputs change), its engine-owned `attempt-brief.md`
-digest survives attempt starts, and the dev/review agents read that digest
-instead of re-deriving repo rules and environment facts every attempt.
-
-The brief digest is mechanically coverage-checked: the configured
-`brief_inputs.sections` headings must each appear on their own line, every
-anchor extracted from the `include` files (markdown `##` headings, and YAML
-category names plus `enforcement_levels`) must appear on its own line
-(case-insensitive, whitespace-collapsed, `**` decoration allowed), and every
-`env_facts` entry must appear verbatim. The section list feeds both the
-engine-embedded brief prompt and the coverage gate, so the two can never
-disagree; a miss
-re-runs the brief agent once per missing set with a `## Coverage retry`
-correction note, bounded to three retries per input set; if the same items are
-still dropped after the cap, the run fails and `last-error.md` names the
-persistent drops. Include files with no extractable anchors pass vacuously, and
-unusual YAML rule shapes are under-checked, never over-checked.
-
-### Secrets (`secrets:`) - refs only, never values
+### Secrets
 
 Secret values never belong in the pipeline yaml, the workspace, or `state_dir`.
 Declare the refs at the top level and opt each step into the refs it needs:
@@ -389,37 +301,26 @@ steps:
     secrets: [kinde-client-secret, r2-keys]
 ```
 
-- The engine resolves every declared ref **host-side at run start** (the `env`
-  provider reads the named host environment variable). A missing variable, an
-  unknown provider, or a ref a step lists without declaring it fails fast -
-  naming the ref, the step, and the provider error. No silent fallback.
-- A resolved secret is injected into a step's exec env **only when that step
-  lists the ref** - the same path step `env:` uses, no new channel. The secret
-  never reaches the provision container, `state_dir`, or any other step.
-- Prefer a mechanical `command` step for secret-consuming work (a script runs
-  the app with creds) so the LLM and the secret never meet; an `agent` step
-  holds a secret only when its job genuinely requires it.
+- The engine resolves every declared ref host-side at run start; a missing
+  variable, unknown provider, or undeclared ref fails fast, naming the ref.
+  A resolved secret reaches only the steps that list it.
+- Prefer a mechanical `command` step for secret-consuming work so the LLM and
+  the secret never meet; an `agent` step holds a secret only when its job
+  genuinely requires it.
 - **`.env*` ban.** At run start the workspace root is scanned for `.env*`
-  files. Any hit fails fast, naming the files, with the remedy text. The
-  convention fixtures `.env.example`, `.env.template`, and `.env.sample` are
-  whitelisted. This applies regardless of `network:` flags.
+  files; any hit fails fast, naming the files. The convention fixtures
+  `.env.example`, `.env.template`, and `.env.sample` are whitelisted.
 - **Output scrubbing.** Resolved secret values are scrubbed from every
   engine-written output - captured step output, retry notes, artifacts, and
-  `state_dir` files. (Hygiene: the declaring step's agent has already seen
-  the value in its own env.)
-- **File provider and LLM keys.** `from: file` reads a host file (`key` is the
-  path, optional `json_key` selects a JSON field). The `llm:` block accepts
-  exactly one of `api_key_env` or `api_key_secret`; the resolved key joins the
-  redaction set. See [Copilot as an endpoint](docs/setup.md#copilot-subscription-endpoint-058)
-  for the GitHub Copilot subscription profile (`copilot-login` device flow,
-  `copilot-models` probe, and the required endpoint headers).
+  `state_dir` files.
+- `from: file` reads a host file (`key` is the path, optional `json_key`
+  selects a JSON field); the `llm:` block accepts exactly one of `api_key_env`
+  or `api_key_secret`. See [docs/setup.md](docs/setup.md).
 
 ### Per-stage networking
 
-The sandbox is network-off by default. A step that legitimately needs egress -
-a QA step that curls a service it booted, an agent that must hit an API or
-fetch package metadata mid-conversation - declares it explicitly, and names
-exactly what it may reach:
+The sandbox is network-off by default. A step that legitimately needs egress
+declares `network: true` and names exactly what it may reach:
 
 ```yaml
 steps:
@@ -436,162 +337,118 @@ steps:
     egress: { presets: [package-registries] }   # pypi/npm/NuGet/cargo + VCS
 ```
 
-- **Default off.** Every step runs with `--network none` unless it declares
-  `network: true`.
-- **A networked step that writes output must also declare a writable mount.**
-  `mounts:` is strict-by-default: with no `mounts:` a step mounts nothing, so
-  a command like `curl ... -o spec.json` has no writable cwd to write into.
-  Declare `mounts: [{ path: ".", mode: rw }]` (or a narrower rw path) for any
-  networked step that needs to produce files.
-- **`network: true` is scoped by the `egress:` allowlist, and egress is
-  structurally enforced.** A networked step runs on a per-run internal
-  docker network with no route to the host. Its traffic is forced
-  through a containerized egress proxy (injected via
-  `HTTP_PROXY`/`HTTPS_PROXY`, pointed at the proxy's internal IP
-  on the internal network; each distinct egress policy gets its own
-  proxy with a distinct internal IP); a request to an undeclared host
-  is denied and logged as an enforcement event. The engine never adds
-  an undeclared target. `egress: { class: browser }` is the explicit
-  broad-but-logged class (every connection logged, nothing filtered); command
-  and agent steps default to a strict allowlist.
-- **Command, agent, and sandbox-action steps** may declare it. The host-side
-  built-in `commit` action never takes it (refused once the registry is known).
-- **Author opt-in is the control.** A networked step grants its agent egress
-  to exactly the declared hosts for that stage; the default stays network-off
-  everywhere. Reserve it for stages that need it (QA, integration). The
-  residual risks are documented in [docs/setup.md](docs/setup.md).
-- **Host-service reachability (planning-docs/037, 038).** The egress
-  proxy is a container on the run's internal network with a second
-  host-access attachment carrying the `host.docker.internal`
-  host-gateway alias, so the name resolves natively inside the proxy
-  container and host services (an S3 SDK against a local MinIO, say)
-  are reached through the enforced, logged path. Sandbox containers
-  have no host route: the internal network carries no default route to
-  the host, and sandbox containers get no host-gateway alias.
-  `dial_rewrites` on the proxy remains the platform override for hosts
-  where the alias does not resolve.
+- `network: true` is scoped by the `egress:` allowlist, structurally: the
+  step's traffic is forced through a containerized egress proxy on a per-run
+  internal docker network with no route to the host, and a request to an
+  undeclared host is denied and logged. `egress: { class: browser }` is the
+  explicit broad-but-logged class (every connection logged, nothing
+  filtered); otherwise the allowlist is strict.
+- A networked step that writes output must also declare a writable mount:
+  with no `mounts:` a step mounts nothing, so `curl ... -o spec.json` has no
+  writable cwd.
+- Host services are reachable through the proxy's `host.docker.internal`
+  host-gateway alias, so an S3 SDK against a local MinIO works through the
+  enforced, logged path. Sandbox containers have no host route.
+- Command, agent, and sandbox-action steps may declare it; the host-side
+  `commit` action never takes it. Author opt-in is the control - reserve it
+  for stages that need it (QA, integration).
 
 ### Sync-back conflicts (host edits during a run)
 
 Only declared-`rw` paths sync back to the real repo after a step. If the host
-also edits a declared-`rw` path while the step is running, sync-back prints
-`[isolation] sync-back conflict: ...` and raises `AE-SBX-016`; the host's
-version wins, the baseline is re-snapshotted, and the next step (even
-`echo hello`) runs clean instead of re-raising forever. For append-style logs
-edited by both sides (an audit log, say), declare them in the top-level
-`merge_on_conflict:` list: those paths are union-merged - the host keeps its
-lines, the sandbox's new lines are appended in order, both sides converge, and
-the run continues with `[isolation] merged concurrent edits: ...` on the
-console.
+also edits a declared-`rw` path while the step is running, sync-back raises
+`AE-SBX-016`; the host's version wins, the baseline is re-snapshotted, and the
+next step runs clean instead of re-raising forever. For append-style logs
+edited by both sides, declare them in the top-level `merge_on_conflict:`
+list: they are union-merged - the host keeps its lines, the sandbox's new
+lines are appended, and the run continues.
 
-### Copilot subscription endpoint
+### Dependency policy (locked by default)
 
-GitHub Copilot subscriptions work as an OpenAI-compatible LLM endpoint: log in
-once, then point an `llm:` block at it. The smoke harness runs the same plan
-against both the Copilot endpoint and a standard OpenAI-compatible endpoint,
-so the provider choice is independent of the pipeline design.
-
-```bash
-agentic-dev-loop copilot-login    # device flow; writes the token (mode 600)
-agentic-dev-loop copilot-models   # the models this token's tier can use
-```
+The supply-chain dial is a pipeline-level `deps_policy:` field, **locked by
+default**. The engine injects the policy into every agent step's context:
 
 ```yaml
-llm:
-  model: openai/gpt-5.6-luna      # pro default; probe-validated (see below)
-  base_url: https://api.githubcopilot.com
-  api_key_secret:
-    from: file
-    key: ~/.agentic-dev-loop/auth/copilot.json
-    json_key: access_token
-  headers:
-    Copilot-Integration-Id: vscode-chat
-    Editor-Version: vscode/1.94.0
-    Openai-Intent: conversation-panel
-llms:
-  flash:
-    model: openai/gpt-4.1         # lite tier; no reasoning_effort (see below)
-    base_url: https://api.githubcopilot.com
-    api_key_secret:
-      from: file
-      key: ~/.agentic-dev-loop/auth/copilot.json
-      json_key: access_token
-    headers:
-      Copilot-Integration-Id: vscode-chat
-      Editor-Version: vscode/1.94.0
-      Openai-Intent: conversation-panel
+deps_policy: locked    # or: open    (default: locked)
+lockfiles: [uv.lock]   # or: [packages.lock.json, package-lock.json]
 ```
 
-- The `openai/` prefix on model names is required: litellm otherwise routes a
-  bare `claude-*` name through Anthropic's wire format, which the gateway
-  rejects. The prefix forces the OpenAI-compatible route.
-- The model pins are probe-validated against the live endpoint (2026-11-06).
-  `gpt-5.6-luna` routes through the Responses API (the SDK switches
-  automatically), accepts `xhigh`, and returns real verdicts on the review
-  step. `gpt-4.1` tool-calls cleanly on the chat path but hard-400s on any
-  `reasoning_effort`, so lite-tier steps set none.
-- The brief step runs on the pro model at `medium`: no-effort `gpt-4.1`
-  cannot satisfy the mechanical brief-coverage gate.
-- The engine forces string-encoded message content for Copilot configs: the
-  gateway silently drops ARRAY-encoded tool results, which would leave an
-  agent blind to its own terminal output.
+- **`locked`** - the human-owned lockfile is the source of truth; the agent
+  may not add dependencies. If the design requires a missing dependency, the
+  agent declares it in its final response under `## Missing dependencies`,
+  which fails the run fast with one human lockfile edit - not a retry loop.
+- **`open`** - the agent may add exact-pinned manifest entries directly
+  (never a package-manager `add` command); the network-on restore step
+  fetches them.
 
-Known limitations (probe-validated, not speculation):
+The **restore step** runs the toolchain's locked mode and fails when the
+manifest and lockfile disagree:
 
-- Anthropic models are unusable for agent steps on this endpoint: the claude
-  pins collapse to tool-less narration on review (planning-docs/059), and
-  claude-opus-4.8 returns two choices on the non-streamed path the engine
-  uses.
-- `gpt-4o-mini` caps chat context at 12288 tokens (it overran on the first
-  smoke run).
-- `gpt-4o` and `gpt-4.1` reject any `reasoning_effort` on the chat path.
-- `gpt-5.x` models are Responses-API-only.
-- kimi-k3 accepts only `low`/`high`/`max` effort, and its tool results were
-  dropped by the gateway until the string-content policy above.
-- `gpt-4.1` carries a gateway "utility model" rate limit that a sustained dev
-  loop can trip; it resets within minutes.
+| Toolchain | Locked restore | Lockfile |
+| --- | --- | --- |
+| .NET | `dotnet restore --locked-mode` | `packages.lock.json` |
+| node | `npm ci` | `package-lock.json` |
+| python | `uv sync --locked` | `uv.lock` |
 
-See [docs/setup.md](docs/setup.md#copilot-subscription-endpoint-058) for the
-token lifecycle, the probe-validated headers, and the full details.
+The restore step also fails on known-CVE findings (per-toolchain thresholds:
+NuGetAudit at `error`, `npm audit --audit-level=high`, `pip-audit`). A human
+generates the lockfile once, on a network machine, and commits it - the
+engine never fetches on the agent's behalf.
 
+### Host boundary (security model)
+
+The orchestrator, tool layer, and the `commit` action run in the host process
+- they hold your credentials and your full user account, so the engine keeps
+anything agent-writable out of that process:
+
+- **Consumer actions are sandbox-executed.** An action you register via an
+  extension is a command-shaped script (`script + params`), run through the
+  same sandbox path as command steps. Only the engine's trusted built-ins
+  (`commit`, document loaders) run host-side.
+- **Extensions load from outside the workspace.** Any extension or tool
+  module whose file resolves under the workspace is refused before import,
+  naming the file.
+- **The engine installs outside the workspace.** Install with pipx so the
+  venv is unmounted from the sandbox; a startup self-check refuses to run if
+  `agentic_dev_loop` resolves under the workspace.
+- **Tooling is read-only by the loop.** At run start the pipeline file,
+  `agents_dir`, `additional_files`, `aidlc-docs/`, and `tools/` must be
+  git-clean relative to HEAD, and the `commit` action excludes those paths
+  from its sweep, so the loop never commits its own tooling.
+- **`commit` stays host-side, deliberately.** It holds push credentials and
+  runs argv-style with a scrubbed child env and a hooks override, so repo
+  hooks never execute.
+
+Net: the host executes nothing from the workspace, reads only git-clean
+control files, and the only agent-writable host-consumed thing left is the
+code the loop is building.
 
 ## Authoring a loop for your own repo
 
 ### Start with `agentic-dev-loop init`
 
-`init` writes the onboarding surface from a bundled toolchain profile:
-
 ```bash
 agentic-dev-loop init --profile python        # or: --profile dotnet-node
 ```
 
-It detects solution files, `package.json` directories, lockfiles, README, and
-AGENTS.md, asks only what detection cannot answer, and writes
+`init` writes the onboarding surface from a bundled toolchain profile:
 `agentic-dev-loop/pipeline.yaml`, the three agent files, an executable
 `trigger-agentic-dev-loop.sh`, `agentic-dev-loop/.engine-version` (the exact
-installed engine version), any missing premise files, gitignore additions, and
-an env-file template. It refuses to overwrite an existing
-`agentic-dev-loop/` directory. A consumer-authored profile file can be passed
-by path instead of a bundled name.
+installed engine version), any missing premise files, gitignore additions,
+and an env-file template. It detects solution files, `package.json`
+directories, lockfiles, README, and AGENTS.md, asks only what detection
+cannot answer, and refuses to overwrite an existing `agentic-dev-loop/`
+directory. A consumer-authored profile file can be passed by path instead of
+a bundled name.
 
-Profiles carry the environment facts every app on a toolchain shares (image,
-cpus, caches, premise files, gitignore lines); recipes carry the gate shape and
-command vocabulary. The pipeline references a profile with the top-level
-`profile:` key, and `load_config` merges it at load time: the pipeline wins on
-scalars, caches union profile-first, and absence of the key behaves exactly as
-before.
-
-`agentic-dev-loop doctor --fast` is the per-run gate the trigger runs first.
-Hard failures abort the run (engine pin mismatch, engine runtime availability,
-API version, git repo, `.env*` files); warnings print and continue. `doctor
---json` emits the same results mechanically. On a hard failure the trigger
-runs `agentic-dev-loop upgrade` exactly once: it installs the latest release
-with pipx and rewrites `.engine-version` to match, then the run fails hard if
-doctor still fails.
+`agentic-dev-loop doctor --fast` is the per-run gate the trigger runs first:
+hard failures abort the run (engine pin mismatch, engine runtime
+availability, API version, git repo, `.env*` files); warnings print and
+continue. On a hard failure the trigger runs `agentic-dev-loop upgrade`
+exactly once, then the run fails hard if doctor still fails.
 
 A consumer repo needs a pipeline file and the agent files it names, both
-committed before the first run (the host-boundary check refuses dirty tooling,
-and the `commit` step never commits it). `init` writes them; the layout is:
+committed before the first run. `init` writes them; the layout is:
 
 ```
 <repo>/agentic-dev-loop/pipeline.yaml
@@ -605,9 +462,8 @@ and the `commit` step never commits it). `init` writes them; the layout is:
 Each `sdk_agents/<name>.agent.md` is a markdown prompt plus YAML frontmatter:
 `name` matches a step's `agent:` value; `tools` lists the tool names the step
 may use (`terminal` always; verdict steps also need `record_verdict`; a repo
-can add more via extensions, e.g. `figma`). A step configured with `verdicts:`
-whose agent file does not grant `record_verdict` fails at load, never at
-routing time.
+can add more via extensions). A step configured with `verdicts:` whose agent
+file does not grant `record_verdict` fails at load, never at routing time.
 
 ```markdown
 ---
@@ -627,37 +483,24 @@ Three roles, three contracts:
 | --- | --- | --- |
 | dev | none - the final response is captured as the `produces:` summary | rw mount, offline |
 | review | `record_verdict` with `APPROVED` / `NEEDS CHANGES`; the prose keeps the findings for humans | ro mount, offline |
-| qa | `record_verdict` with `PASS` / `FAIL`; map `unverifiable: UNVERIFIABLE` if you want a third way | shaped by the repo: rw + network + `class: browser` when it boots servers and drives a browser (the consumer repo); ro + offline when it probes the CLI only (this repo) |
+| qa | `record_verdict` with `PASS` / `FAIL`; map `unverifiable: UNVERIFIABLE` if you want a third way | shaped by the repo: rw + network + `class: browser` when it boots servers and drives a browser; ro + offline when it probes the CLI only |
 
-The conventions that make a good agent file - each one below exists because
-an agent burned budget learning it mid-run:
+Conventions that make a good agent file:
 
 - **State the sandbox truth in the prompt.** Every agent file carries a
   `SANDBOX NOTES` section naming exactly what its step allows: mounts ro or
-  rw, network on or off, and which gates have already run. Never make the
-  agent discover it.
-- **Gates are the source of truth - cite the record, never re-run.** A
-  command the test gate, the editor-tests gate, or the dev summary reports
-  as run is coverage evidence, cited as `covered by <test>` or the gate
-  record. Review and qa never re-run builds or suites; qa maps every
-  acceptance criterion to existing coverage and probes only the remainder.
-- **dev enumerates its impossible set and stops at it.** The dev prompt
-  says: stop the moment your next step needs a command this sandbox cannot
-  run, and lists the set (package-manager fetches after a new pin, npm or
-  vitest offline, playwright downloads, database-category tests), one
-  attempt per command. That keeps the productive edit/build/test loop and
-  kills doomed retries. The set is toolchain-specific - write yours; this
-  repo's is a single bullet (no package managers), the consumer repo's is
-  four.
+  rw, network on or off, and which gates have already run.
+- **Gates are the source of truth - cite the record, never re-run.** Review
+  and qa never re-run builds or suites; qa maps every acceptance criterion to
+  existing coverage and probes only the remainder.
+- **dev enumerates its impossible set and stops at it.** List the commands
+  the sandbox cannot run (offline package fetches, browser downloads), one
+  attempt per command - keeps the productive loop and kills doomed retries.
 - **Failure output returns as *Previous attempt feedback*.** Steps route
-  `on_fail: { goto: dev, retry: true }`, so gate failure output lands in
-  the dev agent's next context; the dev prompt makes every listed issue a
+  `on_fail: { goto: dev, retry: true }`, so gate failure output lands in the
+  dev agent's next context; the dev prompt makes every listed issue a
   required fix.
 - **No git mutations, ever.** The `commit` step is the single commit point.
-- **`max_iterations` per role.** qa is bounded probing (100 in this
-  repo's dogfood loop, with `finalize_nudge_turns: 10` so it never ends
-  silently at the cap - both provisional); dev is open-ended construction
-  and stays uncapped (the engine default).
 
 ### The pipeline file
 
@@ -667,24 +510,24 @@ adapt per repo.
 | Stage | Kind | Typical shape | Why |
 | --- | --- | --- | --- |
 | dev | agent | rw, offline | does the work; edits are untracked |
-| restore | command | network + `presets: [package-registries]` | fetches what dev pinned (`deps_policy: open`) or the locked install; also the audit escalation point |
+| restore | command | network + `presets: [package-registries]` | fetches what dev pinned (`deps_policy: open`) or the locked install |
 | test | command | offline is fine (warm cache) | exit code is the verdict; the source of truth |
-| editor-tests | command | network + `presets: [package-registries]` | frontend suites that cannot run offline (`npm ci && npm test`). A separate step, never merged into `test`: the step name is the failure diagnosis, its timeout does not contend the backend suite's, and a retry re-runs only its own chain |
-| conformance | command | network + `presets: [package-registries]` | repo-specific fitness checks (the consumer repo: jscpd + DDD rules) |
+| editor-tests | command | network + `presets: [package-registries]` | frontend suites that cannot run offline; a separate step keeps its failure diagnosis and timeout independent of the backend suite |
+| conformance | command | network + `presets: [package-registries]` | repo-specific fitness checks |
 | review | agent | ro, offline | static conformance verdict |
-| qa | agent | per repo (see table above) | live-behaviour probes; `max_iterations: 100` + `finalize_nudge_turns: 10` (provisional); inject secrets only if the probes need them |
+| qa | agent | per repo (see table above) | live-behaviour probes; inject secrets only if the probes need them |
 | commit | action | host-side | the single commit point |
 
 Adaptation checklist for a new repo:
 
 1. `llm:` - model, `base_url`, `api_key_env`.
-2. `llms:` (optional) - named profiles for multi-provider lanes (keep review on the strongest model); a step opts in with `llm: <name>`.
+2. `llms:` (optional) - named profiles for multi-provider lanes (keep review
+   on the strongest model); a step opts in with `llm: <name>`.
 3. `profile:` - name a bundled profile (`python`, `dotnet-node`) or a
-   consumer profile path. The profile supplies `isolation:` (image,
-   `seccomp_profile`, cpus) and `caches:`; pipeline keys override its scalars.
-4. `caches:` - profile-supplied toolchain caches plus any run-specific dirs
-   (`.nuget-packages`, `qa/.browsers`); caches are never synced back, and a
-   step's `setup:` hook runs with them mounted so it can warm them.
+   consumer profile path.
+4. `caches:` - profile-supplied toolchain caches plus any run-specific dirs;
+   caches are never synced back, and a step's `setup:` hook runs with them
+   mounted so it can warm them.
 5. `sync_excludes:` - build output trees (`**/bin/**`, `**/obj/**`).
 6. `secrets:` - refs only, resolved from host env; each step opts in to the
    refs it needs.
@@ -694,7 +537,7 @@ Adaptation checklist for a new repo:
    [Dependency policy](#dependency-policy-locked-by-default).
 9. The dev prompt's impossible set - write it for your toolchain.
 10. `additional_files:` - the repo's `AGENTS.md`, coding standards, design
-   docs: shared context for every agent step.
+    docs: shared context for every agent step.
 
 Validate before the first run - dry-run loads and prints the resolved plan
 with no LLM, no Docker, no state writes:
@@ -705,181 +548,39 @@ agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run
 
 Then commit the tooling and run for real.
 
-## Dependency policy (locked by default)
-
-The supply-chain dial is a pipeline-level `deps_policy:` field, **locked by
-default**. The engine injects the policy into every agent step's context -
-the rule lives in the engine, not in hand-authored `dev.agent.md` prose (the
-class of rule that deadlocked the NuGet cache).
-
-```yaml
-deps_policy: locked    # or: open    (default: locked)
-lockfiles: [uv.lock]   # or: [packages.lock.json, package-lock.json]
-```
-
-- **`locked`** - the human-owned lockfile is the source of truth; the agent
-  may not add dependencies. The injected rule says *"You may only use
-  dependencies already present in `<lockfile>`. If the design requires a
-  dependency that is not present, declare it in your final response under the
-  fixed header `## Missing dependencies` (one `name==version` per line) and
-  finish what you can. Do not add it to the manifest."* A non-empty
-  `## Missing dependencies` declaration **fails the run fast** with
-  `Extend <lockfile> with these pins and re-run: …` - one human lockfile edit,
-  not a retry loop. The declaration is advisory to the human; the engine never
-  auto-fetches the declared packages.
-- **`open`** - the bootstrap protocol (018): the agent may add exact-pinned
-  manifest entries directly (never a package-manager `add` command); the
-  network-on restore step fetches them. The engine injects the same rule
-  canonically. Nothing about `open` is default.
-
-The **restore step** runs the toolchain's locked mode and fails when the
-manifest and lockfile disagree:
-
-| Toolchain | Locked restore | Lockfile |
-| --- | --- | --- |
-| .NET | `dotnet restore --locked-mode` | `packages.lock.json` (set `RestorePackagesWithLockFile=true`) |
-| node | `npm ci` | `package-lock.json` |
-| python | `uv sync --locked` (or pip-tools `pip-sync requirements.lock`) | `uv.lock` - pip has no native lockfile; `uv` is the canonical locked-install tool |
-
-### Audit escalation in the restore step
-
-The restore step also fails on known-CVE findings, at a per-toolchain
-threshold:
-
-| Toolchain | Audit (fails the step) |
-| --- | --- |
-| .NET | `NuGetAudit` at `error` - any audit finding fails the restore |
-| node | `npm audit --audit-level=high` |
-| python | `pip-audit` - any finding fails |
-
-Under `locked`, a failing audit means the lockfile pins a vulnerable version:
-the run fails and the human regenerates the lockfile at a patched version.
-Under `open`, the failure routes to `dev` like any restore failure - the dev
-agent can bump the pin, but that pin is audited again on the next pass, so
-the loop self-corrects.
-
-### Generating a lockfile
-
-A human generates the lockfile once, on a network machine, and commits it -
-the engine never fetches on the agent's behalf:
-
-```bash
-uv lock                 # python - writes uv.lock from pyproject.toml
-uv sync --locked        # installs exactly uv.lock; fails on any drift
-npm install --package-lock-only   # node - writes package-lock.json
-npm ci                  # installs exactly package-lock.json
-dotnet restore --use-lock-file   # .NET - writes packages.lock.json
-dotnet restore --locked-mode      # installs exactly packages.lock.json
-```
-
-Keep the lockfile tracked (do not gitignore it) and re-run the locked restore
-to prove it holds from a clean cache before setting `deps_policy: locked`.
-
-## Agent-facing error guide
-
-The engine bundles an always-on guide for the engine error codes an agent
-can actually observe while running terminal commands. The guide lives at
-`src/agentic_dev_loop/engine/agent_error_guide.md`, versioned with the engine
-code that emits the codes, and is injected into every agent step's task
-context at assembly time. There is no opt-in and no opt-out in v1; command
-and action steps never receive it because no agent reads them.
-
-Each agent-visible code has exactly one table row, shaped like this:
-
-| Code | Meaning | Correct response |
-| --- | --- | --- |
-| AE-SBX-016 | The loop refused to sync an edit because the real repo changed underneath on a path this workspace also touches; the file in this workspace is stale and its edits will not be applied. | The command is not the problem: retry once, do not edit or work around the named path, and mention the code in your final response if it persists. |
-
-The guide is consumer-agnostic: it explains the general mechanism and never
-names a consumer or a consumer domain rule ID. If an ID must appear inside a
-quoted engine message, the placeholder `<domain-rule-id>` is used. Any engine
-change that adds or changes an agent-visible error code must update the guide
-in the same commit; the test suite enforces the pairing by parsing the
-agent-visible `SandboxError` raise sites against the bundled table.
-
-## Host boundary (security model)
-
-The orchestrator, tool layer, and the `commit` action run in the **host
-process** - they hold your credentials and your full user account, so the
-engine keeps anything agent-writable out of that process:
-
-- **Consumer actions are sandbox-executed.** An action you register via an
-  extension is a command-shaped script (`script + params`), run through the
-  same sandbox path as command steps - the exit code is the verdict, and the
-  code never runs in the host. Only the engine's trusted built-ins (`commit`,
-  document loaders) run host-side.
-- **Extensions load from outside the workspace.** `extensions_dir` defaults to
-  `~/.agentic-dev-loop/extensions`; at load time any extension or tool module
-  whose file resolves under the workspace is refused *before import*, naming
-  the file.
-- **The engine installs outside the workspace.** Install with pipx so the venv
-  is unmounted from the sandbox; a startup self-check refuses to run if
-  `agentic_dev_loop` resolves under the workspace (an editable install bypasses
-  everything).
-- **Tooling is read-only by the loop.** At run start the pipeline file,
-  `agents_dir`, `additional_files`, `aidlc-docs/`, and `tools/` must be
-  git-clean relative to HEAD - otherwise the run refuses, naming the dirty
-  files. The `commit` action excludes those paths from its sweep, so the loop
-  never commits its own tooling.
-- **`commit` stays host-side, deliberately.** It holds push credentials; moving
-  it into the sandbox would trade host-exec-of-trusted-code for
-  credential-in-sandbox. It runs argv-style with a scrubbed child env and
-  `-c core.hooksPath=~/.agentic-dev-loop/state/hooks` so repo hooks never
-  execute.
-
-Net: the host executes nothing from the workspace, reads only git-clean
-control files, and the only agent-writable host-consumed thing left is the code
-the loop is building.
-
-### Consumer migration notes
-
-- **Actions** - replace a host-side `fn` registration with
-  `registry.add_sandbox_action(name, script)`. `script` is a command string
-  rendered with the step's `params:` plus `{subject}`; the exit code is the
-  verdict. `add_action` (host-side) is now engine-built-in-only and is refused
-  from extensions.
-- **Extensions** - move workspace-resident extension modules (e.g.
-  `extensions/*.py`) into `~/.agentic-dev-loop/extensions/` (or whatever
-  `extensions_dir:` names), and reinstall the engine via pipx so it is not
-  editable/in-workspace.
-- **Tooling** - commit the pipeline, agent defs, shared `additional_files`,
-  `aidlc-docs/`, and `tools/` before running: the run refuses dirty tooling,
-  and `commit` never commits it.
-
 ## Development environment
 
 ```bash
 git clone git@github.com:lukedawilson/agentic-dev-loop.git
 cd agentic-dev-loop
-pipx install "agentic-dev-loop==1.0.0a17"   # engine venv OUTSIDE the workspace (self-check)
-export OPENAI_API_KEY=...           # set your LLM key in the host env (no .env in the repo)
-python -m pytest tests/ -q            # fast suite (in-repo .venv is for tests only)
-python -m pytest tests/ -q -m "not docker"   # skip engine-dependent tests
+pipx install agentic-dev-loop                 # engine venv OUTSIDE the workspace (self-check)
+export OPENAI_API_KEY=...                     # set your LLM key in the host env (no .env in the repo)
+python -m pytest tests/ -q                    # fast suite (in-repo .venv is for tests only)
+python -m pytest tests/ -q -m "not docker"    # skip engine-dependent tests
 agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run   # run the shipped pipeline
-./run-demo.sh                         # viz demo - scripted run replay, no pipeline needed
+./run-demo.sh                                 # viz demo - scripted run replay, no pipeline needed
 ```
 
-- `setup-venv.sh` builds the throwaway `.venv` for local `pytest` runs (the
-  pipeline's `test` step provisions its own `.venv-sandbox` inside the
-  sandbox). The loop itself must run from the pipx install - never an
-  in-workspace `.venv`, which the startup self-check refuses.
+- `setup-venv.sh` builds the throwaway `.venv` for local `pytest` runs. The
+  loop itself must run from the pipx install - never an in-workspace `.venv`,
+  which the startup self-check refuses.
 - Docker-marked integration tests need a local daemon; CI runs them on Linux.
-- The shipped pipeline (`agentic-dev-loop/pipeline.yaml`) **dogfoods the tool on
-  its own repo** - dev → test → review → qa → commit, with the engine's own
+- The shipped pipeline (`agentic-dev-loop/pipeline.yaml`) dogfoods the tool
+  on its own repo - dev → test → review → qa → commit, with the engine's own
   three agent definitions in `sdk_agents/`.
-- CI: `ci.yml` (unit + integration suite, ubuntu),
-  `publish-image.yml` (multi-arch dev image, amd64 + arm64), `release.yml`
-  (PyPI publishing).
+- CI: `ci.yml` (unit + integration suite, ubuntu), `publish-image.yml`
+  (multi-arch dev image, amd64 + arm64), `release.yml` (PyPI publishing).
+- Pre-publish tooling can point `AGENTIC_DEV_LOOP_DEV_IMAGE` at a locally
+  built dev image.
 
 ## Contributing
 
 - **Read [AGENTS.md](AGENTS.md) first** - it is the instruction set for both
-  human and agent contributors (default mode: the user drives, ask before
-  coding, TDD, no silent fallbacks).
+  human and agent contributors.
 - Development is structured by **AI-DLC** - the lifecycle workflow in
-  `.aidlc/aidlc-rules/aws-aidlc-rules/` with working docs (plans, units, state)
-  in `aidlc-docs/`. The bundled document loader autodetects the current unit
-  from `aidlc-state.md` via `--aidlc-unit`, or load any plan with `--plan`.
+  `.aidlc/aidlc-rules/aws-aidlc-rules/` with working docs in `aidlc-docs/`.
+  The bundled document loader autodetects the current unit via
+  `--aidlc-unit`, or loads any plan with `--plan`.
 - OpenCode commands over the workflow: `/unit-status`, `/epic-status`,
   `/ticket-details`, `/update-subtask`, `/apply-aidlc-patches`, and more.
 - Working extension samples (actions, tools, document loaders) ship as

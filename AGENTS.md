@@ -80,6 +80,17 @@ name. This rule applies to committed history too: a leaked name is scrubbed
 out of history with a rebase (see planning-docs/026), not just edited at
 the tip.
 
+## Public-facing artefacts
+
+**NEVER include archaeology in public-facing artefacts** (README.md, docs/,
+or anything a consumer reads): no history of removed or unsupported features
+("every Windows code path was removed"), no internal planning-doc IDs
+(`planning-docs/059`, `(054)`), no probe or validation narratives
+("probe-validated against the live endpoint on 2026-11-06"), and no
+version-pinned install commands (`pip install "agentic-dev-loop==X.Y.Z"`) -
+use unpinned installs so the docs can never reference an obsolete release.
+Public docs describe the product as it is now, not how it got there.
+
 ## Debugging
 
 **Checking deployment status is absolutely forbidden.** Never run `gh run`,

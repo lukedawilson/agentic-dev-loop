@@ -1,63 +1,29 @@
-# Known Issues
+# Known issues
 
-## 1. Loop containers removed while their run was live (2026-10-24)
+## Unregistered containers
 
-**Symptom:** A docker container pair (`<run-hash>-exec`, `<run-hash>-exec-net`)
-that belongs to a live loop run is mistaken for an orphan and removed. The
-owning run then fails every step with
-`Error response from daemon: No such container: <hash>-exec-net` and has to be
-killed and restarted.
+Containers that predate the engine's container registry carry no registry
+record, so `agentic-dev-loop containers` classifies them `unregistered`.
+Ownership is unproven, so `containers --reap` never removes them
+automatically: they surface in the report and are removed only after
+ownership is proven from the audit log.
 
-**Observed case:** The consumer repo plan 002 run's containers (`0521b47c...`) were
-removed after a misdiagnosis. Two wrong signals were treated as proof of
-orphaning:
+## Verifying container ownership
 
-1. Static total CPU time (8 CPU-seconds over about 3 hours) was read as a
-   hung process. It is not: restore/test steps spend most wall time waiting on
-   network and I/O, burning almost no CPU. A healthy step looks identical.
-2. No run dir under `~/.agentic-dev-loop/runs/<hash>/` was read as "owning run
-   gone". Run state is workspace-local; the wrong location was searched. The
-   container was live: a `dotnet test` step for the consumer repo repo was attached
-   to it.
+Before removing any loop container:
 
-The run was killed by its owner and restarted fresh. The `a6a80b5b` pair was
-also removed under the same criteria; its orphaning was likewise not proven.
-
-**Diagnosis rules (corrected):** Before removing any loop container pair:
-
-1. Find the owning run's state dir in the run's OWN workspace
-   (`.agentic-dev-loop/runs/` under the repo the run belongs to), not the
-   agent-engine home path.
-2. Check whether the engine process for that run is alive. The
-   `agentic-dev-loop containers --json` command resolves each engine container
+1. Use `agentic-dev-loop containers --json` to resolve each engine container
    to its registry record, owner pid, and a `live`/`orphaned`/`stale-entry`
-   verdict; run it instead of reasoning from `ps` output or CPU time.
-3. Treat static CPU time as normal for I/O-bound steps. It is not a hang
-   signal.
-4. If ownership cannot be proven, leave the container alone and surface it to
-   the owner instead of removing it.
-
-**Resolution for this incident:** The run was killed by the owner and started
-fresh. A fresh start is sufficient: the engine creates new containers per run.
-Note: a run started over a dirty worktree skips its auto-commit by design (the
-human commits; see `actions.py`), which is what happens when restarting over a
-killed run's uncommitted changes.
-
-**Status:** Closed by plan 042 (2026-10-29) - see
-`planning-docs/042-container-reaping-and-inspection.md`. The engine now
-reliably reaps containers when a run ends or is abandoned (SIGTERM runs
-`close()`; a post-create startup failure also reaps the container it created),
-and `agentic-dev-loop containers` is the verification protocol for declaring a
-container an orphan.
+   verdict. Do not reason from `ps` output or static CPU time: I/O-bound
+   steps (restore, test) burn almost no CPU while healthy, so a step that
+   looks hung is usually just waiting on network or disk.
+2. Run state lives under `~/.agentic-dev-loop/runs/<pipeline-hash>/` (or the
+   pipeline's explicit `state_dir`), not inside the workspace.
+3. If ownership cannot be proven, leave the container alone and surface it
+   to the owner instead of removing it.
 
 ---
 
-## 2. Pre-042 survivors without registry records are `unregistered` (2026-10-31)
-
-Containers leaked before plan 042 landed carry no registry record, so
-`agentic-dev-loop containers` classifies them `unregistered`. Ownership is
-unproven, so `containers --reap` never auto-reaps them: they surface in the
-report and are removed only after ownership is proven from the audit. The
-2026-10-31 manual cleanup of four such survivors, removed by operator
-instruction once the audit showed no live engine process owned them, is the
-worked example.
+A run started over a dirty worktree skips its auto-commit by design (the
+human commits); restarting over a killed run's uncommitted changes is
+expected to skip the commit step.

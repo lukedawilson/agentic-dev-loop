@@ -1,6 +1,6 @@
 # Sandboxed execution setup
 
-The agentic-dev-loop sandbox is **always on** (unit-3): the agent `terminal`
+The agentic-dev-loop sandbox is **always on**: the agent `terminal`
 tool and command steps run inside a Docker-based, kernel-enforced boundary.
 There is no opt-out - the `isolation:` section configures the sandbox, it never
 disables it. This guide covers the three moving parts: the Docker engine, the
@@ -39,8 +39,8 @@ digest - the supply-chain check refuses to continue on a mismatch. Later runs
 reuse the local image cache; the pull is retried (bounded) only on
 connection/timeout errors, never on auth/not-found.
 
-Until the first image is published, the pinned digest constant is empty and
-startup fails fast with `AE-SBX-005`. For a pre-publish dev loop, point the
+If the pinned digest constant is empty, startup fails fast with `AE-SBX-005`.
+For a pre-publish dev loop, point the
 engine at any image (tag or digest) via an environment override:
 
 ```bash
@@ -138,7 +138,7 @@ isolation:
   at a per-toolchain threshold (`pip-audit`, `npm audit --audit-level=high`,
   NuGetAudit at `error`).
 
-### Mounts and egress (unit-5)
+### Mounts and egress
 
 Per-step workspace isolation: a step mounts only what its `mounts:` declares
 (strict-by-default - empty/missing `mounts:` mounts nothing), and a
@@ -176,13 +176,13 @@ steps:
   `host`/`host:port` entries. An allowlist miss denies the connection at the
   engine-run egress proxy and logs an enforcement event. The engine never adds
   an undeclared target, and an unknown preset or malformed target fails load.
-- **`network:`** now routes through a per-policy egress proxy (the container
+- **`network:`** routes through a per-policy egress proxy (the container
   is pointed at it via `HTTP_PROXY`/`HTTPS_PROXY` and reaches it through the
-  `host.docker.internal` host-gateway mapping); it no longer means
+  `host.docker.internal` host-gateway mapping); it does not mean
   unrestricted egress. The host-side built-in `commit` action rejects
   `mounts:`/`egress:`/`network:` (refused once the registry is known).
 
-### Caches and sync-excludes (028)
+### Caches and sync-excludes
 
 Two top-level, run-wide lists declare which host-side stores are toolchain
 caches and which paths are scratch (never copied into the export, never synced
@@ -208,7 +208,7 @@ sync_excludes: ["**/bin/**", "**/obj/**"]
   `**/bin/**` matches a literal `/bin/` segment at any depth and `*.dll`
   matches at any depth. Excluded paths are skipped in both snapshots and never
   classify as added/modified/deleted/conflict - no copy-back, no deletion
-  mirroring, and no BR-4.4 conflict from host-side build-artifact drift. They
+  mirroring, and no conflict from host-side build-artifact drift. They
   are also skipped at export materialisation (no bind-mount), so a step cannot
   read pre-existing excluded content: in-sandbox builds are clean builds.
   Put the reusable part (restore inputs) in `caches:` instead.
@@ -217,7 +217,7 @@ sync_excludes: ["**/bin/**", "**/obj/**"]
   (non-fatal) naming the step and path - wildcard overlap is fuzzy, so it is
   a warning, not a hard failure.
 
-### Sync-back conflicts and merge_on_conflict (029)
+### Sync-back conflicts and merge_on_conflict
 
 Only declared-`rw` paths sync back to the real repo. If the host edits a
 declared-`rw` path while a step is running, sync-back is a loud failure
@@ -271,10 +271,6 @@ Stores are content-addressed by design, so sharing them across repos is correct
 and is the point. Cache pruning is manual for now: delete the dirs under
 `~/.agentic-dev-loop/state/caches/`.
 
-The removed `isolation.refresh`, `--refresh`, `--clean-stamps`, `setup_probe:`,
-and `sandbox_venv_dir` fail loudly with a migration message if a pipeline still
-sets them.
-
 ## 5. Troubleshooting
 
 Run `agentic-dev-loop doctor --fast` first: it names the likeliest host-side cause and the fix command.
@@ -296,7 +292,7 @@ Every fail-fast error points here (`AE-SBX-<NNN>`):
 | AE-SBX-012 | daemon lost mid-run | restart the engine; cleanup is best-effort |
 | AE-SBX-013 | networked container create/route failure | inspect the docker error; a step declared `network: true` but no bridge container started (§3) |
 | AE-SBX-019 | sandbox infrastructure failure (daemon-side) | check `docker info` / `docker system df`; restart Docker Desktop if the VM reports I/O errors |
-| AE-SBX-020 | egress proxy start/attach failed | inspect the daemon stderr tail in the message (it now names the real cause, e.g. "Address already in use") (§3) |
+| AE-SBX-020 | egress proxy start/attach failed | inspect the daemon stderr tail in the message (it names the real cause, e.g. "Address already in use") (§3) |
 
 The audit trail of every sandboxed execution is at
 `~/.agentic-dev-loop/state/sandbox-audit.jsonl` (rotates at 5 MB); run state
@@ -368,9 +364,7 @@ steps:
 - **Providers.** `env` and `file` ship. The `file` provider reads a host file:
   `key` is the file path and `json_key` selects one string field (the whole
   file content when absent). A missing file fails fast naming
-  `agentic-dev-loop copilot-login`. Later providers (`keychain`, `op`, `sops`)
-  implement the same `resolve(keys) -> {key: value}` interface - that interface
-  is the compatibility contract.
+  `agentic-dev-loop copilot-login`.
 - **LLM keys.** The `llm:` block takes exactly one of `api_key_env` (the
   existing shape) or `api_key_secret` (a `SecretSpec`, file provider usable).
   Neither or both fails at load. The resolved LLM key joins the run's
@@ -386,7 +380,7 @@ steps:
   This is hygiene, not a control: the declaring step's agent has already seen
   the value in its own env.
 
-### Copilot subscription endpoint (058)
+### Copilot subscription endpoint
 
 Copilot runs as an OpenAI-compatible endpoint on the existing runtime - no new
 driver, no MCP, no subprocess. Log in once, then point an `llm:` block at the
@@ -399,7 +393,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: openai/gpt-5.6-luna      # pro default; probe-validated (see below)
+  model: openai/gpt-5.6-luna      # pro default
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -411,7 +405,7 @@ llm:
     Openai-Intent: conversation-panel
 llms:
   flash:
-    model: openai/gpt-4.1         # lite tier; no reasoning_effort (see below)
+    model: openai/gpt-4.1         # lite tier; no reasoning_effort
     base_url: https://api.githubcopilot.com
     api_key_secret:
       from: file
@@ -423,53 +417,38 @@ llms:
       Openai-Intent: conversation-panel
 ```
 
-- The model pins are probe-validated against the live endpoint (2026-11-06):
-  `gpt-5.6-luna` (pro) routes through the Responses API, which the
-  openhands SDK switches to automatically; it accepts `xhigh`, acts on the
-  review message, and returns a real verdict. `gpt-4.1` (lite) makes clean
-  tool calls on the chat path with string tool content. `gpt-4.1` hard-400s
-  on ANY reasoning_effort, so lite-tier steps set none (the dev step runs
-  the flash profile with no step effort). The brief step runs the pro
-  model at `medium`: no-effort gpt-4.1 cannot satisfy the mechanical
-  brief-coverage gate (run 9d3f0fca20ea burned all three attempts on the
-  brief digest). Also avoid:
-  `gpt-4o-mini` (Copilot caps its chat context at 12288 tokens, which
-  overran on the first smoke run), `claude-opus-4.8` (two choices on the
-  non-streamed path the engine uses; the surfaced one carries no tool
-  calls), the claude pins in general (they collapse on the review step,
-  see planning-docs/059), and `kimi-k3` (the Copilot gateway silently
-  drops the ARRAY-encoded tool results the SDK sends for it, leaving the
-  agent blind).
+- Working models: `gpt-5.6-luna` (pro) routes through the Responses API,
+  which the openhands SDK switches to automatically; it accepts `xhigh` and
+  returns real verdicts on review. `gpt-4.1` (lite) tool-calls cleanly on
+  the chat path with string tool content. `gpt-4.1` hard-400s on ANY
+  reasoning_effort, so lite-tier steps set none (the dev step runs the flash
+  profile with no step effort). The brief step runs the pro model at
+  `medium`: no-effort `gpt-4.1` cannot satisfy the mechanical
+  brief-coverage gate. Avoid: `gpt-4o-mini` (Copilot caps its chat context
+  at 12288 tokens), `claude-opus-4.8` (two choices on the non-streamed path
+  the engine uses; the surfaced one carries no tool calls), the claude pins
+  in general (they collapse to tool-less narration on review), and `kimi-k3`
+  (the Copilot gateway silently drops the ARRAY-encoded tool results the SDK
+  sends for it, leaving the agent blind).
 - The `openai/` prefix on the model names is required. litellm routes a
   bare `claude-*` name through its Anthropic provider path, which speaks
   Anthropic's wire format and dies at the gateway with "missing required
-  Authorization header" (observed on the brief step of the first mirror
-  smoke run); a bare `kimi-k3` makes litellm refuse outright ("LLM
-  Provider NOT provided"). The prefix forces the OpenAI-compatible route:
-  Bearer auth, chat/completions, bare model name in the body.
-- These three headers are probe-validated against the live endpoint
-  (2026-11-06): accepted at `/models` and `/chat/completions`. Do not add
-  `X-GitHub-Api-Version: 2022-11-28`; the live endpoint rejects it with
-  400 `invalid apiVersion` at both endpoints.
+  Authorization header"; a bare `kimi-k3` makes litellm refuse outright
+  ("LLM Provider NOT provided"). The prefix forces the OpenAI-compatible
+  route: Bearer auth, chat/completions, bare model name in the body.
+- The three headers above are accepted at `/models` and
+  `/chat/completions`. Do not add `X-GitHub-Api-Version: 2022-11-28`; the
+  endpoint rejects it with 400 `invalid apiVersion` at both endpoints.
 
 - The token is the Copilot subscription credential; the pinned OAuth client id
   belongs to OpenCode's app and is overridable with
   `AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID`.
-- A token created before the scope fix (scope `read:user`) must be deleted and
-  re-created: `rm ~/.agentic-dev-loop/auth/copilot.json` then
-  `agentic-dev-loop copilot-login`. The 401/403 fail-fast names this fix.
+- A token with the old `read:user` scope is refused (401/403): delete it and
+  re-run `agentic-dev-loop copilot-login`. The fail-fast names this fix.
 - `model:` stays required. Confirm the models with `copilot-models` before a
-  run; the smoke harness pre-flights every pinned model against the token's
-  tier list.
-- The smoke harness takes a provider and a plan directory independently:
-  `./run-smoke.sh openhands tests/smoke/viz-provider` (or
-  `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-provider
-  --provider copilot`). The `--provider` argument (`openhands` or
-  `copilot`) injects the llm block into the plan's provider-free
-  pipeline.yaml, so the same plan runs against any provider without
-  editing the plan.
+  run.
 
-### Migration checklist (consumer)
+### Secrets migration checklist
 
 1. Replace secret-bearing workspace files with `secrets:` refs and host env.
 2. Read the values from environment variables in scripts (`qa/common.sh`), not
@@ -478,6 +457,6 @@ llms:
 4. Add the `secrets:` block and the per-step `secrets: [...]` opt-in.
 5. Run `--dry-run` (validates schema/refs) then a full run against the real
    service with no `.env` in the workspace.
-6. Prefer a mechanical `command` step for secret-consuming work (decision 5):
+6. Prefer a mechanical `command` step for secret-consuming work:
    the LLM and the secret never meet. Reserve `agent` + `secrets` for steps
    whose job genuinely requires the agent to exercise them.
