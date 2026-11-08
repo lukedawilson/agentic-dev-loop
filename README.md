@@ -121,6 +121,27 @@ reuses a pre-upload snapshot of the index for up to 10 minutes, reporting
 uv pip install --refresh "agentic-dev-loop==1.0.0a17"
 ```
 
+### Inspecting a run
+
+`agentic-dev-loop run-status <pipeline>` renders the latest run for a pipeline
+as a mermaid flowchart with the current step highlighted, plus a bullet
+summary, reading the run-state checkpoint database directly:
+
+```bash
+agentic-dev-loop run-status agentic-dev-loop/pipeline.yaml
+```
+
+To drive that from OpenCode, install the bundled `/run-status` command once into
+your global OpenCode commands directory:
+
+```bash
+agentic-dev-loop run-status --install
+```
+
+This copies the command wrapper to
+`${XDG_CONFIG_HOME:-~/.config}/opencode/commands/run-status.md`; from then on
+`/run-status` in any OpenCode workspace shells out to the subcommand above.
+
 On the first run the engine pulls the **digest-pinned** dev image
 (`ghcr.io/lukedawilson/agentic-dev-loop/dev`) and verifies its digest - the
 supply-chain check refuses to continue on a mismatch. If you're running

@@ -226,6 +226,9 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
         return _run_copilot_login(argv[1:])
     if argv and argv[0] == "copilot-models":
         return _run_copilot_models(argv[1:])
+    if argv and argv[0] == "run-status":
+        from .run_status import _run_status
+        return _run_status(argv[1:])
     if argv and argv[0] == "init":
         from .onboarding.init import run_init
         return run_init(argv[1:])

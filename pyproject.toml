@@ -43,6 +43,9 @@ dependencies = [
     "agent-client-protocol<1.0.0",
     "langgraph>=1.2",
     "langgraph-checkpoint-sqlite>=3.0",
+    # msgpack is a transitive dep (langgraph-checkpoint-sqlite), but the
+    # run-status subcommand decodes checkpoints directly, so pin it explicitly.
+    "msgpack>=1.0",
     # filelock is a transitive dep (openhands-sdk, litellm, virtualenv).
     # 3.32.7 carries CVE-2026-112907/-112913/-112940 (fixed in 4.2.1); pin a
     # floor so the restore step's pip-audit stays green.
