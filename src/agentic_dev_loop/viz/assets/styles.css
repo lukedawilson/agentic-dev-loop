@@ -301,6 +301,7 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
   .shell { padding: 12px; }
   .tiles { flex-wrap: wrap; }
   .tiles .tile { flex: 1 1 45%; }
+  .tiles .tile:last-child:nth-child(odd) { flex-basis: 100%; }
   .lower { flex-direction: column; }
   #pipeline-panel { overflow-x: auto; }
 }

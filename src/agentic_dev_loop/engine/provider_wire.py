@@ -40,6 +40,13 @@ def adapter_for(base_url: str | None) -> WireAdapter | None:
     return WIRE_ADAPTERS.get(base_url.rstrip("/"))
 
 
+def provider_name(base_url: str | None) -> str:
+    """Display name of the LLM provider behind a base URL."""
+    if base_url is not None and base_url.rstrip("/") == COPILOT_BASE_URL:
+        return "Copilot"
+    return "OpenAI"
+
+
 class WireShapeError(RuntimeError):
     """A surfaced or outgoing wire shape that cannot carry a tool call.
 

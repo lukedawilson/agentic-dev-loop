@@ -618,7 +618,7 @@ class TestServer:
         _bus, _httpd, _thread, port = server
         status, body = http_get(port, "/topology")
         assert status == 200
-        assert json.loads(body) == {"mermaid": MERMAID, "subject": "plan plan.md",
+        assert json.loads(body) == {"mermaid": MERMAID, "subject": "plan plan.md", "provider": None,
                                     "nodes": [], "flow": [], "edges": []}
 
     def test_topology_round_trip_includes_nodes(self):
@@ -629,7 +629,7 @@ class TestServer:
         try:
             status, body = http_get(port, "/topology")
             assert status == 200
-            assert json.loads(body) == {"mermaid": MERMAID, "subject": "subject",
+            assert json.loads(body) == {"mermaid": MERMAID, "subject": "subject", "provider": None,
                                         "nodes": ["dev", "success"],
                                         "flow": [], "edges": []}
         finally:
@@ -1532,3 +1532,28 @@ class TestVizPageAssets:
              "--register", "frontend/viz-register.md"],
             capture_output=True, text=True, cwd=self.ROOT, timeout=60)
         assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+class TestProvider:
+    def test_provider_name_mapping(self):
+        from agentic_dev_loop.engine.provider_wire import provider_name
+        assert provider_name("https://api.githubcopilot.com/") == "Copilot"
+        assert provider_name("https://api.deepseek.com") == "OpenAI"
+        assert provider_name(None) == "OpenAI"
+        assert provider_name("") == "OpenAI"
+
+    def test_provider_in_topology(self):
+        import urllib.request
+        bus = VizBus()
+        httpd, _t = serve_viz(bus, MERMAID, "subject", 0, provider="Copilot")
+        try:
+            url = f"http://127.0.0.1:{httpd.server_address[1]}/topology"
+            body = json.loads(urllib.request.urlopen(url).read())
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        assert body["provider"] == "Copilot"
+
+    def test_provider_handler_class_forwards(self):
+        cls = _handler_class(VizBus(), MERMAID, "s", [], provider="Copilot")
+        assert cls.viz_provider == "Copilot"

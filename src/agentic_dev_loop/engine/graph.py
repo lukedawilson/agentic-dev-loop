@@ -27,6 +27,7 @@ from .hostboundary import (check_orchestrator_install,
 from .isolation import startup_sandbox
 from .llm import build_llm
 from .loaders import resolve_docs
+from .provider_wire import provider_name
 from .secrets import resolve_secrets, scan_env_files
 from .registry import (Registry, default_registry, load_extensions,
                        validate_action_mounts_egress, validate_action_network)
@@ -291,7 +292,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             httpd, _thread = viz.serve_viz(
                 bus, topology["mermaid"], start_state["subject"],
                 args.viz_port, topology["nodes"], topology["flow"],
-                topology["edges"])
+                topology["edges"], provider_name(cfg.llm.base_url))
             bound = httpd.server_address[1]
             url = f"http://127.0.0.1:{bound}"
             if args.viz_port and bound != args.viz_port:
