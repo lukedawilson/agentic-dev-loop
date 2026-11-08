@@ -175,7 +175,7 @@ class TestInjection:
         assert f"## {GUIDE_HEADING}" in message
         assert "AE-SBX-016" in message
 
-    def test_command_step_notes_do_not_gain_guide(self, runtime):
+    def test_command_step_mechanical_notes_do_not_gain_guide(self, runtime):
         cfg = make_cfg([
             {"name": "dev", "agent": "dev", "on_pass": "test"},
             {"name": "test", "command": "false", "on_pass": "success",
@@ -183,5 +183,6 @@ class TestInjection:
         ])
         rt = replace(runtime, cfg=cfg)
         update = make_command_node(rt, cfg.steps[1])(make_state())
-        assert "notes" in update
-        assert all(f"## {GUIDE_HEADING}" not in note for note in update["notes"])
+        assert "mechanical_notes" in update
+        assert all(f"## {GUIDE_HEADING}" not in note
+                   for note in update["mechanical_notes"])

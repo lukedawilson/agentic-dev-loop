@@ -432,7 +432,8 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
                   notes: list[str] | None = None,
                   artifacts: dict[str, str] | None = None,
                   custom_prompt: str | None = None,
-                  verified: dict[str, str] | None = None) -> str:
+                  verified: dict[str, str] | None = None,
+                  mechanical_notes: list[str] | None = None) -> str:
     """Assemble the attempt's shared message: the always-on agent-facing error
     guide (034), subject, doc bundle, the run-specific instructions appended
     from the step's ``custom_prompt`` (040), the canonical dependency-policy
@@ -441,9 +442,11 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
     stage artifacts as *claims* (027), and previous-attempt notes.
 
     Unit-11 (FR-11.3) splits the injected material: agent prose is labelled
-    as an unverified claim, and only engine-verified facts (command exit
-    codes, brief coverage, commit outcome) appear in the verified section.
-    Nothing in the claims section is ever routed on."""
+    as an unverified claim, engine-captured command/action output rides in its
+    own mechanical section (process fact, never an agent claim), and only
+    engine-verified facts (command exit codes, brief coverage, commit outcome)
+    appear in the verified section. Nothing in the claims section is ever
+    routed on."""
     parts = [f"You are working on {subject}.\n", guide_section()]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
@@ -465,6 +468,10 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
     if claims:
         parts.append("## Stage artifacts (each agent's own claims, not verified)")
         parts.extend(claims)
+    if mechanical_notes:
+        parts.append("## Mechanical gate output "
+                     "(pipeline-captured process output, not agent claims)")
+        parts.extend(mechanical_notes)
     verified_lines = [f"- {name}: {fact}" for name, fact in (verified or {}).items()]
     parts.append(
         "## Verified state (mechanically checked by the pipeline)\n\n"
@@ -786,7 +793,8 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                                            state.get("artifacts", {}).items()
                                            if k != step.name},
                                 custom_prompt=step.custom_prompt,
-                                verified=state.get("verified_state", {}))
+                                verified=state.get("verified_state", {}),
+                                mechanical_notes=state.get("mechanical_notes", []))
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
         result = runtime.run_agent(step.agent, message,
                                     max_iterations=max_iterations, step=step)
@@ -964,7 +972,8 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
             merged = {**state["step_verdicts"], step.name: "pass"}
             return {"step_verdicts": merged, "failed": False,
                     "verified_state": {
-                        step.name: f"coverage passed ({len(sections)} sections)"}}
+                        step.name: (f"attempt {attempt}: coverage passed "
+                                    f"({len(sections)} sections)")}}
 
         coverage_note = None
         if reused:
@@ -1020,7 +1029,8 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
         merged = {**state["step_verdicts"], step.name: "pass"}
         update = {"step_verdicts": merged, "failed": False,
                   "verified_state": {
-                      step.name: f"coverage passed ({len(sections)} sections)"}}
+                      step.name: (f"attempt {attempt}: coverage passed "
+                                  f"({len(sections)} sections)")}}
         if captures and result.response is not None:
             update["artifacts"] = {step.name: result.response}
             update["brief_hashes"] = {step.name: current_hash}
@@ -1030,10 +1040,13 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
     return node
 
 
-def _exit_fact(exit_code: int | None, timed_out: bool) -> str:
-    """The verified exit-code fact a command/action step records."""
+def _exit_fact(attempt: int, exit_code: int | None, timed_out: bool) -> str:
+    """The verified exit-code fact a command/action step records, tagged with
+    the attempt that produced it so an earlier attempt's fact is never
+    presented as concurrently verified (m4)."""
     code = "timeout" if exit_code is None else str(exit_code)
-    return f"exit {code}" + ("" if not timed_out else " (timed out)")
+    tail = "" if not timed_out else " (timed out)"
+    return f"attempt {attempt}: exit {code}{tail}"
 
 
 def make_command_node(runtime: Runtime, step: StepConfig):
@@ -1083,7 +1096,7 @@ def make_command_node(runtime: Runtime, step: StepConfig):
             print(output, end="" if output.endswith("\n") else "\n", flush=True)
         merged = {**state["step_verdicts"],
                   step.name: "pass" if exit_code == 0 else "fail"}
-        verified = {step.name: _exit_fact(exit_code, timed_out)}
+        verified = {step.name: _exit_fact(attempt, exit_code, timed_out)}
         if exit_code == 0:
             print(f"[{subject}] {step.name} command passed on attempt {attempt}.",
                   flush=True)
@@ -1094,7 +1107,8 @@ def make_command_node(runtime: Runtime, step: StepConfig):
         label = f"attempt {attempt} - timed out" if timed_out else f"attempt {attempt}"
         update = {"step_verdicts": merged,
                   "verified_state": verified,
-                  "notes": [f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
+                  "mechanical_notes": [
+                      f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
         if isinstance(step.on_fail, Route) and step.on_fail.retry:
             update["retry_target"] = step.on_fail.goto
         return update
@@ -1180,7 +1194,7 @@ def make_action_node(runtime: Runtime, step: StepConfig):
             print(output, end="" if output.endswith("\n") else "\n", flush=True)
         merged = {**state["step_verdicts"],
                   step.name: "pass" if exit_code == 0 else "fail"}
-        verified = {step.name: _exit_fact(exit_code, timed_out)}
+        verified = {step.name: _exit_fact(attempt, exit_code, timed_out)}
         if exit_code == 0:
             print(f"[{subject}] {step.name} action passed on attempt {attempt}.",
                   flush=True)
@@ -1191,7 +1205,8 @@ def make_action_node(runtime: Runtime, step: StepConfig):
         label = f"attempt {attempt} - timed out" if timed_out else f"attempt {attempt}"
         update = {"step_verdicts": merged,
                   "verified_state": verified,
-                  "notes": [f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
+                  "mechanical_notes": [
+                      f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
         if isinstance(step.on_fail, Route) and step.on_fail.retry:
             update["retry_target"] = step.on_fail.goto
         return update

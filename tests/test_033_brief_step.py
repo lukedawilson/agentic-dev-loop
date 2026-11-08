@@ -346,7 +346,7 @@ class TestBriefNode:
         second = node(make_state(artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
         assert second == {"step_verdicts": {"brief": "pass"}, "failed": False,
-                          "verified_state": {"brief": "coverage passed (4 sections)"}}
+                          "verified_state": {"brief": "attempt 1: coverage passed (4 sections)"}}
         assert fake_agents.agents_called() == [BRIEF_AGENT_NAME]
 
     def test_changed_inputs_rerun(self, runtime, fake_agents):

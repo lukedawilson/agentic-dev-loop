@@ -6,6 +6,7 @@ zero ActionEvents (tool-less narration). It must fail fast with a named class
 instead of reading as a clean pass.
 """
 
+import dataclasses
 import json
 from types import SimpleNamespace
 
@@ -36,7 +37,8 @@ from agentic_dev_loop.engine.provider_wire import (WireShapeError,
                                                    validate_tool_call_pairing)
 from agentic_dev_loop.engine.registry import default_registry
 from agentic_dev_loop.engine.stages import (Runtime, build_context,
-                                            make_agent_node, make_router)
+                                            make_agent_node,
+                                            make_command_node, make_router)
 
 
 def make_cfg(steps, **over):
@@ -341,6 +343,18 @@ class TestWireShape:
         validate_string_tool_results(
             [tool_message], [{"content": []}], forced=False)
 
+    def test_serialized_alignment_is_asserted_not_assumed(self):
+        tool_message = Message(role="tool", tool_call_id="c1",
+                               name="terminal",
+                               content=[TextContent(text="visible")])
+        with pytest.raises(WireShapeError, match="message count"):
+            validate_string_tool_results(
+                [tool_message], [], forced=True)
+        with pytest.raises(WireShapeError, match="message count"):
+            validate_string_tool_results(
+                [tool_message],
+                [{"content": "visible"}, {"content": "extra"}], forced=True)
+
     def test_request_wrapper_enforces_pairing_before_sending(self,
                                                               monkeypatch):
         llm = LLM(model="openai/test-model", api_key="sk-test")
@@ -354,3 +368,68 @@ class TestWireShape:
             lambda self, messages, *a, **k: SimpleNamespace(raw_response=None))
         with pytest.raises(WireShapeError):
             llm.completion(dangling)
+
+
+class TestMechanicalOutputChannel:
+    """M2: command/action failure output is mechanically produced fact, not an
+    agent claim - it never rides under the claims heading."""
+
+    def _run_failing_command(self, runtime):
+        cfg = make_cfg([{"name": "test",
+                         "command": "echo gate-broke && false",
+                         "on_pass": "success",
+                         "on_fail": "success"}])
+        rt = dataclasses.replace(runtime, cfg=cfg)
+        update = make_command_node(rt, cfg.steps[0])(make_state())
+        return rt, update
+
+    def test_failing_command_records_mechanical_notes_not_agent_notes(
+            self, runtime):
+        _rt, update = self._run_failing_command(runtime)
+        assert "notes" not in update
+        assert "gate-broke" in update["mechanical_notes"][0]
+        assert "## test output (attempt 1)" in update["mechanical_notes"][0]
+
+    def test_command_output_never_renders_under_the_claims_heading(
+            self, runtime):
+        rt, update = self._run_failing_command(runtime)
+        ctx = build_context(rt, {}, "s", notes=["agent prose note"],
+                            mechanical_notes=update["mechanical_notes"],
+                            verified=update["verified_state"])
+        claims = "## Stage artifacts (each agent's own claims, not verified)"
+        mechanical = ("## Mechanical gate output "
+                      "(pipeline-captured process output, not agent claims)")
+        verified = "## Verified state (mechanically checked by the pipeline)"
+        assert claims in ctx and mechanical in ctx
+        claims_section = ctx[ctx.index(claims):ctx.index(mechanical)]
+        assert "agent prose note" in claims_section
+        assert "gate-broke" not in claims_section
+        mechanical_section = ctx[ctx.index(mechanical):ctx.index(verified)]
+        assert "gate-broke" in mechanical_section
+
+    def test_context_without_mechanical_notes_omits_the_section(self, runtime):
+        ctx = build_context(runtime, {}, "s", notes=["agent prose note"])
+        assert "## Mechanical gate output" not in ctx
+
+
+class TestVerifiedStateAge:
+    """m4: a verified fact carries the attempt that produced it, so attempt 1's
+    exit code is never presented as concurrently verified in attempt 2."""
+
+    def test_command_fact_is_tagged_with_its_attempt(self, runtime):
+        cfg = make_cfg([{"name": "test", "command": "false",
+                         "on_pass": "success",
+                         "on_fail": "success"}])
+        rt = dataclasses.replace(runtime, cfg=cfg)
+        update = make_command_node(rt, cfg.steps[0])(make_state(attempt=2))
+        assert update["verified_state"] == {"test": "attempt 2: exit 1"}
+
+    def test_attempt_one_fact_does_not_read_as_current(self, runtime):
+        cfg = make_cfg([{"name": "test", "command": "false",
+                         "on_pass": "success",
+                         "on_fail": "success"}])
+        rt = dataclasses.replace(runtime, cfg=cfg)
+        attempt_one = make_command_node(rt, cfg.steps[0])(make_state(attempt=1))
+        ctx = build_context(rt, {}, "s", verified=attempt_one["verified_state"])
+        assert "- test: attempt 1: exit 1" in ctx
+        assert "- test: exit 1" not in ctx

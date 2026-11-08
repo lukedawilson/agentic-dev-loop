@@ -251,5 +251,5 @@ class TestBriefNodeCoverage:
                                 _make_state()["docs"])})
         update = node(state)
         assert update == {"step_verdicts": {"brief": "pass"}, "failed": False,
-                          "verified_state": {"brief": "coverage passed (4 sections)"}}
+                          "verified_state": {"brief": "attempt 1: coverage passed (4 sections)"}}
         assert fake_agents.agents_called() == []

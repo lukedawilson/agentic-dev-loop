@@ -70,6 +70,7 @@ class LoopState(TypedDict):
     tooling_paths: list[str]          # workspace-relative paths the commit never sweeps
     step_verdicts: dict[str, str | None]  # per-step pass/fail/None(unclear)
     failure_class: str | None          # structural failure class (unit-11)
+    mechanical_notes: Annotated[list[str], operator.add]  # command/action output
     verified_state: Annotated[dict[str, str], _merge_artifacts]  # engine-verified facts
     retry_target: str | None           # where the bump node loops back to
     thread_id: str
@@ -240,6 +241,7 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             "tooling_paths": tooling_paths,
             "step_verdicts": {},
             "failure_class": None,
+            "mechanical_notes": [],
             "verified_state": {},
             "retry_target": None,
             "thread_id": thread_id,

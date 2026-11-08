@@ -1,10 +1,13 @@
-"""QA prompt contract (024): the three-way verdict vocabulary in the dogfood
-copy of sdk_agents/qa.agent.md stays in sync with what the verdict parser
-accepts."""
+"""QA prompt contract (024): the three-way verdict vocabulary in the staged
+``sdk_agents/qa.agent.md.new`` stays in sync with what the verdict parser
+accepts. The active prompt is restored to the pre-unit-11 prose contract for
+the installed engine; the record_verdict contract ships as ``.new`` until the
+operator flips it (see the unit-11 review, prompt staging)."""
 
 from pathlib import Path
 
-QA_PROMPT = Path(__file__).parent.parent / "agentic-dev-loop" / "sdk_agents" / "qa.agent.md"
+QA_PROMPT = (Path(__file__).parent.parent / "agentic-dev-loop" / "sdk_agents"
+             / "qa.agent.md.new")
 
 
 def _text() -> str:

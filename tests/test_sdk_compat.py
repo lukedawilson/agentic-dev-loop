@@ -12,6 +12,8 @@ changes. These tests make the change loud in both directions:
 
 import importlib.metadata
 
+import pytest
+
 from openhands.sdk.llm.message import Message, MessageToolCall, TextContent
 
 from agentic_dev_loop.core.config import LlmConfig
@@ -134,3 +136,47 @@ def test_canary_sdk_run_loop_still_breaks_on_stuck():
         "(agents.py) is dead. Adopt the SDK's supported stop mechanism and "
         "update COMPAT-SHIMS.md."
     )
+
+
+def test_canary_sdk_wire_checks_still_wrap_completion_and_responses():
+    """Canary for the unit-11 wire-shape shims (COMPAT-SHIMS.md): passes while
+    ``LLM.completion`` and ``LLM.responses`` remain plain class attributes the
+    engine can wrap, and both engine wrappers are installed. Fails once the SDK
+    stops routing requests through those attributes (a rename, an instance-level
+    attribute, or a built-in validator that makes the wrappers dead) - replace
+    the shim and update COMPAT-SHIMS.md."""
+    from openhands.sdk import LLM
+    from agentic_dev_loop.engine import llm as engine_llm
+
+    assert getattr(LLM.completion, "_agentic_dev_loop_wire_checked", False), (
+        "LLM.completion is no longer the engine's wire-checked wrapper - the "
+        "D-1/D-2 shim in src/agentic_dev_loop/engine/llm.py is dead. Replace "
+        "it and update COMPAT-SHIMS.md.")
+    assert getattr(LLM.responses, "_agentic_dev_loop_wire_checked", False), (
+        "LLM.responses is no longer the engine's wire-checked wrapper - the "
+        "D-1/D-2 shim in src/agentic_dev_loop/engine/llm.py is dead. Replace "
+        "it and update COMPAT-SHIMS.md.")
+    assert engine_llm._ORIGINAL_COMPLETION is not LLM.completion, (
+        "The engine did not capture the SDK's original LLM.completion before "
+        "wrapping - the shim would recurse. Update COMPAT-SHIMS.md.")
+
+
+def test_canary_responses_wrapper_still_validates_the_surfaced_shape(
+        monkeypatch):
+    """The Responses-path wrapper must enforce D-1 on the surfaced response,
+    same as the chat path. A failing assertion here means the wrapper no longer
+    wraps the SDK entry point (COMPAT-SHIMS.md)."""
+    from types import SimpleNamespace
+
+    from openhands.sdk import LLM
+
+    from agentic_dev_loop.engine.provider_wire import WireShapeError
+
+    llm = LLM(model="openai/test-model", api_key="sk-test")
+    malformed = SimpleNamespace(raw_response={
+        "choices": [{"finish_reason": "tool_calls", "message": {}}]})
+    monkeypatch.setattr(
+        "agentic_dev_loop.engine.llm._ORIGINAL_RESPONSES",
+        lambda self, messages, *a, **k: malformed)
+    with pytest.raises(WireShapeError):
+        llm.responses([])

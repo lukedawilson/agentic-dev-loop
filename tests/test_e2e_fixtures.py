@@ -129,6 +129,13 @@ def consumer_repo(tmp_path, monkeypatch, fake_agents, fake_sandbox):
     # once clear_attempt_artifacts deletes the produced files.
     shutil.copytree(EXAMPLE, repo / "agentic-dev-loop", dirs_exist_ok=True,
                     ignore=shutil.ignore_patterns(".pr"))
+    # The active dogfood verdict prompts are staged back to the pre-unit-11
+    # prose contract for the installed engine; the engine under test requires
+    # record_verdict. The consumer copy takes the staged *.new contracts, so
+    # the fixture exercises the new engine without touching the active files.
+    for staged_prompt in (repo / "agentic-dev-loop" / "sdk_agents").glob(
+            "*.agent.md.new"):
+        staged_prompt.rename(staged_prompt.with_suffix(""))
     # The shipped example drops `state_dir` (the relocated default lives in the
     # user home, out of the workspace). The e2e fixture replays historical
     # artifact flows against it, so it declares an explicit in-repo state_dir

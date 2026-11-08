@@ -83,6 +83,11 @@ def validate_string_tool_results(messages, serialized,
     surface as a non-empty string, not vanish from the request."""
     if not forced:
         return
+    if len(messages) != len(serialized):
+        raise WireShapeError(
+            "wire shape violation (chat): the serializer changed the message "
+            f"count ({len(messages)} in, {len(serialized)} out); the forced "
+            "string policy cannot be aligned positionally")
     for message, out in zip(messages, serialized):
         if getattr(message, "role", None) != "tool":
             continue

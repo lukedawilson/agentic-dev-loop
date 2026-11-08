@@ -395,7 +395,7 @@ class TestCommandNode:
         update = node(make_state())
         assert update["step_verdicts"] == {"test": "fail"}
         assert update["retry_target"] == "dev"
-        (note,) = update["notes"]
+        (note,) = update["mechanical_notes"]
         assert "FAILURE OUTPUT" in note and "attempt 1" in note
 
     def test_output_printed_on_pass_and_fail(self, runtime, capsys):
@@ -421,7 +421,7 @@ class TestCommandNode:
             idx=1)
         update = node(make_state())
         assert update["step_verdicts"] == {"test": "fail"}
-        (note,) = update["notes"]
+        (note,) = update["mechanical_notes"]
         assert "timed out" in note
 
     def test_timeout_reaps_the_process_tree(self, tmp_path):
@@ -497,7 +497,7 @@ class TestCommandNode:
         update = node(make_state())
         assert update["step_verdicts"] == {"test": "fail"}
         assert "retry_target" not in update
-        (note,) = update["notes"]
+        (note,) = update["mechanical_notes"]
         assert "attempt 1" in note
 
 
@@ -701,7 +701,8 @@ class TestSandboxActionNode:
         update = make_action_node(rt, cfg.steps[0])(make_state())
         assert update["step_verdicts"] == {"consumer": "fail"}
         assert "failed" not in update
-        assert "notes" in update
+        assert "mechanical_notes" in update
+        assert "notes" not in update
 
     def test_missing_param_fails_loud_not_silent(self, runtime, fake_sandbox):
         rt, cfg = self._rt(runtime, "echo {missing}")
@@ -814,7 +815,7 @@ class TestSandboxedCommandNode:
         node = self._node(runtime, "echo routed")
         update = node(make_state())
         assert update == {"step_verdicts": {"test": "pass"}, "failed": False,
-                          "verified_state": {"test": "exit 0"}}
+                          "verified_state": {"test": "attempt 1: exit 0"}}
         assert fake_sandbox.requests
         assert fake_sandbox.requests[0].argv == ["echo", "routed"]
 
