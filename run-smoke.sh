@@ -7,7 +7,7 @@
 #   provider    openhands | copilot
 #   config-dir  a smoke plan directory: pipeline.yaml (provider-free),
 #               agents/dev.agent.md, optionally plan.md. This repo ships
-#               tests/smoke/viz-keepalive.
+#               tests/smoke/viz-provider.
 #
 # openhands preflight: OPENAI_API_KEY must be exported.
 # copilot preflight:   token file at ~/.agentic-dev-loop/auth/copilot.json

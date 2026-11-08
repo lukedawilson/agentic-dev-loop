@@ -126,12 +126,12 @@ verbatim); backend support ships as committed config dirs:
 > `PROVIDER_BLOCKS` into a provider-free template, rejecting templates that
 > still carry their own `llm:` block. `tests/smoke/copilot-endpoint/` and
 > `tests/smoke/openai-endpoint/` were deleted;
-> `tests/smoke/viz-keepalive/` is the single provider-free plan dir, and
+> `tests/smoke/viz-provider/` is the single provider-free plan dir, and
 > `run-smoke.sh <provider> <config-dir>` wraps the invocation. A template
 > carrying an `llm:` block is now a pre-flight error, never silently
 > overridden.
 
-- tests/smoke/viz-keepalive/ - DeepSeek (existing default; api_key_env
+- tests/smoke/viz-provider/ - DeepSeek (existing default; api_key_env
   OPENAI_API_KEY, base_url https://api.deepseek.com)
 - tests/smoke/copilot-endpoint/ - the Copilot subscription endpoint (the
   D1-D7 shape: base_url https://api.githubcopilot.com, api_key_secret file
@@ -219,7 +219,7 @@ Non-token gates (runnable without a subscription):
 - test_repo_ascii + em-dash check on all new files.
 - Smoke script pre-flight: a config dir with an unset api_key_env and one
   with a missing token file both fail fast with the right guidance.
-- `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive`
+- `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-provider`
   still passes (DeepSeek profile; the restructured script).
 
 Real-token gates (user-run):

@@ -164,7 +164,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   client-id override), `copilot-login` and `copilot-models` CLI subcommands.
 - Smoke: run_smoke.py llm credential pre-flight plus a pinned-model probe;
   the provider argument (openhands|copilot) injects the llm block into a
-  provider-free plan dir (tests/smoke/viz-keepalive); run-smoke.sh wraps
+  provider-free plan dir (tests/smoke/viz-provider); run-smoke.sh wraps
   the invocation.
 - Non-token gates are green (full suite, ASCII check). Real-token gates
   (device flow, model probe, tool-call round trip, both smokes) remain

@@ -1,4 +1,4 @@
-name: smoke-viz-keepalive
+name: smoke-viz-provider
 profile: python
 # Provider-free template: run_smoke.py injects the llm block for its
 # --provider argument (openhands or copilot). agents_dir and
@@ -71,7 +71,7 @@ steps:
     on_pass: test
 
   - name: test
-    command: .venv-sandbox/bin/python -m pytest tests/test_055_cli.py -q -m "not docker" -k keepalive
+    command: .venv-sandbox/bin/python -m pytest tests/test_viz.py -q -m "not docker" -k provider
     timeout: 600
     mounts: [{path: ".", mode: rw}]
     on_pass: review

@@ -462,8 +462,8 @@ llms:
   run; the smoke harness pre-flights every pinned model against the token's
   tier list.
 - The smoke harness takes a provider and a plan directory independently:
-  `./run-smoke.sh openhands tests/smoke/viz-keepalive` (or
-  `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-keepalive
+  `./run-smoke.sh openhands tests/smoke/viz-provider` (or
+  `./.venv/bin/python tests/smoke/run_smoke.py tests/smoke/viz-provider
   --provider copilot`). The `--provider` argument (`openhands` or
   `copilot`) injects the llm block into the plan's provider-free
   pipeline.yaml, so the same plan runs against any provider without
