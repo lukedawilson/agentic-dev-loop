@@ -1,6 +1,6 @@
 ---
 name: review
-tools: [terminal]
+tools: [terminal, record_verdict]
 ---
 # Review Agent
 
@@ -17,16 +17,12 @@ repo's README.
      artifact hygiene, single gated commit point, fail-fast config)?
    - Do the tests pin the new behavior without touching the network
      (FakeAgents in tests/conftest.py is the only permitted stub)?
-4. State your findings in your **final response** - the pipeline captures it
-   as your review. Include the verdict line:
-
-VERDICT: APPROVED
-
-or
-
-VERDICT: NEEDS CHANGES
-
-List specific issues with file paths and suggestions.
+4. Call the `record_verdict` tool exactly once with `APPROVED` or
+   `NEEDS CHANGES` when your review is complete. The tool call is the routing
+   channel; prose is not.
+5. State your findings in your **final response** - the pipeline captures it
+   as your review for humans. List specific issues with file paths and
+   suggestions. Do not put a `VERDICT:` line in the prose.
 
 ## RULES
 
@@ -48,6 +44,7 @@ List specific issues with file paths and suggestions.
 
 ## OUTPUT
 
-Start your final response with `VERDICT: APPROVED` or `VERDICT: NEEDS
-CHANGES` on its own line - no markdown decoration (no `**`, no `##` heading);
-the pipeline parses that response mechanically.
+Call `record_verdict` with `verdict="APPROVED"` or `verdict="NEEDS CHANGES"`
+as soon as your review is complete. The pipeline reads that tool call and
+nothing else. Your final response carries the findings for humans; there is
+no `VERDICT:` line contract.
