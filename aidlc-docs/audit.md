@@ -1075,3 +1075,43 @@ Let's do some brainstorming and then feed into the unit intent"
 **Context**: INCEPTION - unit-12/13 intents approved; next is unit-12 Functional Design (lean plan: EXTSRF checkpoint-format probe first).
 
 ---
+
+## Unit-12 Functional Design - start
+**Timestamp**: 2026-11-08T16:55:00Z
+**User Input**: "yes"
+**AI Response**: Starting unit-12 Functional Design per the approved lean plan (D9): EXTSRF checkpoint-format probe first, resolve D8 workspace source, then FD artifacts.
+**Context**: CONSTRUCTION - unit-12 Functional Design stage; user approved starting FD.
+
+---
+
+## Unit-12 FD question answers (inline chat)
+**Timestamp**: 2026-11-08T17:05:00Z
+**User Input**: "drop the workspace/pipeline filter for now" (FD-Q1)
+**AI Response**: Recorded in the FD plan: v1 filters = --since/--until + --status only; no run-metadata.json patch; D8 amended.
+**Context**: CONSTRUCTION - unit-12 Functional Design.
+
+---
+
+## Unit-12 FD question answers (inline chat)
+**Timestamp**: 2026-11-08T17:08:00Z
+**User Input**: "A: stdout only (Recommended)" (FD-Q2)
+**AI Response**: Recorded in the FD plan: report prints markdown to stdout; wrapper renders in chat; no --out flag.
+**Context**: CONSTRUCTION - unit-12 Functional Design.
+
+---
+
+## Unit-12 FD question answers (inline chat)
+**Timestamp**: 2026-11-08T17:10:00Z
+**User Input**: "A: gate + dev-lane when available (Recommended)" (FD-Q3)
+**AI Response**: Recorded in the FD plan: red-then-green from test-step verdict sequences (permanent) + dev-lane audit metrics when rows survive.
+**Context**: CONSTRUCTION - unit-12 Functional Design.
+
+---
+
+## Unit-12 Functional Design approval
+**Timestamp**: 2026-11-08T17:20:00Z
+**User Input**: "Approved, continue"
+**AI Response**: FD stage approved. Artifacts: aidlc-docs/construction/unit-12/functional-design/{validated-model,domain-entities,business-rules,business-logic-model}.md + plan (all checkboxes, FD-Q1..Q3 answered). Next: Code Generation (user-driven, TDD per intent D9).
+**Context**: CONSTRUCTION - unit-12 Functional Design stage complete.
+
+---

@@ -242,7 +242,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   the dev fix pass. Flip to active after the record_verdict engine is
   installed.
 
-### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - INTENT RECORDED (2026-11-08)
+### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - FUNCTIONAL DESIGN APPROVED (2026-11-08)
 
 - Intent document: aidlc-docs/unit-12-intent-reporting-cli.md (brainstormed
   with the user 2026-11-08; all three design sections approved)
@@ -254,12 +254,18 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   mechanical-first metrics with [mechanical]/[parsed]/[claimed] provenance
   labels; aggregate dashboard + per-run deep dive markdown; CLI report
   subcommand; .opencode/commands/loop-report.md wrapper.
-- Filters (D8): --pipeline, --since/--until, --status, --workspace/--repo
-  (workspace source is an FD item; candidate engine addition of
-  run-metadata.json for future runs).
+- Filters (D8, amended by FD-Q1): --since/--until, --status only; workspace/pipeline filters deferred; no run-metadata.json patch.
 - Test-format flexibility (D7): TDD detection from exit codes and
   recipe-declared patterns, never test output text; per-format parser
   registry deferred.
+- FD outcome (2026-11-08): run model corrected (run dir = one workspace,
+  one thread = one run; aggregate rows per thread); FD-Q1 dropped
+  workspace/pipeline filters, FD-Q2 stdout only, FD-Q3 gate verdicts +
+  dev-lane audit metrics when rows survive; artifacts in
+  aidlc-docs/construction/unit-12/functional-design/ (validated-model
+  V1-V20 + U1-U8, domain-entities, business-rules BR-1..23,
+  business-logic-model); FD plan at
+  aidlc-docs/construction/plans/unit-12-functional-design-plan.md.
 - Out of scope: token/cost capture and reporting (no capture exists);
   per-format output parsing; any write into run/state dirs (read-only).
 - Staging (D9): lean - Functional Design (EXTSRF probe of the LangGraph
