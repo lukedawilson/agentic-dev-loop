@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prose `VERDICT:` contract in those agent prompts with a `record_verdict`
   tool call; the pipeline now fails at load when the tool is missing.
 
+## [0.12.3] - 2026-11-08
+
+### Changed
+
+- The live run viz now shows the LLM provider (OpenAI or Copilot) in the run summary strip, derived from the configured base_url.
+
 ## [0.12.2] - 2026-11-08
 
 ### Changed
