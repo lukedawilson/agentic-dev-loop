@@ -1002,3 +1002,76 @@ How? Will you update the loop artefact with this review? Or just the AI-DLC docs
 **Context**: Unit-11 Code Generation, crash avoidance for the next dogfood run.
 
 ---
+
+## Unit-12/13 intent - initial request (reporting)
+**Timestamp**: 2026-11-08T16:05:00Z
+**User Input**: "Start an intent for an aidlc unit on reporting.
+
+The run history provides valuable data that could be used to help understand the performace of the dev loop, for example:
+
+- Is TDD effective?
+- Is code review effective?
+- Is QA effective?
+etc.
+
+Let's do some brainstorming and then feed into the unit intent"
+**AI Response**: Started a brainstorming session (skill: brainstorming). Explored the run-history landscape: 27 runs under ~/.agentic-dev-loop/runs, each with loop-checkpoints.sqlite (universal, LangGraph checkpoints; 334 checkpoints/1544 per-task writes in sample run 6cb529022644), varying prose artifacts (attempt-brief.md, implementation-summary.md, review-findings.md, qa-report.md, last-error.md for crashed runs), huge exports/ snapshots, and global sandbox-audit.jsonl (per-execution timings/exit codes, 5MB rotation). Verified no token/cost usage is captured anywhere today. Checked the existing /run-status opencode wrapper pattern as the model for the new wrapper command.
+**Context**: INCEPTION - brainstorming for the reporting unit (units 12/13).
+
+---
+
+## Unit-12/13 intent - brainstorm Q&A (capability shape)
+**Timestamp**: 2026-11-08T16:20:00Z
+**User Input**: Question tool answers: capability standing = "Ongoing, shipped in the library"; form = "Both CLI + viz page"; metric scope = "Broad operational dashboard"; backfill = "All runs, incl. legacy"; cost/token = "Out of scope for this unit"; report scope = "Aggregate + per-run deep dive"; engine approach = "A: Mechanical-first"; AI-DLC staging = "Lean: FD then user-driven code".
+**AI Response**: Recorded all answers. Presented three design sections (unit split and data/provenance model; metrics catalog; architecture/surfaces/validation). All three approved by the user.
+**Context**: INCEPTION - brainstorming Q&A for units 12/13.
+
+---
+
+## Unit-12/13 intent - two-unit split directive
+**Timestamp**: 2026-11-08T16:25:00Z
+**User Input**: "Actually, two units:
+- firs tunit: cli, opencode wrapper command, markdown report
+- second unit: viz extension"
+**AI Response**: Reshaped the intent into two units: unit-12 = reporting CLI + opencode wrapper command + markdown report; unit-13 = viz extension consuming the same metrics module. Explored the .opencode/commands/ wrapper pattern (/run-status, /unit-status) as the model for the unit-12 wrapper.
+**Context**: INCEPTION - unit split directive for units 12/13.
+
+---
+
+## Unit-12/13 intent - test-output-format flexibility directive
+**Timestamp**: 2026-11-08T16:28:00Z
+**User Input**: "Needs to be flexible enough to handle different test output formats (e.g. JUnit, NUnit, XTest, JSTest, whatever)"
+**AI Response**: Folded into the metrics catalog: TDD detection derives from exit codes and recipe-declared command patterns, never from test output text, so any test format works. Per-format output parsing deferred as a pluggable parser registry seam (out of v1 scope). Design Section 2 approved by the user with this incorporated.
+**Context**: INCEPTION - design constraint for unit-12 metrics.
+
+---
+
+## Unit-12/13 intent - aggregate filtering directive
+**Timestamp**: 2026-11-08T16:30:00Z
+**User Input**: "Need some filtering for the aggregate run too"
+**AI Response**: Asked for the filter dimensions; probing showed no canonical per-run workspace metadata exists (workspace path appears in checkpoint writes - 175 matches in one sample run - but is not a top-level run field), so the workspace source becomes a Functional Design item with a candidate small engine addition (run-metadata.json) for future runs.
+**Context**: INCEPTION - aggregate report filters for unit-12.
+
+---
+
+## Unit-12/13 intent - filter dimensions answer
+**Timestamp**: 2026-11-08T16:31:00Z
+**User Input**: Question tool answer: aggregate filter dimensions = "pipeline, date, status, workspace/repo"
+**AI Response**: Recorded the filter set: --pipeline, --since/--until (date), --status (pass/fail/crash), --workspace/--repo, combinable, with matching filter controls on the unit-13 viz aggregate view.
+**Context**: INCEPTION - filter set for unit-12 aggregate report.
+
+---
+
+## Unit-12/13 intent - docs written
+**Timestamp**: 2026-11-08T16:36:00Z
+**User Input**: (n/a - agent action)
+**AI Response**: Wrote aidlc-docs/unit-12-intent-reporting-cli.md and aidlc-docs/unit-13-intent-viz-reporting.md (design decisions D1-D9, metrics catalog, architecture, extension applicability, workflow plans, answered open questions) and updated aidlc-docs/aidlc-state.md with the two INTENT RECORDED sections. Awaiting user review before commit.
+**Context**: INCEPTION - intent documentation for units 12/13.
+
+## Unit-12/13 intent - user approval
+**Timestamp**: 2026-11-08T16:40:00Z
+**User Input**: Question tool answer: "Approve + commit" (intent docs review)
+**AI Response**: Committing and pushing the four docs: aidlc-docs/unit-12-intent-reporting-cli.md, aidlc-docs/unit-13-intent-viz-reporting.md, aidlc-docs/aidlc-state.md (unit-12/13 INTENT RECORDED sections), aidlc-docs/audit.md (session log).
+**Context**: INCEPTION - unit-12/13 intents approved; next is unit-12 Functional Design (lean plan: EXTSRF checkpoint-format probe first).
+
+---

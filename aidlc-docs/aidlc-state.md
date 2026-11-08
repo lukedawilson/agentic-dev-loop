@@ -241,3 +241,36 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   qa.agent.md.new. test_qa_prompt.py re-point at the staged file is part of
   the dev fix pass. Flip to active after the record_verdict engine is
   installed.
+
+### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - INTENT RECORDED (2026-11-08)
+
+- Intent document: aidlc-docs/unit-12-intent-reporting-cli.md (brainstormed
+  with the user 2026-11-08; all three design sections approved)
+- Origin: user directive that run history should answer "Is TDD effective? Is
+  code review effective? Is QA effective?" etc. Shipping a permanent
+  reporting capability in the library.
+- Scope: new reporting module (sources/metrics/render) reading the run-state
+  dir (per-run checkpoints sqlite + sandbox-audit JSONL + prose artifacts);
+  mechanical-first metrics with [mechanical]/[parsed]/[claimed] provenance
+  labels; aggregate dashboard + per-run deep dive markdown; CLI report
+  subcommand; .opencode/commands/loop-report.md wrapper.
+- Filters (D8): --pipeline, --since/--until, --status, --workspace/--repo
+  (workspace source is an FD item; candidate engine addition of
+  run-metadata.json for future runs).
+- Test-format flexibility (D7): TDD detection from exit codes and
+  recipe-declared patterns, never test output text; per-format parser
+  registry deferred.
+- Out of scope: token/cost capture and reporting (no capture exists);
+  per-format output parsing; any write into run/state dirs (read-only).
+- Staging (D9): lean - Functional Design (EXTSRF probe of the LangGraph
+  checkpoint format) -> user-driven Code Generation -> Build and Test.
+
+### unit-13 (reporting viz extension) - INTENT RECORDED (2026-11-08)
+
+- Intent document: aidlc-docs/unit-13-intent-viz-reporting.md (split from the
+  combined reporting intent by user directive)
+- Scope: viz /runs and /runs/<id> endpoints + a runs view (list + aggregate
+  metrics with the D8 filters + per-run detail) consuming the unit-12 metrics
+  module directly; historical backfill of the existing runs; unit-9
+  hand-written skin and tokens.
+- Hard dependency on unit-12 (metrics module); ordering: unit-12 first.
