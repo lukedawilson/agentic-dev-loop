@@ -55,7 +55,7 @@ def repo(tmp_path, monkeypatch):
     (agents / "dev.agent.md").write_text(
         "---\nname: dev\ntools: [terminal]\n---\nYou are the dev agent.\n")
     (agents / "review.agent.md").write_text(
-        "---\nname: review\ntools: [terminal]\n---\nYou are the review agent.\n")
+        "---\nname: review\ntools: [terminal, record_verdict]\n---\nYou are the review agent.\n")
     monkeypatch.chdir(repo)
     monkeypatch.delenv("AGENTIC_DEV_LOOP_DEV_IMAGE", raising=False)
     return repo

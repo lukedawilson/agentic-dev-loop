@@ -13,9 +13,10 @@ def _text() -> str:
 
 def test_unverifiable_verdict_rules_present():
     text = _text()
-    assert "VERDICT: PASS" in text
-    assert "VERDICT: UNVERIFIABLE" in text
-    assert "VERDICT: FAIL" in text
+    assert "record_verdict" in text
+    assert "`PASS`" in text
+    assert "`UNVERIFIABLE`" in text
+    assert "`FAIL`" in text
     assert "## UNVERIFIABLE" in text
 
 
@@ -25,6 +26,6 @@ def test_inconclusive_budget_rule_retained():
 
 def test_env_verdict_rules_present():
     text = _text()
-    assert "VERDICT: ENV" in text
+    assert 'record_verdict(verdict="ENV")' in text
     assert "## ENV" in text
     assert "2 attempts" in text

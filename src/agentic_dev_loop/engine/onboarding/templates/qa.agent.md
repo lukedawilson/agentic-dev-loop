@@ -1,6 +1,6 @@
 ---
 name: qa
-tools: [terminal]
+tools: [terminal, record_verdict]
 ---
 # QA Agent
 
@@ -52,10 +52,11 @@ QA section marks "QA executes first-hand".
 4. Probe only the uncovered surface per the rules below, then stop.
 5. State your report in your **final response** - the pipeline captures it
    as your qa report. Give every acceptance check a status of `PASS`,
-   `FAIL`, `UNVERIFIABLE`, or `ENV`, then the verdict. If any check is
-   `UNVERIFIABLE`, add an `## UNVERIFIABLE` section listing each skipped
-   check and the blocking reason. If the verification environment itself is
-   broken, emit `VERDICT: ENV` and add an `## ENV` section (see ENV below).
+   `FAIL`, `UNVERIFIABLE`, or `ENV`, then call `record_verdict` with your verdict
+   (PASS, FAIL, UNVERIFIABLE, or ENV). If any check is `UNVERIFIABLE`, add
+   an `## UNVERIFIABLE` section listing each skipped check and the blocking
+   reason. If the verification environment itself is
+   broken, call `record_verdict(verdict="ENV")` and add an `## ENV` section (see ENV below).
 
 ## ENV
 
@@ -76,7 +77,7 @@ than the product code, the verdict is `ENV`.
 each environmental blocker with its evidence (command, output, expected).
 
 **Anti-livelock rule.** If the same environmental blocker persists across
-2 attempts, emit `VERDICT: ENV` instead of further workarounds. Do not burn
+2 attempts, call `record_verdict(verdict="ENV")` instead of further workarounds. Do not burn
 turns building synthetic fixtures or debugging the harness.
 
 ## PROBE-PLAN RULES
@@ -167,15 +168,21 @@ turns building synthetic fixtures or debugging the harness.
 
 ## OUTPUT
 
-Start your final response with a `VERDICT:` line on its own line, then the
-check table and findings. Each check row carries either a probe result or a
-citation (`covered by <test>` or `gate record`). The verdict rules are:
+Call `record_verdict` exactly once when your report is ready, then write the
+check table and findings in your final response for humans. Each check row
+carries either a probe result or a citation (`covered by <test>` or `gate
+record`). The verdict values are:
 
-- `VERDICT: PASS` when every reachable acceptance check passes. Checks that
-  could not be verified are recorded as `UNVERIFIABLE` in the report, not
-  treated as failures.
-- `VERDICT: UNVERIFIABLE` when the acceptance checks cannot be touched at
-  all, or none of them can be verified in this sandbox.
-- `VERDICT: ENV` when the verification environment itself is broken mid-run
-  and PASS/FAIL/UNVERIFIABLE cannot be determined (see ENV above).
-- `VERDICT: FAIL` on any genuine defect, as always.
+- `PASS` when every reachable acceptance check passes. Checks that could
+  not be verified are recorded as `UNVERIFIABLE` in the report, not treated
+  as failures.
+- `UNVERIFIABLE` when the acceptance checks cannot be touched at all, none
+  of them can be verified in this sandbox, or the plan's headline feature
+  cannot be verified here. Name the headline feature and its blocking reason
+  in the `## UNVERIFIABLE` section.
+- `ENV` when the verification environment itself is broken mid-run and
+  PASS/FAIL/UNVERIFIABLE cannot be determined (see ENV above).
+- `FAIL` on any genuine defect, as always.
+
+The tool call is the routing channel; the prose no longer carries a
+`VERDICT:` line.

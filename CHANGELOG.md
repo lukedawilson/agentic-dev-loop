@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Unit-11 output-format robustness: agent-step completion is structural
+  (a FINISHED turn with zero tool calls is `no_actions` and fails fast, never
+  a phantom pass), verdicts travel on the structured `record_verdict` tool
+  instead of a prose `VERDICT:` line, context injection separates agent
+  claims from engine-verified state, and the adapter validates surfaced and
+  outgoing wire shapes (`finish_reason=tool_calls` with no tool calls,
+  dangling tool calls, invisible forced-string tool results).
+
+### Consumer adoption
+
+- Add `record_verdict` to the `tools:` allowlist of every agent backing a
+  step with `verdicts:` (the shipped review and qa agents). Replace the
+  prose `VERDICT:` contract in those agent prompts with a `record_verdict`
+  tool call; the pipeline now fails at load when the tool is missing.
+
 ## [0.12.1] - 2026-11-06
 
 ### Changed

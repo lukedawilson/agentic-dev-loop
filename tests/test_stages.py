@@ -5,6 +5,7 @@ and router closures built from the pipeline config; the fixed policies
 (hygiene, verdict-first truncation, unclear-verdict retry, notes) stay here."""
 
 import dataclasses
+import json
 import os
 import sys
 from types import SimpleNamespace
@@ -13,6 +14,9 @@ import pytest
 from langgraph.graph import END
 from openhands.sdk import LLM
 from openhands.sdk.conversation.state import ConversationExecutionStatus
+from openhands.sdk.event.llm_convertible.action import ActionEvent
+from openhands.sdk.llm.message import MessageToolCall, TextContent
+from openhands.sdk.tool.builtins.finish import FinishAction
 
 from agentic_dev_loop.core.config import PipelineConfig
 from agentic_dev_loop.engine.isolation import SandboxError
@@ -267,13 +271,14 @@ class TestAgentNode:
         assert "check agent produced no final response on attempt 1" in note
         assert update["retry_target"] == "dev"  # on_fail's goto
 
-    def test_no_verdict_surfaces_content(self, runtime, fake_agents):
+    def test_no_verdict_tool_is_structural_failure(self, runtime, fake_agents):
         fake_agents.set("check", [("write", "ci-fix.md", "I am undecided")])
         update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
-        (note,) = update["notes"]
-        assert "contains no verdict" in note
-        assert "VERDICT: PASS" in note and "VERDICT: FAIL" in note
-        assert "I am undecided" in note
+        assert update["failed"] is True
+        assert update["failure_class"] == "no_verdict_tool"
+        report = (runtime.state_dir / "last-error.md").read_text()
+        assert "no_verdict_tool" in report
+        assert "I am undecided" in report
 
     def test_unclear_retries_entry_step_when_no_fail_route(self, runtime, fake_agents):
         # review has no on_fail - the unclear-retry policy targets the entry step
@@ -286,12 +291,13 @@ class TestAgentNode:
         assert update["step_verdicts"] == {"check": "pass"}
         assert "notes" not in update
 
-    def test_truncated_without_verdict_notes_cut_short(self, runtime, fake_agents):
+    def test_truncated_without_verdict_is_structural(self, runtime, fake_agents):
         fake_agents.set("check", [("write_truncated", "ci-fix.md", "partial findings")])
         update = make_agent_node(runtime, runtime.cfg.steps[1])(make_state())
-        assert update["step_verdicts"] == {"check": None}
-        (note,) = update["notes"]
-        assert "cut short" in note and "partial findings" in note
+        assert update["failed"] is True
+        assert update["failure_class"] == "no_verdict_tool"
+        report = (runtime.state_dir / "last-error.md").read_text()
+        assert "partial findings" in report
 
     def test_agent_failure_sets_failed(self, runtime, fake_agents):
         fake_agents.set("check", [("raise",)])
@@ -328,7 +334,8 @@ class TestAgentNode:
         assert "notes" not in update
         assert "UNVERIFIABLE (moves on)" in capsys.readouterr().out
 
-    def test_unclear_note_mentions_fourth_keyword(self, runtime, fake_agents):
+    def test_four_verdict_step_without_tool_call_is_structural(
+            self, runtime, fake_agents):
         step = make_cfg([
             {"name": "qa", "agent": "qa", "artifact": "qa-report.md",
              "verdicts": {"pass": "PASS", "fail": "FAIL",
@@ -336,11 +343,8 @@ class TestAgentNode:
              "on_pass": "success"}]).steps[0]
         fake_agents.set("qa", [("write", "qa-report.md", "undecided")])
         update = make_agent_node(runtime, step)(make_state())
-        (note,) = update["notes"]
-        assert "VERDICT: PASS" in note
-        assert "VERDICT: FAIL" in note
-        assert "VERDICT: UNVERIFIABLE" in note
-        assert "VERDICT: ENV" in note
+        assert update["failed"] is True
+        assert update["failure_class"] == "no_verdict_tool"
 
     def test_env_verdict_hard_fails_and_writes_last_error(self, runtime,
                                                           fake_agents):
@@ -543,10 +547,14 @@ class TestRouter:
         router = make_router(runtime, runtime.cfg.steps[1])
         assert router(make_state(attempt=3, step_verdicts={"check": "fail"})) == END
 
-    def test_unclear_retries_then_exhausts(self, runtime):
+    def test_truncation_retry_requires_retry_target(self, runtime):
         router = make_router(runtime, runtime.cfg.steps[1])
-        assert router(make_state(attempt=1, step_verdicts={"check": None})) == "bump"
-        assert router(make_state(attempt=3, step_verdicts={"check": None})) == END
+        assert router(make_state(step_verdicts={"check": None})) == END
+        retrying = {"check": None, "retry_target": "dev"}
+        assert router(make_state(attempt=1, step_verdicts={"check": None},
+                           retry_target="dev")) == "bump"
+        assert router(make_state(attempt=3, step_verdicts={"check": None},
+                           retry_target="dev")) == END
 
     def test_fail_without_route_ends(self, runtime):
         router = make_router(runtime, runtime.cfg.steps[2])  # review: no on_fail
@@ -655,7 +663,8 @@ class TestBumpNode:
         state = make_state(attempt=1, notes=["N1"], artifacts={"dev": "D1"},
                            step_verdicts={"check": "fail"})
         update = make_bump_node(runtime)(state)
-        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False}
+        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False,
+                          "failure_class": None}
         assert "context" not in update  # message is rebuilt per run (027)
         for stale in ("ci-fix.md", "implementation-summary.md", "last-error.md"):
             assert not (runtime.state_dir / stale).exists()
@@ -710,11 +719,26 @@ class TestSandboxActionNode:
             make_action_node(rt, cfg.steps[0])
 
 
+def _finish_event(message: str = "done") -> ActionEvent:
+    """A real FinishTool ActionEvent (one action, so completion is structural)."""
+    return ActionEvent(
+        thought=[TextContent(text="wrapping up")],
+        tool_name="finish",
+        tool_call_id="call-finish-1",
+        tool_call=MessageToolCall(
+            id="call-finish-1", name="finish",
+            arguments=json.dumps({"message": message}), origin="completion"),
+        llm_response_id="resp-1",
+        action=FinishAction(message=message),
+    )
+
+
 class FakeConversation:
     """Boundary stub for the SDK's network-driving Conversation."""
 
-    def __init__(self, status, **kwargs):
-        self.state = SimpleNamespace(execution_status=status)
+    def __init__(self, status, events=None, **kwargs):
+        self.state = SimpleNamespace(execution_status=status,
+                                     events=list(events or []))
         self.kwargs = kwargs
         self.messages = []
         self.closed = False
@@ -789,7 +813,8 @@ class TestSandboxedCommandNode:
     def test_routes_through_sandbox(self, runtime, fake_sandbox):
         node = self._node(runtime, "echo routed")
         update = node(make_state())
-        assert update == {"step_verdicts": {"test": "pass"}, "failed": False}
+        assert update == {"step_verdicts": {"test": "pass"}, "failed": False,
+                          "verified_state": {"test": "exit 0"}}
         assert fake_sandbox.requests
         assert fake_sandbox.requests[0].argv == ["echo", "routed"]
 
@@ -961,7 +986,8 @@ class TestRunAgentProfileSelection:
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.Conversation",
             lambda **kw: FakeConversation(
-                ConversationExecutionStatus.FINISHED, **kw))
+                ConversationExecutionStatus.FINISHED,
+                events=[_finish_event()], **kw))
 
     def test_selects_profile_llm(self, runtime, monkeypatch):
         cfg = self._profile_cfg(llm="review")
@@ -973,7 +999,7 @@ class TestRunAgentProfileSelection:
         captured = {}
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.load_agent",
-            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+            lambda agents_dir, name, llm, **kw: (captured.setdefault("llm", llm)
                                            and object()))
 
         result = runtime.run_agent("dev", "msg", step=cfg.steps[0])
@@ -989,7 +1015,7 @@ class TestRunAgentProfileSelection:
         captured = {}
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.load_agent",
-            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+            lambda agents_dir, name, llm, **kw: (captured.setdefault("llm", llm)
                                            and object()))
 
         result = runtime.run_agent("dev", "msg", step=cfg.steps[0])
@@ -1013,7 +1039,7 @@ class TestRunAgentProfileSelection:
         captured = {}
         monkeypatch.setattr(
             "agentic_dev_loop.engine.stages.load_agent",
-            lambda agents_dir, name, llm: (captured.setdefault("llm", llm)
+            lambda agents_dir, name, llm, **kw: (captured.setdefault("llm", llm)
                                            and object()))
 
         result = runtime.run_agent("dev", "msg", step=cfg.steps[0])

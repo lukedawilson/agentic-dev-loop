@@ -10,9 +10,16 @@ totality for arbitrary input (no crash, no silent routing).
 from __future__ import annotations
 
 import enum
+import json
 from dataclasses import dataclass
+from typing import Iterable
 
+from .failure import FailureClass
 from .results import Result
+
+# The structured verdict channel's tool name. The tool is registered by the
+# engine (engine/agents.py); the entity owns the argument contract.
+RECORD_VERDICT_TOOL = "record_verdict"
 
 # Leading markdown/list/quote decoration tolerated on a verdict line.
 _LEAD_DECOR = "#*_`>- "
@@ -31,6 +38,15 @@ RETRY = "retry"
 class VerdictError(enum.Enum):
     NO_VERDICT = "no_verdict"
     AMBIGUOUS = "ambiguous"
+
+
+@dataclass(frozen=True)
+class VerdictChannelError:
+    """A structured verdict channel failure: the class plus the evidence a
+    report must name (the offending value, the configured set, the conflict)."""
+
+    code: FailureClass
+    detail: str
 
 
 @dataclass(frozen=True)
@@ -62,6 +78,77 @@ class Verdict:
         if saw_verdict_line:
             return Result.err(VerdictError.AMBIGUOUS)
         return Result.err(VerdictError.NO_VERDICT)
+
+
+    @staticmethod
+    def from_events(
+        events: Iterable[object], verdicts: dict[str, str]
+    ) -> "Result[Verdict, VerdictChannelError]":
+        """Decode the verdict from record_verdict tool calls (FR-11.2).
+
+        The event stream is the only source: prose is never parsed here. Zero
+        calls is NO_VERDICT_TOOL; a value outside the configured set is
+        INVALID_VERDICT_VALUE; two different decisions are CONFLICTING_VERDICT
+        (fail fast, FD-Q1). Matching is case-insensitive because models vary
+        the casing of a configured keyword."""
+        values: list[str] = []
+        calls = 0
+        for event in events:
+            if getattr(event, "tool_name", None) != RECORD_VERDICT_TOOL:
+                continue
+            calls += 1
+            value = _verdict_argument(event)
+            if value is not None:
+                values.append(value)
+        if calls == 0:
+            return Result.err(VerdictChannelError(
+                FailureClass.NO_VERDICT_TOOL,
+                f"no {RECORD_VERDICT_TOOL} tool call in the event stream"))
+        lookup = {keyword.casefold(): value
+                  for keyword, value in verdicts.items()}
+        decided: dict[str, str] = {}
+        for value in values:
+            canonical = lookup.get(value.casefold())
+            if canonical is None:
+                configured = ", ".join(sorted(verdicts))
+                return Result.err(VerdictChannelError(
+                    FailureClass.INVALID_VERDICT_VALUE,
+                    f"{RECORD_VERDICT_TOOL} value {value!r} is not in the "
+                    f"configured set [{configured}]"))
+            decided[canonical] = value
+        if not decided:
+            return Result.err(VerdictChannelError(
+                FailureClass.INVALID_VERDICT_VALUE,
+                f"{RECORD_VERDICT_TOOL} call carried no readable verdict "
+                "argument"))
+        if len(decided) > 1:
+            return Result.err(VerdictChannelError(
+                FailureClass.CONFLICTING_VERDICT,
+                "conflicting verdicts: "
+                + ", ".join(sorted(repr(v) for v in decided.values()))))
+        return Result.ok(Verdict(value=next(iter(decided))))
+
+
+def _verdict_argument(event: object) -> str | None:
+    """The verdict argument carried by one RecordVerdictAction event.
+
+    Prefers the parsed action (the SDK's normal path); falls back to the raw
+    tool-call arguments JSON when the action was not parsed."""
+    action = getattr(event, "action", None)
+    value = getattr(action, "verdict", None)
+    if isinstance(value, str):
+        return value
+    tool_call = getattr(event, "tool_call", None)
+    arguments = getattr(tool_call, "arguments", None)
+    if not isinstance(arguments, str):
+        return None
+    try:
+        payload = json.loads(arguments)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(payload, dict) and isinstance(payload.get("verdict"), str):
+        return payload["verdict"]
+    return None
 
 
 def parse_verdict(text: str, verdicts: dict[str, str]) -> str:

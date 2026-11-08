@@ -13,6 +13,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from agentic_dev_loop.core.config import PipelineConfig, StepConfig, load_config
+from agentic_dev_loop.core.verdict import RECORD_VERDICT_TOOL
+from .agents import check_required_tools
 from .hostboundary import check_orchestrator_install, check_tooling_integrity
 from .loaders import resolve_docs
 from .isolation import (isolation_state_dir, resolve_effective_profile,
@@ -30,12 +32,18 @@ def _validate_agents(cfg: PipelineConfig, agents_dir: Path) -> None:
     The brief prompt is engine-embedded (046), so a native ``brief_inputs:``
     step (kind 'brief') has `agent is None` and is exempt from the agents_dir
     lookup - it never reads a vendored file."""
+    from openhands.sdk.subagent.schema import AgentDefinition
+
     for step in cfg.steps:
         if step.agent is None:
             continue
         path = agents_dir / f"{step.agent}.agent.md"
         if not path.is_file():
             raise FileNotFoundError(f"Agent file not found: {path}")
+        if step.verdicts is not None:
+            agent_def = AgentDefinition.load(path)
+            check_required_tools(agent_def.tools, (RECORD_VERDICT_TOOL,),
+                                 agent_name=step.agent)
 
 
 def _validate_actions(cfg: PipelineConfig, registry: Registry) -> None:

@@ -175,8 +175,9 @@ flowchart LR
    Its edits are untracked; only declared `produces:` files are hygiene-tracked.
 2. **test** - a mechanical command step runs the suite inside the sandbox.
    Exit 0 moves on; anything else rewinds to `dev` with the failing output.
-3. **review / qa** - verdict agents write artifacts whose `VERDICT:` lines route
-   the graph. `fail` rewinds to `dev` and consumes an attempt.
+3. **review / qa** - verdict agents finish by calling the `record_verdict`
+   tool; the validated tool call routes the graph. `fail` rewinds to `dev`
+   and consumes an attempt.
 4. **commit** - the single commit point fires only when all gates passed and
    the worktree was clean at start.
 5. **success** - committed; or **failure** when attempts are exhausted.
@@ -259,7 +260,7 @@ steps:
 | Key | Notes |
 | --- | --- |
 | `agent:` / `command:` / `action:` / `brief_inputs:` | Exactly one per step. Agents live in `agents_dir` as `<name>.agent.md`; commands run sandboxed (mechanical, never an LLM call). `commit` is the sole host-side built-in action; consumer actions are sandbox-executed, command-shaped scripts (see [Host boundary](#host-boundary-security-model)). `brief_inputs:` is a native brief step - see its row below. |
-| `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs verdict-parsed routing. The **last** `VERDICT:` line wins; stale artifacts are deleted at each attempt start. |
+| `produces:` / `artifact:` + `verdicts:` | Hygiene-tracked outputs vs structured-verdict routing. The verdict comes from a validated `record_verdict` tool call, never from prose; stale artifacts are deleted at each attempt start. |
 | `brief_inputs:` | The discriminator for a native brief step: `{ include: [<paths/globs>], env_facts: [<strings>], sections: [<headings>] }`. There is no `agent:`, `produces:`, or `max_iterations:` - the prompt is engine-embedded, the capture file is `attempt-brief.md`, and the iteration cap is 12, all engine-owned. The engine resolves the include list against the workspace, passes the resolved docs + include contents + env facts as the step's task message, and regenerates the step only when those inputs change. `sections` is the ordered list of digest headings the brief must emit (default `[Repo rules digest, Unit scope digest, Environment facts, Open risks]`; non-empty and unique). `name` stays free-form, so multiple brief steps are allowed. |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds (gt 0). `SandboxTerminalExecutor` uses it when the agent leaves the terminal action timeout unset, overriding the SDK tool's default. `None` = current behavior. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge (gt 0). Requires `max_iterations:` and must be less than it. At `max_iterations - finalize_nudge_turns` completed turns the engine injects one advisory turn ("`N turns remain: produce your final response now`"), exactly once; the agent may still exhaust its turns and existing stuck/unclear handling applies unchanged. Absent = current behavior. Provisional pending one consumer run (revert if noisy or the raised cap inflates cost). |
@@ -582,13 +583,15 @@ and the `commit` step never commits it). `init` writes them; the layout is:
 
 Each `sdk_agents/<name>.agent.md` is a markdown prompt plus YAML frontmatter:
 `name` matches a step's `agent:` value; `tools` lists the tool names the step
-may use (`terminal` always; a repo can add more via extensions, e.g.
-`figma`).
+may use (`terminal` always; verdict steps also need `record_verdict`; a repo
+can add more via extensions, e.g. `figma`). A step configured with `verdicts:`
+whose agent file does not grant `record_verdict` fails at load, never at
+routing time.
 
 ```markdown
 ---
 name: review                 # matches a step's `agent:` value
-tools: [terminal]
+tools: [terminal, record_verdict]
 ---
 # Review Agent
 ## WORKFLOW                   # numbered steps
@@ -602,8 +605,8 @@ Three roles, three contracts:
 | Role | Verdict contract | Typical sandbox |
 | --- | --- | --- |
 | dev | none - the final response is captured as the `produces:` summary | rw mount, offline |
-| review | `VERDICT: APPROVED` / `VERDICT: NEEDS CHANGES` on the first content line | ro mount, offline |
-| qa | `VERDICT: PASS` / `VERDICT: FAIL`; map `unverifiable: UNVERIFIABLE` if you want a third way | shaped by the repo: rw + network + `class: browser` when it boots servers and drives a browser (the consumer repo); ro + offline when it probes the CLI only (this repo) |
+| review | `record_verdict` with `APPROVED` / `NEEDS CHANGES`; the prose keeps the findings for humans | ro mount, offline |
+| qa | `record_verdict` with `PASS` / `FAIL`; map `unverifiable: UNVERIFIABLE` if you want a third way | shaped by the repo: rw + network + `class: browser` when it boots servers and drives a browser (the consumer repo); ro + offline when it probes the CLI only (this repo) |
 
 The conventions that make a good agent file - each one below exists because
 an agent burned budget learning it mid-run:

@@ -10,13 +10,17 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from openhands.sdk import LLM
-from openhands.sdk.tool import ToolExecutor
+from openhands.sdk.tool import (Action, Observation, ToolAnnotations,
+                                ToolDefinition, ToolExecutor, register_tool)
+from pydantic import Field
 from openhands.tools.file_editor import FileEditorTool  # noqa: F401 - registers "file_editor"
 from openhands.tools.task_tracker import TaskTrackerTool  # noqa: F401 - registers "task_tracker"
 from openhands.tools.terminal import TerminalTool  # noqa: F401 - registers "terminal"
 
 from .forbidden import ForbiddenRule, match_forbidden_command
 from .brief_prompt import render_brief_prompt
+from agentic_dev_loop.core.verdict import RECORD_VERDICT_TOOL
+
 from .isolation import (SandboxError, SandboxExecutionRequest, command_argv,
                         resolve_sandbox_env)
 
@@ -32,7 +36,39 @@ if TYPE_CHECKING:
 BRIEF_AGENT_NAME = "4f1c9e2b-7a3d-4e5f-8b6c-0d1a2f3c4d5e"
 
 
-def load_agent(agents_dir: Path | str, name: str, llm: LLM) -> "Agent":
+def check_required_tools(tools: list[str], required: tuple[str, ...],
+                         *, agent_name: str) -> None:
+    """Fail loudly when a step's contract needs a tool the agent file does not
+    grant (BR-1: the frontmatter list is the exact allowlist)."""
+    missing = [name for name in required if name not in tools]
+    if missing:
+        raise ValueError(
+            f"agent {agent_name!r} does not grant required tools "
+            f"{missing}; add them to its frontmatter 'tools:' allowlist")
+
+
+def validate_agent_contracts(cfg, agents_dir: Path | str) -> None:
+    """Load-time contract check (unit-11, B-2): a step configured with
+    ``verdicts:`` requires ``record_verdict`` in its agent's tool allowlist.
+
+    A missing agent file is left to ``load_agent`` (which fails fast naming
+    it); this check only inspects files that exist so graph construction stays
+    a pure config pass for fake-agent test harnesses."""
+    from openhands.sdk.subagent.schema import AgentDefinition
+
+    for step in cfg.steps:
+        if step.agent is None or step.verdicts is None:
+            continue
+        path = Path(agents_dir) / f"{step.agent}.agent.md"
+        if not path.is_file():
+            continue
+        agent_def = AgentDefinition.load(path)
+        check_required_tools(agent_def.tools, (RECORD_VERDICT_TOOL,),
+                             agent_name=step.agent)
+
+
+def load_agent(agents_dir: Path | str, name: str, llm: LLM,
+               required_tools: tuple[str, ...] = ()) -> "Agent":
     """Load `<agents_dir>/<name>.agent.md` and build the Agent via the SDK
     factory (frontmatter tool names resolved against the registry, unknown →
     ValueError; the markdown body is delivered as the system prompt suffix).
@@ -63,6 +99,7 @@ def load_agent(agents_dir: Path | str, name: str, llm: LLM) -> "Agent":
         raise ValueError(
             f"Agent file {path} name {agent_def.name!r} does not match "
             f"filename {stem!r}")
+    check_required_tools(agent_def.tools, required_tools, agent_name=name)
     return agent_definition_to_factory(agent_def)(llm)
 
 
@@ -206,3 +243,58 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
                 allowlist=allowlist))
 
     register_tool("terminal", factory)
+
+
+class RecordVerdictAction(Action):
+    """The structured verdict channel's input (unit-11, FR-11.2)."""
+
+    verdict: str = Field(
+        description=(
+            "The verdict keyword for this step, exactly as configured in the "
+            "pipeline's `verdicts:` map (for example APPROVED or NEEDS "
+            "CHANGES)."))
+
+
+class RecordVerdictObservation(Observation):
+    """A visible acknowledgement: the wire invariant (D-3) requires the tool
+    result to reach the model, so this is never empty."""
+
+
+class RecordVerdictExecutor(ToolExecutor):
+    def __call__(self, action: RecordVerdictAction,
+                 conversation=None) -> RecordVerdictObservation:
+        return RecordVerdictObservation.from_text(
+            f"recorded verdict: {action.verdict}")
+
+
+class RecordVerdictTool(
+        ToolDefinition[RecordVerdictAction, RecordVerdictObservation]):
+    """Registers `record_verdict`; validation against the step's configured
+    verdict set happens in `Verdict.from_events`, never in the tool schema."""
+
+    @classmethod
+    def create(cls, conv_state=None, **params):
+        if params:
+            raise ValueError("RecordVerdictTool does not accept parameters")
+        return [
+            cls(
+                action_type=RecordVerdictAction,
+                observation_type=RecordVerdictObservation,
+                description=(
+                    "Record this step's verdict. Call exactly once when your "
+                    "work is complete, passing the configured verdict keyword. "
+                    "Never state the verdict only in prose: the pipeline reads "
+                    "this tool call, not your final message."),
+                executor=RecordVerdictExecutor(),
+                annotations=ToolAnnotations(
+                    title=RECORD_VERDICT_TOOL,
+                    readOnlyHint=True,
+                    destructiveHint=False,
+                    idempotentHint=True,
+                    openWorldHint=False,
+                ),
+            )
+        ]
+
+
+register_tool(RECORD_VERDICT_TOOL, RecordVerdictTool)

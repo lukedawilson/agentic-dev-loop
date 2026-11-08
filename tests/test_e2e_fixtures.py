@@ -237,11 +237,11 @@ class TestHistoricalFixtures:
         assert fake_agents.agents_called().count("qa") == 1
         assert "(agent dev loop)" in _log(consumer_repo)
 
-    def test_unclear_verdict_retries_with_content_in_notes(self, consumer_repo,
+    def test_missing_verdict_tool_fails_fast_without_retry(self, consumer_repo,
                                                            fake_agents):
-        """An unparseable verdict forces an attempt-bounded retry, and the
-        artifact's content rides into the next attempt's notes - findings
-        are never swallowed."""
+        """No record_verdict tool call is a structural failure: the run halts
+        on the first attempt instead of re-running the same refusal, and the
+        prose (display-only) is preserved in the report."""
         _passing_scripts(fake_agents, qa=[
             ("write", "qa-report.md",
              "The build looks mostly fine but I cannot decide.\n"
@@ -249,10 +249,10 @@ class TestHistoricalFixtures:
             ("write", "qa-report.md", "Decided.\n\nVERDICT: PASS\n"),
         ])
         rc = main([str(consumer_repo / "agentic-dev-loop" / "pipeline.yaml"), "--plan", "plan.md", "--no-viz"])
-        assert rc == 0
-        attempt2_dev = fake_agents.messages_for("dev")[1]
-        assert "contains no verdict" in attempt2_dev
-        assert "I cannot decide" in attempt2_dev
+        assert rc == 1
+        assert fake_agents.agents_called().count("qa") == 1
+        report = (consumer_repo / "agentic-dev-loop" / ".pr" / "last-error.md")
+        assert "no_verdict_tool" in report.read_text()
 
     def test_dirty_worktree_at_start_skips_commit_but_run_succeeds(
             self, consumer_repo, fake_agents):

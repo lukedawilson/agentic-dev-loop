@@ -250,5 +250,6 @@ class TestBriefNodeCoverage:
                                 runtime, runtime.cfg.steps[0],
                                 _make_state()["docs"])})
         update = node(state)
-        assert update == {"step_verdicts": {"brief": "pass"}, "failed": False}
+        assert update == {"step_verdicts": {"brief": "pass"}, "failed": False,
+                          "verified_state": {"brief": "coverage passed (4 sections)"}}
         assert fake_agents.agents_called() == []

@@ -28,7 +28,10 @@ from agentic_dev_loop.engine.isolation import (Sandbox, SandboxExecutionRequest,
                                         SandboxExecutionResult, SandboxError,
                                         is_git_mutation)
 from agentic_dev_loop.engine.proc import kill_process_tree
-from agentic_dev_loop.engine.stages import AgentResult
+from agentic_dev_loop.engine.stages import AgentResult, verdict_map
+from agentic_dev_loop.core.failure import FailureClass
+from agentic_dev_loop.core.verdict import (Verdict, VerdictChannelError,
+                                           VerdictError)
 
 
 class FakeAgents:
@@ -45,10 +48,19 @@ class FakeAgents:
                                                return ok=False)
       ("crash",)                             - KeyboardInterrupt escapes the
                                                graph (process-death resume)
+      ("no_actions", content)                - FINISHED with zero ActionEvents
+                                               (the 059 collapse shape)
+      ("verdict_error", code, detail, text)  - a structured verdict-channel
+                                               failure with prose for the report
 
     Capture mirroring: for steps that capture (produces/artifact), ("ok",)
     and ("truncated",) - which produce no final response - return
     capture_error="empty_response", exactly as the real run_agent does.
+
+    Verdict mirroring: for a verdict step the scripted prose's
+    decoration-tolerant VERDICT line models the record_verdict tool call the
+    real run_agent decodes from the event stream. Prose with no verdict line
+    becomes NO_VERDICT_TOOL, exactly as a missing tool call does.
     """
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch):
@@ -81,6 +93,15 @@ class FakeAgents:
             return AgentResult(ok=False)
         if kind == "crash":
             raise KeyboardInterrupt()
+        if kind == "no_actions":
+            return AgentResult(
+                ok=True, response=b[1],
+                failure_class=FailureClass.NO_ACTIONS,
+                failure_evidence="event_count=1 action_events=0 tool_calls=[]")
+        if kind == "verdict_error":
+            return AgentResult(
+                ok=True, response=b[3],
+                verdict_error=VerdictChannelError(FailureClass(b[1]), b[2]))
         captures = step is not None and (step.artifact is not None or step.produces)
         response = None
         capture_error = None
@@ -91,8 +112,22 @@ class FakeAgents:
             response = b[1]
         elif captures:
             capture_error = "empty_response"
+        verdict = None
+        verdict_error = None
+        if step is not None and step.verdicts is not None and response is not None:
+            parsed = Verdict.from_text(response, verdict_map(step))
+            if parsed.is_ok():
+                verdict = parsed.unwrap().value
+            else:
+                code = (FailureClass.NO_VERDICT_TOOL
+                        if parsed.error is VerdictError.NO_VERDICT
+                        else FailureClass.CONFLICTING_VERDICT)
+                verdict_error = VerdictChannelError(
+                    code, f"fake agent did not call record_verdict "
+                          f"({parsed.error.value})")
         return AgentResult(ok=True, truncated=kind in ("truncated", "write_truncated"),
-                           response=response, capture_error=capture_error)
+                           response=response, capture_error=capture_error,
+                           verdict=verdict, verdict_error=verdict_error)
 
 
 @pytest.fixture

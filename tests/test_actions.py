@@ -260,7 +260,7 @@ class TestCommitNode:
         log = git_log(repo)
         assert "feat: construct unit U2 (agent dev loop)" in log
         assert "seed" in log  # exactly one new commit on top
-        assert update == {}
+        assert update["verified_state"]["commit"].startswith("committed ")
 
     def test_message_template_renders_subject(self, tmp_path, monkeypatch):
         repo = tmp_path / "repo"
@@ -339,7 +339,7 @@ class TestCommitNode:
 
         update = commit({"subject": "unit U2", "commit_allowed": True}, COMMIT_PARAMS)
 
-        assert update == {}
+        assert update["verified_state"]["commit"].startswith("committed ")
         assert not marker.exists()  # the repo hook never ran
         assert "feat: construct unit U2 (agent dev loop)" in git_log(repo)
 
@@ -364,7 +364,7 @@ class TestCommitNode:
 
         update = commit({"subject": "unit U2", "commit_allowed": True}, COMMIT_PARAMS)
 
-        assert update == {}
+        assert update["verified_state"]["commit"].startswith("failed")
         assert "auto-commit failed" in capsys.readouterr().err
 
     def test_add_excludes_live_checkpoint_db(self, tmp_path, monkeypatch):

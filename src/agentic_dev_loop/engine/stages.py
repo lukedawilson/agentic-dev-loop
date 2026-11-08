@@ -36,7 +36,9 @@ from .agents import (BRIEF_AGENT_NAME, load_agent, load_brief_agent,
                       register_sandbox_terminal)
 from .brief_coverage import extract_anchors, missing_anchors
 from .brief_prompt import BRIEF_PROMPT_VERSION
+from .completion import classify_completion, completion_evidence
 from agentic_dev_loop.core.config import TERMINALS, PipelineConfig, Route, StepConfig, route_target
+from agentic_dev_loop.core.failure import FailureClass
 from agentic_dev_loop.core.paths import _has_wildcards
 from .deps import extension_message, parse_missing_dependencies, policy_injection
 from .egress_policy import assemble_egress_policy
@@ -47,7 +49,8 @@ from .llm import build_llm
 from .mounts import resolve_mount_set
 from .outputs import CapturedOutput
 from .secrets import redact_values, step_secret_env
-from agentic_dev_loop.core.verdict import Verdict
+from agentic_dev_loop.core.verdict import (RECORD_VERDICT_TOOL, Verdict,
+                                           VerdictChannelError)
 from .proc import (child_env, host_shell_execution, kill_process_tree,
                    needs_shell, split_command)
 from .registry import Registry
@@ -194,7 +197,11 @@ class Runtime:
                 agent = load_brief_agent(
                     agent_name, step.brief_inputs.sections, llm)
             else:
-                agent = load_agent(self.agents_dir, agent_name, llm)
+                required = ((RECORD_VERDICT_TOOL,)
+                            if step is not None and step.verdicts is not None
+                            else ())
+                agent = load_agent(self.agents_dir, agent_name, llm,
+                                   required_tools=required)
             callbacks = []
             if finalize_controller is not None:
                 callbacks.append(finalize_controller.on_event)
@@ -216,7 +223,21 @@ class Runtime:
             if self.sandbox is not None and self.sandbox.infra_error is not None:
                 raise self.sandbox.infra_error
 
+            events = list(getattr(conv.state, "events", []))
             truncated = conv.state.execution_status != ConversationExecutionStatus.FINISHED
+            failure_class = (classify_completion(events, finished=not truncated)
+                             if step is not None and step.agent is not None
+                             else None)
+            failure_evidence = (completion_evidence(events)
+                                if failure_class is not None else None)
+            verdict_value = None
+            verdict_error = None
+            if step is not None and step.verdicts is not None:
+                parsed = Verdict.from_events(events, verdict_map(step))
+                if parsed.is_ok():
+                    verdict_value = parsed.unwrap().value
+                else:
+                    verdict_error = parsed.error
 
             if step is not None and (step.artifact is not None or step.produces):
                 artifact = step.artifact if step.artifact is not None else step.produces[0]
@@ -225,14 +246,26 @@ class Runtime:
                     redactions=tuple(self.secrets.values()))
                 if captured.is_err():
                     return AgentResult(ok=True, truncated=truncated,
-                                       capture_error=captured.error.value)
+                                       capture_error=captured.error.value,
+                                       failure_class=failure_class,
+                                       failure_evidence=failure_evidence,
+                                       verdict=verdict_value,
+                                       verdict_error=verdict_error)
                 write_result = captured.unwrap().write()
                 if write_result.is_err():
                     raise RuntimeError(
                         f"captured output write failed: {write_result.error.value}")
                 return AgentResult(ok=True, truncated=truncated,
-                                   response=captured.unwrap().raw_text)
-            return AgentResult(ok=True, truncated=truncated)
+                                   response=captured.unwrap().raw_text,
+                                   failure_class=failure_class,
+                                   failure_evidence=failure_evidence,
+                                   verdict=verdict_value,
+                                   verdict_error=verdict_error)
+            return AgentResult(ok=True, truncated=truncated,
+                               failure_class=failure_class,
+                               failure_evidence=failure_evidence,
+                               verdict=verdict_value,
+                               verdict_error=verdict_error)
         except Exception:
             err = redact_values(traceback.format_exc(), self.secrets.values())
             print(err[-4000:], file=sys.stderr, flush=True)
@@ -322,11 +355,17 @@ class AgentResult:
     without the agent reaching FINISHED - the turn cap (ERROR) or the SDK's
     stuck detector (STUCK) both land here. response carries the captured final
     agent message (capture-applying steps only); capture_error is set when the
-    agent finished but produced no final response ("empty_response")."""
+    agent finished but produced no final response ("empty_response").
+    failure_class names a structural completion failure (unit-11); verdict and
+    verdict_error carry the structured record_verdict channel."""
     ok: bool = False
     truncated: bool = False
     response: str | None = None
     capture_error: str | None = None
+    failure_class: FailureClass | None = None
+    failure_evidence: str | None = None
+    verdict: str | None = None
+    verdict_error: VerdictChannelError | None = None
 
 
 def _run_command(command: str, workspace: Path, timeout: float,
@@ -392,20 +431,26 @@ def _artifact_file(runtime: Runtime, step_name: str) -> str | None:
 def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
                   notes: list[str] | None = None,
                   artifacts: dict[str, str] | None = None,
-                  custom_prompt: str | None = None) -> str:
+                  custom_prompt: str | None = None,
+                  verified: dict[str, str] | None = None) -> str:
     """Assemble the attempt's shared message: the always-on agent-facing error
     guide (034), subject, doc bundle, the run-specific instructions appended
     from the step's ``custom_prompt`` (040), the canonical dependency-policy
     paragraph (021), the expected-output-paths section generated from step
     defs (a prompt merely naming files lets agents skip them), accumulated
-    stage artifacts (027), and previous-attempt notes."""
+    stage artifacts as *claims* (027), and previous-attempt notes.
+
+    Unit-11 (FR-11.3) splits the injected material: agent prose is labelled
+    as an unverified claim, and only engine-verified facts (command exit
+    codes, brief coverage, commit outcome) appear in the verified section.
+    Nothing in the claims section is ever routed on."""
     parts = [f"You are working on {subject}.\n", guide_section()]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
     if custom_prompt:
         parts.append(custom_prompt_section(custom_prompt))
+    claims: list[str] = []
     if artifacts:
-        parts.append("## Stage artifacts")
         for step_name, content in artifacts.items():
             capped = content[:ARTIFACT_CONTEXT_CAP]
             if len(content) > ARTIFACT_CONTEXT_CAP:
@@ -414,7 +459,16 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
                         else prompt_dir(runtime))
                 capped += (f"\n\n[... content truncated - full text at "
                            f"`{path}`]")
-            parts.append(f"### {step_name}\n\n{capped}")
+            claims.append(f"### {step_name}\n\n{capped}")
+    if notes:
+        claims.append("### Previous attempt feedback\n\n" + "\n\n".join(notes))
+    if claims:
+        parts.append("## Stage artifacts (each agent's own claims, not verified)")
+        parts.extend(claims)
+    verified_lines = [f"- {name}: {fact}" for name, fact in (verified or {}).items()]
+    parts.append(
+        "## Verified state (mechanically checked by the pipeline)\n\n"
+        + ("\n".join(verified_lines) if verified_lines else "- none yet"))
     parts.append("## Dependency policy\n\n" + policy_injection(runtime.cfg))
     lines = []
     for step in runtime.cfg.steps:
@@ -426,8 +480,6 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
             lines.append(f"{step.name} agent writes: `{prompt_dir(runtime)}/{step.artifact}`")
     if lines:
         parts.append("## Expected output paths\n\n" + "\n".join(lines))
-    if notes:
-        parts.append("## Previous attempt feedback\n\n" + "\n\n".join(notes))
     return "\n\n".join(parts)
 
 
@@ -633,6 +685,18 @@ def build_brief_context(runtime: Runtime, step: StepConfig,
     return "\n\n".join(parts)
 
 
+def verdict_map(step: StepConfig) -> dict[str, str]:
+    """The step's configured verdict keywords mapped to routing values."""
+    if step.verdicts is None:
+        return {}
+    mapping = {step.verdicts.pass_: "pass", step.verdicts.fail: "fail"}
+    if step.verdicts.unverifiable is not None:
+        mapping[step.verdicts.unverifiable] = "unverifiable"
+    if step.verdicts.env is not None:
+        mapping[step.verdicts.env] = "env"
+    return mapping
+
+
 def _unclear_target(runtime: Runtime, step: StepConfig) -> str:
     """Where the unclear-verdict retry loops to: on_fail's goto when that is
     a step, else the entry step (the consumer always looped back to dev)."""
@@ -673,19 +737,32 @@ def _unclear_note(runtime: Runtime, step: StepConfig, attempt: int,
             f"verdict{expected}. Its findings so far:\n\n{text}")
 
 
+def _write_structural_report(runtime: Runtime, failure_class: FailureClass,
+                             step: StepConfig, attempt: int, *,
+                             evidence: str, prose: str | None) -> None:
+    """Record a structural failure with its class, step, attempt, evidence and
+    the captured prose (display-only). Never silently swallowed (NFR-11.1)."""
+    text = (
+        f"# Structural failure: {failure_class.value}\n\n"
+        f"- class: {failure_class.value}\n"
+        f"- step: {step.name}\n"
+        f"- attempt: {attempt}\n"
+        f"- evidence: {evidence}\n\n"
+        "## Captured prose (display-only, not routed on)\n\n"
+        f"{prose if prose is not None else '(no final response)'}\n")
+    text = redact_values(text, runtime.secrets.values())
+    runtime.state_dir.mkdir(parents=True, exist_ok=True)
+    (runtime.state_dir / LAST_ERROR).write_text(text, encoding="utf-8")
+    print(text, file=sys.stderr, flush=True)
+
+
 def make_agent_node(runtime: Runtime, step: StepConfig):
     """Node closure for an agent step. The pipeline captures the final
     response and writes the declared artifact itself; verdict steps parse the
     captured text (decoration-tolerant) and record pass/fail/None into
     step_verdicts. A finished agent with no final response, and a verdict the
     parser can't pin down, both fall into the attempt-bounded unclear retry."""
-    verdicts_map = None
-    if step.verdicts is not None:
-        verdicts_map = {step.verdicts.pass_: "pass", step.verdicts.fail: "fail"}
-        if step.verdicts.unverifiable is not None:
-            verdicts_map[step.verdicts.unverifiable] = "unverifiable"
-        if step.verdicts.env is not None:
-            verdicts_map[step.verdicts.env] = "env"
+    verdicts_map = verdict_map(step) if step.verdicts is not None else None
     captures = step.artifact is not None or bool(step.produces)
 
     def node(state: dict) -> dict:
@@ -708,13 +785,25 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                                 artifacts={k: v for k, v in
                                            state.get("artifacts", {}).items()
                                            if k != step.name},
-                                custom_prompt=step.custom_prompt)
+                                custom_prompt=step.custom_prompt,
+                                verified=state.get("verified_state", {}))
         print(f"[{subject}] Running {step.agent} agent...", flush=True)
         result = runtime.run_agent(step.agent, message,
                                     max_iterations=max_iterations, step=step)
         if not result.ok:
             print(f"[{subject}] {step.name} agent failed on attempt {attempt}.", flush=True)
             return {"failed": True, "failed_step": step.name}
+
+        if result.failure_class is not None:
+            _write_structural_report(
+                runtime, result.failure_class, step, attempt,
+                evidence=result.failure_evidence or "zero ActionEvents",
+                prose=result.response)
+            print(f"[{subject}] {step.name} failed structurally: "
+                  f"{result.failure_class.value} on attempt {attempt}.",
+                  flush=True)
+            return {"failed": True, "failed_step": step.name,
+                    "failure_class": result.failure_class.value}
 
         if result.capture_error is not None:
             print(f"[{subject}] {step.name} agent produced no final response on "
@@ -724,6 +813,16 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                     "notes": [_unclear_note(runtime, step, attempt, None,
                                             result.truncated, max_iterations)],
                     "retry_target": _unclear_target(runtime, step)}
+
+        if result.verdict_error is not None:
+            _write_structural_report(
+                runtime, result.verdict_error.code, step, attempt,
+                evidence=result.verdict_error.detail, prose=result.response)
+            print(f"[{subject}] {step.name} failed structurally: "
+                  f"{result.verdict_error.code.value} on attempt {attempt}.",
+                  flush=True)
+            return {"failed": True, "failed_step": step.name,
+                    "failure_class": result.verdict_error.code.value}
 
         # 021: under `locked`, a declared missing dependency is a fail-fast -
         # one human lockfile edit, never a retry loop. The extension message
@@ -749,10 +848,9 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                 update["artifacts"] = {step.name: result.response}
             return update
 
-        parsed = Verdict.from_text(result.response or "", verdicts_map)
+        verdict = result.verdict
         merged = {**state["step_verdicts"], step.name: None}
-        if parsed.is_ok():
-            verdict = parsed.unwrap().value
+        if verdict is not None:
             merged[step.name] = verdict
             if verdict == "pass":
                 print(f"[{subject}] {step.name} VERDICT: PASS on attempt {attempt}.",
@@ -794,13 +892,9 @@ def make_agent_node(runtime: Runtime, step: StepConfig):
                 update["retry_target"] = step.on_fail.goto
             return update
 
-        print(f"[{subject}] {step.name} verdict unclear on attempt {attempt}, retrying.",
-              flush=True)
-        return {"step_verdicts": merged,
-                "notes": [_unclear_note(runtime, step, attempt, result.response,
-                                        result.truncated, max_iterations,
-                                        parsed.error.value)],
-                "retry_target": _unclear_target(runtime, step)}
+        raise RuntimeError(
+            f"step {step.name!r}: structured verdict channel produced no "
+            "verdict and no error")
 
     return node
 
@@ -868,7 +962,9 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
             print(f"[{subject}] {step.name} brief inputs unchanged - reusing.",
                   flush=True)
             merged = {**state["step_verdicts"], step.name: "pass"}
-            return {"step_verdicts": merged, "failed": False}
+            return {"step_verdicts": merged, "failed": False,
+                    "verified_state": {
+                        step.name: f"coverage passed ({len(sections)} sections)"}}
 
         coverage_note = None
         if reused:
@@ -922,7 +1018,9 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
             return update
 
         merged = {**state["step_verdicts"], step.name: "pass"}
-        update = {"step_verdicts": merged, "failed": False}
+        update = {"step_verdicts": merged, "failed": False,
+                  "verified_state": {
+                      step.name: f"coverage passed ({len(sections)} sections)"}}
         if captures and result.response is not None:
             update["artifacts"] = {step.name: result.response}
             update["brief_hashes"] = {step.name: current_hash}
@@ -930,6 +1028,12 @@ def make_brief_node(runtime: Runtime, step: StepConfig):
         return update
 
     return node
+
+
+def _exit_fact(exit_code: int | None, timed_out: bool) -> str:
+    """The verified exit-code fact a command/action step records."""
+    code = "timeout" if exit_code is None else str(exit_code)
+    return f"exit {code}" + ("" if not timed_out else " (timed out)")
 
 
 def make_command_node(runtime: Runtime, step: StepConfig):
@@ -979,14 +1083,17 @@ def make_command_node(runtime: Runtime, step: StepConfig):
             print(output, end="" if output.endswith("\n") else "\n", flush=True)
         merged = {**state["step_verdicts"],
                   step.name: "pass" if exit_code == 0 else "fail"}
+        verified = {step.name: _exit_fact(exit_code, timed_out)}
         if exit_code == 0:
             print(f"[{subject}] {step.name} command passed on attempt {attempt}.",
                   flush=True)
-            return {"step_verdicts": merged, "failed": False}
+            return {"step_verdicts": merged, "failed": False,
+                    "verified_state": verified}
         print(f"[{subject}] {step.name} command failed on attempt {attempt}.",
               flush=True)
         label = f"attempt {attempt} - timed out" if timed_out else f"attempt {attempt}"
         update = {"step_verdicts": merged,
+                  "verified_state": verified,
                   "notes": [f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
         if isinstance(step.on_fail, Route) and step.on_fail.retry:
             update["retry_target"] = step.on_fail.goto
@@ -1073,14 +1180,17 @@ def make_action_node(runtime: Runtime, step: StepConfig):
             print(output, end="" if output.endswith("\n") else "\n", flush=True)
         merged = {**state["step_verdicts"],
                   step.name: "pass" if exit_code == 0 else "fail"}
+        verified = {step.name: _exit_fact(exit_code, timed_out)}
         if exit_code == 0:
             print(f"[{subject}] {step.name} action passed on attempt {attempt}.",
                   flush=True)
-            return {"step_verdicts": merged, "failed": False}
+            return {"step_verdicts": merged, "failed": False,
+                    "verified_state": verified}
         print(f"[{subject}] {step.name} action failed on attempt {attempt}.",
               flush=True)
         label = f"attempt {attempt} - timed out" if timed_out else f"attempt {attempt}"
         update = {"step_verdicts": merged,
+                  "verified_state": verified,
                   "notes": [f"## {step.name} output ({label})\n\n{output[-4000:]}"]}
         if isinstance(step.on_fail, Route) and step.on_fail.retry:
             update["retry_target"] = step.on_fail.goto
@@ -1113,14 +1223,15 @@ def make_router(runtime: Runtime, step: StepConfig):
     def router(state: dict) -> str:
         if state["failed"]:
             return END
+        retryable_capture = step.kind in ("agent", "brief") and (
+            step.artifact is not None or bool(step.produces))
+        if (retryable_capture and state.get("retry_target")
+                and state["step_verdicts"].get(step.name) is None):
+            # Truncation / empty capture: the existing attempt-bounded retry.
+            # This is the only remaining unclear-adjacent path; a structured
+            # verdict is validated upstream and is never None here.
+            return "bump" if state["attempt"] < state["max_attempts"] else END
         if step.verdicts is None and step.command is None and not is_sandbox_action:
-            # Capture-applying steps without verdicts (produces-only) retry on
-            # empty responses: the node signals it by recording None plus a
-            # retry_target. Steps that don't capture never retry here.
-            if ((step.artifact is not None or step.produces)
-                    and state["step_verdicts"].get(step.name) is None
-                    and state.get("retry_target")):
-                return "bump" if state["attempt"] < state["max_attempts"] else END
             return resolve(step.on_pass)
         verdict = state["step_verdicts"].get(step.name)
         if verdict == "pass":
@@ -1137,8 +1248,10 @@ def make_router(runtime: Runtime, step: StepConfig):
             if isinstance(step.on_fail, Route) and step.on_fail.retry:
                 return "bump" if state["attempt"] < state["max_attempts"] else END
             return resolve(step.on_fail)
-        # Unclear - implicit retry, attempt-bounded (fixed policy).
-        return "bump" if state["attempt"] < state["max_attempts"] else END
+        # Structured verdicts are validated upstream; a missing value here
+        # means a structural failure (already routed to END), never an
+        # unclear-verdict bump (unit-11, rule E-2).
+        return END
 
     return router
 
@@ -1153,6 +1266,7 @@ def make_bump_node(runtime: Runtime):
         clear_attempt_artifacts(runtime)
         update = {"attempt": state["attempt"] + 1,
                   "step_verdicts": {},
+                  "failure_class": None,
                   "failed": False}
         # 033 regeneration gate: if a brief step's resolved inputs changed
         # since it was written (a mid-run edit to AGENTS.md or the unit plan),

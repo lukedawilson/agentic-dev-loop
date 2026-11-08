@@ -71,7 +71,7 @@ def repo(tmp_path, monkeypatch, fake_sandbox):
     (agents / "dev.agent.md").write_text(
         "---\nname: dev\ntools: [terminal]\n---\nYou are the dev agent.\n")
     (agents / "check.agent.md").write_text(
-        "---\nname: check\ntools: [terminal]\n---\nYou are the check agent.\n")
+        "---\nname: check\ntools: [terminal, record_verdict]\n---\nYou are the check agent.\n")
     _git(repo, "init")
     _git(repo, "config", "user.email", "test@example.com")
     _git(repo, "config", "user.name", "Test")

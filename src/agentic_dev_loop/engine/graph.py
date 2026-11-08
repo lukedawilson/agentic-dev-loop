@@ -19,6 +19,7 @@ from langgraph.graph import END, START, StateGraph
 
 from agentic_dev_loop import viz
 from .actions import git_worktree_clean, kill_listeners_on_port
+from .agents import validate_agent_contracts
 from .allowlist import resolve_engine_allowlist
 from agentic_dev_loop.core.config import load_config
 from .hostboundary import (check_orchestrator_install,
@@ -68,6 +69,8 @@ class LoopState(TypedDict):
     state_dir: str                     # resolved pipeline state dir (for the commit action)
     tooling_paths: list[str]          # workspace-relative paths the commit never sweeps
     step_verdicts: dict[str, str | None]  # per-step pass/fail/None(unclear)
+    failure_class: str | None          # structural failure class (unit-11)
+    verified_state: Annotated[dict[str, str], _merge_artifacts]  # engine-verified facts
     retry_target: str | None           # where the bump node loops back to
     thread_id: str
     brief_hashes: Annotated[dict[str, str], _merge_artifacts]  # step name -> input hash (033)
@@ -78,6 +81,7 @@ def build_graph(runtime: Runtime, checkpointer=None):
     """Compile the pipeline's state graph: one node per step (agent, command,
     or action), plus the bump retry node and the success terminal. Unknown
     action names fail here, at build time, not mid-run."""
+    validate_agent_contracts(runtime.cfg, runtime.agents_dir)
     known_actions = (set(runtime.registry.actions)
                      | set(runtime.registry.sandbox_actions))
     for step in runtime.cfg.steps:
@@ -235,6 +239,8 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
             "state_dir": str(state_dir),
             "tooling_paths": tooling_paths,
             "step_verdicts": {},
+            "failure_class": None,
+            "verified_state": {},
             "retry_target": None,
             "thread_id": thread_id,
             "brief_hashes": {},
@@ -362,6 +368,9 @@ def _run_pipeline(cfg, base, registry, state_dir, max_attempts, args, viz_bus,
                 f"{final.get('failed_step', 'unknown')!r}; see "
                 f"{state_dir}/last-error.md",
                 flush=True)
+            if final.get("failure_class"):
+                print(f"[{final['subject']}] structural failure class: "
+                      f"{final['failure_class']}", flush=True)
         else:
             print(f"[{final['subject']}] FAILED after {final['attempt']} "
                   f"attempt(s).", flush=True)

@@ -225,16 +225,18 @@ class TestRunPipeline:
         assert fake_agents.agents_called() == ["dev", "check", "review"]
         assert git(repo, "log", "-1", "--pretty=%s") == "init"
 
-    def test_unclear_verdict_retries_with_content(self, repo, fake_agents):
+    def test_missing_verdict_tool_fails_fast(self, repo, fake_agents):
         script_all_pass(fake_agents)
         fake_agents.set("check", [
             ("write", "ci-fix.md", "undecided prose"),
             ("write", "ci-fix.md", "VERDICT: PASS"),
         ])
         ok, attempts = run_pipeline("pipeline.yaml", args())
-        assert (ok, attempts) == (True, 2)
-        second_dev = fake_agents.messages_for("dev")[1]
-        assert "contains no verdict" in second_dev and "undecided prose" in second_dev
+        assert (ok, attempts) == (False, 1)
+        assert fake_agents.agents_called() == ["dev", "check"]
+        err = (repo / ".pr" / "last-error.md").read_text()
+        assert "no_verdict_tool" in err
+        assert "undecided prose" in err
 
     def test_stale_artifact_deleted_between_attempts(self, repo, fake_agents):
         script_all_pass(fake_agents)

@@ -345,7 +345,8 @@ class TestBriefNode:
         first = node(make_state())
         second = node(make_state(artifacts=first["artifacts"],
                                  brief_hashes=first["brief_hashes"]))
-        assert second == {"step_verdicts": {"brief": "pass"}, "failed": False}
+        assert second == {"step_verdicts": {"brief": "pass"}, "failed": False,
+                          "verified_state": {"brief": "coverage passed (4 sections)"}}
         assert fake_agents.agents_called() == [BRIEF_AGENT_NAME]
 
     def test_changed_inputs_rerun(self, runtime, fake_agents):
@@ -420,7 +421,8 @@ class TestBumpRegenerationGate:
                            retry_target="dev", brief_hashes={"brief": h},
                            artifacts={"brief": "B"})
         update = make_bump_node(runtime)(state)
-        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False}
+        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False,
+                          "failure_class": None}
 
     def test_changed_inputs_redirect_to_brief(self, runtime):
         step = runtime.cfg.steps[0]
@@ -466,7 +468,8 @@ class TestBumpRegenerationGate:
                            doc_sources={"plan.md": str(plan)},
                            brief_hashes={"brief": h}, artifacts={"brief": "B"})
         update = make_bump_node(runtime)(state)
-        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False}
+        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False,
+                          "failure_class": None}
 
     def test_no_brief_step_is_backward_compatible(self, tmp_path, fake_sandbox):
         state_dir = tmp_path / ".pr"; state_dir.mkdir()
@@ -479,7 +482,8 @@ class TestBumpRegenerationGate:
         state = make_state(attempt=1, step_verdicts={"dev": "fail"},
                            retry_target="dev", brief_hashes={})
         update = make_bump_node(rt)(state)
-        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False}
+        assert update == {"attempt": 2, "step_verdicts": {}, "failed": False,
+                          "failure_class": None}
 
 
 class TestDryRunBriefInputs:

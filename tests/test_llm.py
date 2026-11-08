@@ -163,6 +163,8 @@ class TestReasoningPassback:
                         id="call_2", name="read_file",
                         arguments='{"path":"b.md"}', origin="completion")],
                     reasoning_content=None),
+            Message(role="tool", tool_call_id="call_2", name="read_file",
+                    content=[TextContent(text="b contents")]),
         ]
 
         out = llm.format_messages_for_llm(messages)

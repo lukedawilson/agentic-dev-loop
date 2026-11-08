@@ -215,7 +215,8 @@ def commit(state: dict, params: dict) -> dict:
     if not state.get("commit_allowed", False):
         print(f"[{subject}] Skipping auto-commit - worktree was dirty at run "
               f"start; commit the constructed work manually.", flush=True)
-        return {}
+        return {"verified_state": {
+            "commit": "skipped: worktree dirty at run start"}}
     if "message" not in params:
         raise ValueError("commit action requires params.message "
                          "(a template rendered with {subject})")
@@ -235,10 +236,10 @@ def commit(state: dict, params: dict) -> dict:
         # permission problem) - its error is the diagnostic that matters.
         print(f"WARNING: [{subject}] auto-commit failed - git add: "
               f"{added.stderr.strip()}", file=sys.stderr, flush=True)
-        return {}
+        return {"verified_state": {"commit": "failed: add"}}
     if not _git(["status", "--porcelain"], cwd=cwd).stdout.strip():
         print(f"[{subject}] Nothing to commit.", flush=True)
-        return {}
+        return {"verified_state": {"commit": "nothing to commit"}}
     message = params["message"].format(subject=subject)
     result = _git(["-c", f"core.hooksPath={hooks}", "commit", "-m", message],
                   cwd=cwd)
@@ -247,7 +248,7 @@ def commit(state: dict, params: dict) -> dict:
         # not a pipeline failure.
         print(f"WARNING: [{subject}] auto-commit failed - commit manually.\n"
               f"{result.stderr.strip()}", file=sys.stderr, flush=True)
-        return {}
+        return {"verified_state": {"commit": "failed: commit"}}
     short = _git(["rev-parse", "--short", "HEAD"], cwd=cwd).stdout.strip()
     print(f"[{subject}] Committed constructed work as {short}.", flush=True)
-    return {}
+    return {"verified_state": {"commit": f"committed {short}"}}

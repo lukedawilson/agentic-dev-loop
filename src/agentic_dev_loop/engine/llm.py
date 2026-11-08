@@ -6,7 +6,10 @@ import os
 from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import LlmConfig
-from agentic_dev_loop.engine.provider_wire import adapter_for
+from agentic_dev_loop.engine.provider_wire import (adapter_for,
+                                                   validate_response_shape,
+                                                   validate_string_tool_results,
+                                                   validate_tool_call_pairing)
 from agentic_dev_loop.engine.secrets import (
     SecretResolutionError, resolve_secret_spec)
 
@@ -62,6 +65,8 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
                 d.pop("reasoning_content", None)
             if any(getattr(m, "reasoning_content", None) for m in messages):
                 raise _reasoning_stripped_error(self)
+            validate_string_tool_results(
+                messages, out, forced=bool(self.force_string_serializer))
             return out
 
         last = None
@@ -79,10 +84,41 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
                     d["reasoning_content"] = last
             elif rc:
                 d["reasoning_content"] = rc
+        validate_string_tool_results(
+            messages, out, forced=bool(self.force_string_serializer))
         return out
 
     _config_gated_reasoning_serializer._agentic_dev_loop_reasoning_repair = True
     LLM.format_messages_for_llm = _config_gated_reasoning_serializer
+
+
+_ORIGINAL_COMPLETION = LLM.completion
+_ORIGINAL_RESPONSES = LLM.responses
+
+
+def _wire_checked_completion(self, messages, *args, **kwargs):
+    """D-2 before the request, D-1 on the surfaced response (chat path)."""
+    validate_tool_call_pairing(messages)
+    response = _ORIGINAL_COMPLETION(self, messages, *args, **kwargs)
+    validate_response_shape(response)
+    return response
+
+
+def _wire_checked_responses(self, messages, *args, **kwargs):
+    """D-2 before the request; D-1 where the Responses shape exposes it."""
+    validate_tool_call_pairing(messages)
+    response = _ORIGINAL_RESPONSES(self, messages, *args, **kwargs)
+    validate_response_shape(response)
+    return response
+
+
+if not getattr(LLM.completion, "_agentic_dev_loop_wire_checked", False):
+    _wire_checked_completion._agentic_dev_loop_wire_checked = True
+    LLM.completion = _wire_checked_completion
+
+if not getattr(LLM.responses, "_agentic_dev_loop_wire_checked", False):
+    _wire_checked_responses._agentic_dev_loop_wire_checked = True
+    LLM.responses = _wire_checked_responses
 
 
 def resolve_api_key(cfg: LlmConfig, environ=None) -> str:
