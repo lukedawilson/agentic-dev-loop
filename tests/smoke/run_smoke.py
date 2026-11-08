@@ -51,9 +51,10 @@ SRC_DIR = REPO_ROOT / "src"
 # Model pins (probed 2026-11-06 against the real endpoints):
 # - openhands = DeepSeek: pro deepseek-v4-pro, flash deepseek-flash with
 #   reasoning_effort medium (mirrors agentic-dev-loop/pipeline.yaml).
-# - copilot = gpt-5.6-luna (pro) / gpt-4.1 (lite, flash profile).
-#   History: the Anthropic pins (claude-opus-5.5 pro / claude-sonnet-5.5
-#   flash) collapsed on agent steps (see planning-docs/059), and
+# - copilot = claude-opus-5.5 (pro) / claude-sonnet-5.5 (flash): re-testing
+#   the Anthropic models against the post-unit-11 engine. History: these
+#   Anthropic pins (claude-opus-5.5 pro / claude-sonnet-5.5 flash) collapsed
+#   on agent steps (see planning-docs/059), and
 #   kimi-k3 was unusable in agent loops because the Copilot gateway
 #   silently drops ARRAY-encoded tool-result content, which the
 #   openhands SDK sends by default for kimi (the dev agent worked blind;
@@ -96,7 +97,7 @@ PROVIDER_BLOCKS = {
     ),
     "copilot": (
         "llm:\n"
-        "  model: openai/gpt-5.6-luna\n"
+        "  model: openai/claude-opus-5.5\n"
         "  base_url: https://api.githubcopilot.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -108,7 +109,7 @@ PROVIDER_BLOCKS = {
         "    Openai-Intent: conversation-panel\n"
         "llms:\n"
         "  flash:\n"
-        "    model: openai/gpt-4.1\n"
+        "    model: openai/claude-sonnet-5.5\n"
         "    base_url: https://api.githubcopilot.com\n"
         "    api_key_secret:\n"
         "      from: file\n"
