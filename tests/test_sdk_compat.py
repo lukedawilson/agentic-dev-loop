@@ -161,6 +161,25 @@ def test_canary_sdk_wire_checks_still_wrap_completion_and_responses():
         "wrapping - the shim would recurse. Update COMPAT-SHIMS.md.")
 
 
+def test_canary_sdk_transport_call_merge_still_wrapped():
+    """Canary for the Copilot multi-choice merge shim (COMPAT-SHIMS.md): passes
+    while ``LLM._transport_call`` remains a plain class attribute the engine can
+    wrap. Fails once the SDK stops routing chat responses through that
+    attribute (a rename or an instance-level attribute) - replace the shim and
+    update COMPAT-SHIMS.md."""
+    from openhands.sdk import LLM
+
+    from agentic_dev_loop.engine import llm as engine_llm
+
+    assert getattr(LLM._transport_call, "_agentic_dev_loop_merge_checked", False), (
+        "LLM._transport_call is no longer the engine's merge-checked wrapper - "
+        "the Copilot multi-choice merge shim in llm.py is dead. Replace it and "
+        "update COMPAT-SHIMS.md.")
+    assert engine_llm._ORIGINAL_TRANSPORT_CALL is not LLM._transport_call, (
+        "The engine did not capture the SDK's original LLM._transport_call "
+        "before wrapping - the shim would recurse. Update COMPAT-SHIMS.md.")
+
+
 def test_canary_responses_wrapper_still_validates_the_surfaced_shape(
         monkeypatch):
     """The Responses-path wrapper must enforce D-1 on the surfaced response,

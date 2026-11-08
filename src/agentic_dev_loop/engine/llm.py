@@ -7,6 +7,7 @@ from openhands.sdk import LLM
 
 from agentic_dev_loop.core.config import LlmConfig
 from agentic_dev_loop.engine.provider_wire import (adapter_for,
+                                                   merge_choices,
                                                    validate_response_shape,
                                                    validate_string_tool_results,
                                                    validate_tool_call_pairing)
@@ -121,6 +122,25 @@ if not getattr(LLM.responses, "_agentic_dev_loop_wire_checked", False):
     LLM.responses = _wire_checked_responses
 
 
+# The Copilot gateway splits Anthropic-model turns across multiple choices
+# (narration-only choice + one choice per tool call); the SDK reads only
+# choices[0] inside LLM.completion, so the merge must happen BEFORE that read,
+# at the _transport_call boundary where the litellm ModelResponse is built.
+_ORIGINAL_TRANSPORT_CALL = LLM._transport_call
+
+
+def _merge_checked_transport_call(self, **kwargs):
+    ret = _ORIGINAL_TRANSPORT_CALL(self, **kwargs)
+    if getattr(self, "_agentic_dev_loop_merge_choices", False):
+        merge_choices(ret)
+    return ret
+
+
+if not getattr(LLM._transport_call, "_agentic_dev_loop_merge_checked", False):
+    _merge_checked_transport_call._agentic_dev_loop_merge_checked = True
+    LLM._transport_call = _merge_checked_transport_call
+
+
 def resolve_api_key(cfg: LlmConfig, environ=None) -> str:
     """Resolve the configured host-side key: the existing env mechanism, or
     the file-backed secret spec. Missing values fail fast naming the fix."""
@@ -156,4 +176,6 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
         force_string_serializer=adapter.force_string_serializer if adapter else None,
     )
     llm._agentic_dev_loop_reasoning_effort = effort
+    llm._agentic_dev_loop_merge_choices = (
+        adapter.merge_choices if adapter else False)
     return llm

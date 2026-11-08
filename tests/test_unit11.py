@@ -31,6 +31,7 @@ from agentic_dev_loop.engine.completion import (classify_completion,
 from agentic_dev_loop.engine.dryrun import _validate_agents
 from agentic_dev_loop.engine.graph import build_graph
 from agentic_dev_loop.engine.provider_wire import (WireShapeError,
+                                                   merge_choices,
                                                    validate_finish_shape,
                                                    validate_response_shape,
                                                    validate_string_tool_results,
@@ -317,6 +318,57 @@ class TestWireShape:
             "choices": [{"finish_reason": "tool_calls",
                          "message": {"tool_calls": [{"id": "c1"}]}}]})
         validate_response_shape(good)
+
+    def test_response_shape_validator_scans_all_choices(self):
+        # The Copilot gateway splits parallel tool calls and narration across
+        # choices; choices[0] can be narration with empty tool_calls while the
+        # real tool calls sit in choices[1..n]. That must not be a violation.
+        split = SimpleNamespace(raw_response={
+            "choices": [
+                {"finish_reason": "tool_calls",
+                 "message": {"content": "I'll run two commands",
+                             "tool_calls": []}},
+                {"finish_reason": "tool_calls",
+                 "message": {"tool_calls": [{"id": "c1"}]}},
+                {"finish_reason": "tool_calls",
+                 "message": {"tool_calls": [{"id": "c2"}]}},
+            ]})
+        validate_response_shape(split)
+
+    def test_response_shape_validator_raises_when_no_choice_has_tool_calls(self):
+        empty = SimpleNamespace(raw_response={
+            "choices": [
+                {"finish_reason": "tool_calls",
+                 "message": {"content": "narration", "tool_calls": []}},
+                {"finish_reason": "tool_calls", "message": {}},
+            ]})
+        with pytest.raises(WireShapeError, match="empty tool_calls"):
+            validate_response_shape(empty)
+
+    def test_merge_choices_collapses_narration_and_tool_calls(self):
+        def _choice(content, tool_calls):
+            msg = SimpleNamespace(content=content, tool_calls=tool_calls)
+            return SimpleNamespace(message=msg, finish_reason="tool_calls")
+
+        response = SimpleNamespace(choices=[
+            _choice("I'll run two commands", []),
+            _choice(None, [SimpleNamespace(id="c1")]),
+            _choice(None, [SimpleNamespace(id="c2")]),
+        ])
+        merge_choices(response)
+        assert len(response.choices) == 1
+        assert response.choices[0].message.content == "I'll run two commands"
+        assert [c.id for c in response.choices[0].message.tool_calls] == \
+            ["c1", "c2"]
+
+    def test_merge_choices_is_a_noop_for_a_single_choice(self):
+        response = SimpleNamespace(choices=[
+            SimpleNamespace(message=SimpleNamespace(content="done",
+                                                   tool_calls=[object()]),
+                            finish_reason="stop"),
+        ])
+        merge_choices(response)
+        assert len(response.choices) == 1
 
     def test_dangling_assistant_tool_call_is_rejected(self):
         dangling = [Message(
