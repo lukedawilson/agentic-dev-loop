@@ -14,6 +14,7 @@ from agentic_dev_loop.engine.run_status import (
     NoRunError,
     RunStatus,
     collect,
+    collect_latest,
     command_text,
     format_output,
     install_command,
@@ -172,6 +173,59 @@ def test_format_output_running_shows_verdicts_and_pending():
     assert "- Steps: dev=pass, review=in progress" in out
 
 
+# --- collect_latest (workspace discovery) -------------------------------
+
+def test_collect_latest_finds_latest_across_state_dirs(tmp_path):
+    runs_root = tmp_path / "runs"
+    _write_db(runs_root / "aaaa", [
+        ("t1", "c1", _checkpoint(ts="2026-11-08T00:00:00Z", outcome="success",
+                                 step_verdicts={"dev": "pass",
+                                                "review": "APPROVED"})),
+    ])
+    _write_db(runs_root / "bbbb", [
+        ("t2", "c1", _checkpoint(ts="2026-11-08T01:00:00Z",
+                                 subject="smoke-viz-provider",
+                                 step_verdicts={"dev": "pass",
+                                                "review": "APPROVED"})),
+    ])
+    rs = collect_latest(runs_root)
+    assert rs.thread_id == "t2"
+    assert rs.last_checkpoint == "2026-11-08T01:00:00Z"
+    assert rs.subject == "smoke-viz-provider"
+
+
+def test_collect_latest_no_runs_raises(tmp_path):
+    with pytest.raises(NoRunError):
+        collect_latest(tmp_path / "nonexistent")
+
+
+def test_collect_latest_skips_dirs_without_checkpoints(tmp_path):
+    runs_root = tmp_path / "runs"
+    (runs_root / "empty").mkdir(parents=True)
+    _write_db(runs_root / "real", [
+        ("t1", "c1", _checkpoint(ts="2026-11-08T00:00:00Z", outcome="success",
+                                 step_verdicts={"dev": "pass"})),
+    ])
+    rs = collect_latest(runs_root)
+    assert rs.thread_id == "t1"
+
+
+def test_collect_latest_builds_linear_mermaid(tmp_path):
+    runs_root = tmp_path / "runs"
+    _write_db(runs_root / "aaaa", [
+        ("t1", "c1", _checkpoint(ts="2026-11-08T00:00:00Z", outcome="success",
+                                 step_verdicts={"dev": "pass",
+                                                "review": "APPROVED"})),
+    ])
+    rs = collect_latest(runs_root)
+    assert rs.status == "DONE"
+    assert "dev --> review" in rs.mermaid
+    assert "review --> success" in rs.mermaid
+    out = format_output(rs)
+    assert "class success current;" in out
+    assert "class dev,review done;" in out
+
+
 # --- command_text / install --------------------------------------------
 
 def test_command_text_matches_repo_command_file():
@@ -205,6 +259,21 @@ def test_cli_run_status_install_uses_xdg_config_home(
     assert installed.exists()
     assert installed.read_text(encoding="utf-8") == command_text()
     assert str(installed) in out
+
+
+def test_cli_run_status_no_arg_discovers_latest(tmp_path, monkeypatch, capsys):
+    runs_root = tmp_path / "runs"
+    _write_db(runs_root / "aaaa", [
+        ("t1", "c1", _checkpoint(ts="2026-11-08T00:00:00Z", outcome="success",
+                                 step_verdicts={"dev": "pass",
+                                                "review": "APPROVED"})),
+    ])
+    monkeypatch.setenv("AGENTIC_DEV_LOOP_RUNS_ROOT", str(runs_root))
+    code = main(["run-status"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "===SUMMARY===" in out
+    assert "- Status: success" in out
 
 
 def test_default_commands_dir_respects_env(monkeypatch):
