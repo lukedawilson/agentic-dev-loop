@@ -872,6 +872,8 @@
     fetch("/topology").then(function (r) { return r.json(); }).then(function (d) {
       var subject = el("subject");
       if (subject) { subject.textContent = d.subject; }
+      var provider = el("provider");
+      if (provider && d.provider) { provider.textContent = d.provider; }
       topology = {
         nodes: d.nodes || [],
         flow: d.flow || [],

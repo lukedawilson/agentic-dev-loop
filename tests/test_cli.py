@@ -228,7 +228,7 @@ class TestViz:
             order.append("sweep")
 
         def fake_serve_viz(bus, topology, subject, port, nodes=(),
-                           flow=(), edges=()):
+                           flow=(), edges=(), provider=None):
             captured["bus"] = bus
             captured["topology"] = topology
             captured["subject"] = subject
@@ -236,6 +236,7 @@ class TestViz:
             captured["nodes"] = nodes
             captured["flow"] = flow
             captured["edges"] = edges
+            captured["provider"] = provider
             order.append("serve")
             return types.SimpleNamespace(server_address=("127.0.0.1", port)), \
                 object()
@@ -260,6 +261,7 @@ class TestViz:
         assert "bump" not in captured["nodes"]
         assert captured["subject"] == "plan plan.md"
         assert captured["port"] == 8321
+        assert captured["provider"] == "OpenAI"
         assert opened == ["http://127.0.0.1:8321"]
         assert sweep_calls == [(8321, "agentic-dev-loop", repo.resolve())]
         assert order == ["sweep", "serve"]

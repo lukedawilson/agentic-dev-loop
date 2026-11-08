@@ -367,12 +367,14 @@ class HeartbeatThread(threading.Thread):
 def _handler_class(bus: VizBus, topology_mermaid: str,
                    subject: str, nodes: Iterable[str],
                    flow: Iterable[dict] | None = None,
-                   edges: Iterable[dict] | None = None) -> type[BaseHTTPRequestHandler]:
+                   edges: Iterable[dict] | None = None,
+                   provider: str | None = None) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         viz_bus = bus
         viz_topology = topology_mermaid
         viz_subject = subject
+        viz_provider = provider
         viz_nodes = list(nodes)
         viz_flow = list(flow or ())
         viz_edges = list(edges or ())
@@ -392,6 +394,7 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
             elif self.path == "/topology":
                 body = json.dumps({"mermaid": self.viz_topology,
                                    "subject": self.viz_subject,
+                                   "provider": self.viz_provider,
                                    "nodes": self.viz_nodes,
                                    "flow": self.viz_flow,
                                    "edges": self.viz_edges})
@@ -445,7 +448,8 @@ class _ReuseSafeServer(ThreadingHTTPServer):
 def serve_viz(bus: VizBus, topology_mermaid: str, subject: str,
               port: int, nodes: Iterable[str] = (),
               flow: Iterable[dict] | None = None,
-              edges: Iterable[dict] | None = None) -> tuple[_ReuseSafeServer, threading.Thread]:
+              edges: Iterable[dict] | None = None,
+              provider: str | None = None) -> tuple[_ReuseSafeServer, threading.Thread]:
     """Bind a loopback HTTP server on ``port`` and serve it on a daemon
     thread. Returns ``(httpd, thread)`` - the caller reads the real bound
     port from ``httpd.server_address[1]``.
@@ -455,7 +459,7 @@ def serve_viz(bus: VizBus, topology_mermaid: str, subject: str,
     free port. Any other bind error (e.g. ``EACCES`` on a privileged port)
     still fails loud, naming ``--viz-port``."""
     handler = _handler_class(bus, topology_mermaid, subject, nodes,
-                             flow, edges)
+                             flow, edges, provider)
     try:
         httpd = _ReuseSafeServer(("127.0.0.1", port), handler)
     except OSError as exc:
