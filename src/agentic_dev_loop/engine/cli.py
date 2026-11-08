@@ -206,6 +206,71 @@ def _run_copilot_models(argv: list[str]) -> int:
     return 0
 
 
+def _report_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="agentic-dev-loop report",
+        description="Report accumulated agentic-dev-loop run history as "
+                    "read-only markdown.")
+    parser.add_argument("run_id", nargs="?", default=None,
+                        help="12-hex run dir name for a deep dive "
+                             "(default: aggregate report)")
+    parser.add_argument("--since", default=None,
+                        help="only threads starting at or after this ISO "
+                             "datetime")
+    parser.add_argument("--until", default=None,
+                        help="only threads starting before this ISO datetime")
+    parser.add_argument("--status", action="append", default=None,
+                        help="filter by status (success/failed/interrupted/"
+                             "running); repeatable or comma-separated")
+    parser.add_argument("--runs-root", default=None,
+                        help="runs root (default: $AGENTIC_DEV_LOOP_RUNS_ROOT "
+                             "or ~/.agentic-dev-loop/runs)")
+    parser.add_argument("--audit-dir", "--state-dir", dest="audit_dir",
+                        default=None,
+                        help="sandbox audit dir (default: "
+                             "$AGENTIC_DEV_LOOP_STATE_DIR or "
+                             "~/.agentic-dev-loop/state)")
+    return parser
+
+
+def _run_report(argv: list[str]) -> int:
+    from agentic_dev_loop.reporting import (
+        apply_filters, build_run_records, discover, find_run_dir,
+        pure_metrics, read_audit, read_dir, render_markdown, runs_root)
+
+    args = _report_parser().parse_args(argv)
+    root = runs_root(args.runs_root)
+    notice = None
+    if args.run_id is not None:
+        run_dir = find_run_dir(args.run_id, root)
+        if run_dir is None:
+            print(f"report: unknown run id: {args.run_id}", file=sys.stderr)
+            return 1
+        dirs = [run_dir]
+    else:
+        dirs = discover(root)
+        if not root.is_dir():
+            notice = f"runs root not found: {root}"
+    audit_pool = read_audit(args.audit_dir)
+    records = build_run_records([read_dir(path) for path in dirs], audit_pool)
+    filters = {key: getattr(args, key)
+               for key in ("since", "until", "status") if getattr(args, key)}
+    try:
+        records = apply_filters(
+            records, since=args.since, until=args.until,
+            statuses=args.status)
+    except ValueError as exc:
+        print(f"report: {exc}", file=sys.stderr)
+        return 1
+    if not records and notice is None:
+        notice = "no runs recorded" if not dirs else "no runs matched filters"
+    metrics = pure_metrics(records)
+    sys.stdout.write(render_markdown(
+        records, metrics, deep_dive=args.run_id is not None,
+        filters=filters, notice=notice))
+    return 0
+
+
 def build_parser(cfg_path) -> argparse.ArgumentParser:
     """The full parser for one pipeline: core flags + loader-contributed."""
     registry, _ = _registry_for(cfg_path)
@@ -226,6 +291,8 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
         return _run_copilot_login(argv[1:])
     if argv and argv[0] == "copilot-models":
         return _run_copilot_models(argv[1:])
+    if argv and argv[0] == "report":
+        return _run_report(argv[1:])
     if argv and argv[0] == "run-status":
         from .run_status import _run_status
         return _run_status(argv[1:])
