@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prose `VERDICT:` contract in those agent prompts with a `record_verdict`
   tool call; the pipeline now fails at load when the tool is missing.
 
+## [0.13.0] - 2026-11-08
+
+### Changed
+
+- `agentic-dev-loop report` renders accumulated run history as read-only ASCII markdown: an aggregate dashboard (loop health, TDD, review, and QA metrics with provenance labels) plus a per-run deep dive, with `--since` / `--until` / `--status` filters.
+
 ## [0.12.3] - 2026-11-08
 
 ### Changed
