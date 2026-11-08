@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `agentic-dev-loop report` renders accumulated run history as read-only
+  ASCII markdown: an aggregate dashboard (loop health, TDD, review, and QA
+  metrics with provenance labels) plus a per-run deep dive, with
+  `--since` / `--until` / `--status` filters.
+
 ### Changed
 
 - Unit-11 output-format robustness: agent-step completion is structural

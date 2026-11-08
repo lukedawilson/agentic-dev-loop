@@ -91,6 +91,11 @@ Other commands:
   mermaid flowchart with the current step highlighted, reading the run-state
   checkpoint database directly. `run-status --install` installs the bundled
   `/run-status` command into OpenCode.
+- `agentic-dev-loop report [<run-id>]` renders accumulated run history as
+  ASCII markdown: an aggregate dashboard by default (loop health, TDD,
+  review, and QA metrics with provenance labels) or a deep dive for one
+  12-hex run directory. `--since` / `--until` / `--status` filter the set.
+  Reporting is strictly read-only.
 - `agentic-dev-loop containers` inspects the engine's sandbox containers and
   networks from the host; `containers --reap` removes registry-owned orphans
   whose owner process is dead. A SIGTERM to a running pipeline still closes

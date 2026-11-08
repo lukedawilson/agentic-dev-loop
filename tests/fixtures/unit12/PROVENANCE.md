@@ -37,7 +37,7 @@ dev-lane red-then-green signal.
 
 ## Regenerating
 
-    .venv-sandbox/bin/python tests/fixtures/unit12/regen_fixture.py
+    .venv/bin/python tests/fixtures/unit12/regen_fixture.py
 
 Regeneration is not part of the test suite; the committed artifact is what the
 tests read.
