@@ -159,3 +159,15 @@ C) Intent-only for now (like units 6-8); implementation driven later outside AI-
 X) Other (please describe after [Answer]: tag below)
 
 [Answer]: A) 3-stage plan like unit-9: Functional Design -> Code Generation -> Build and Test; NFR/Infra stages N/A (user, 2026-11-07)
+
+## Manual follow-up: staged prompt files (2026-11-08)
+
+The new record_verdict agent contracts are staged inactive at
+agentic-dev-loop/sdk_agents/review.agent.md.new and qa.agent.md.new (the
+active prompts were restored to the HEAD prose contract so the
+pre-unit-11 pipx engine keeps running). After the code work lands and the
+record_verdict engine is installed, the operator must MANUALLY move each
+.new file over its active name and re-point tests/test_qa_prompt.py back
+at the active qa prompt. Until then the dogfood loop runs the old prose
+contract, and the new engine's B-2 load check refuses the old prompts by
+design. See construction/unit-11/code/review-2026-11-08.md.

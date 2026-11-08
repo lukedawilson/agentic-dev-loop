@@ -974,3 +974,31 @@ This highlighted brittleness in our loop - it can easily be tripped up by model 
 **Context**: CONSTRUCTION - unit-11 Functional Design approved; Code Generation handed to the user's dev loop.
 
 ---
+
+## Unit-11 review round 1 - M1 decision and feedback mechanics
+**Timestamp**: 2026-11-08T05:55:06Z
+**User Input**: "M1. Truncation should lead to the current NO VERDICT flow. Update the review accordingly.
+
+> Suggested next step: feed M1-M3 (and the two minors) back to the dev loop as the review findings
+
+How? Will you update the loop artefact with this review? Or just the AI-DLC docs?"
+**AI Response**: M1 reclassified as accepted design (verdict-step truncation with no record_verdict call fails structurally as no_verdict_tool); review amended, verdict remains NEEDS CHANGES on M2/M3 plus minors m4/m5. Explained the feedback mechanics: the crashed run is terminal and a new invocation starts with empty artifacts/notes, so writing into the old run dir reaches nothing; the channel that reaches the dev agent is the resolved unit docs (the aidlc extension rglobs aidlc-docs/construction/unit-11/), so the findings file lands at code/review-2026-11-08.md.
+**Context**: Unit-11 Code Generation, review round 1 packaging.
+
+---
+
+## Unit-11 review round 1 - packaging and truncation-edge answers
+**Timestamp**: 2026-11-08T05:56:30Z
+**User Input**: Question tool answers - "How should I package the review for the dev loop?" = "Docs + loop input file (Recommended)"; "Residual truncation edge: truncated + no captured prose currently retries instead of failing structurally. Include it in the findings?" = "Accept current behavior"
+**AI Response**: Wrote aidlc-docs/construction/unit-11/code/review-2026-11-08.md (amended review: required M2/M3, minor m4/m5, accepted decisions, outstanding acceptance items); appended the truncation amendment to functional-design/business-rules.md; updated aidlc-state.md (Current Stage + review round 1 section).
+**Context**: Unit-11 Code Generation, review round 1 packaging.
+
+---
+
+## Unit-11 - prompt staging to avoid the review-load crash
+**Timestamp**: 2026-11-08T06:02:00Z
+**User Input**: "I assume it will crash at the review stage again? Can we try to avoid this by telling the agent to save the new agent prompt as something like agent.prompt.md.new so the current dog food loop doesn't pick it up?"
+**AI Response**: Confirmed the crash would repeat with the pipx-installed pre-unit-11 engine (its registry has no record_verdict; review then qa). Staged the new contracts as agentic-dev-loop/sdk_agents/review.agent.md.new and qa.agent.md.new and restored the active prompts to the HEAD prose contract (verified byte-identical to HEAD). Checked test couplings: only tests/test_qa_prompt.py reads an active verdict prompt, so it is expected-red until the dev pass re-points it at the staged file (instruction added to code/review-2026-11-08.md, including the flip procedure). Onboarding templates keep the new contract; nothing loads *.new files.
+**Context**: Unit-11 Code Generation, crash avoidance for the next dogfood run.
+
+---

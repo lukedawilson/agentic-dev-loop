@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Functional Design for unit-11 (output-format robustness) APPROVED 2026-11-07 (FD-Q1 fail fast on conflicts; FD-Q2 verdict-only payload). Code Generation will be driven by the user via the agentic dev loop; docs committed and pushed. All intent Q1-Q5 answered (scope A-E; record_verdict tool; 059-fixture + live smoke acceptance; prose display-only; 3-stage plan). Prior: unit-10 WONTSHIP 2026-11-06 (reverted 526c802, superseded by planning-docs/058). Prior: unit-9 (viz redesign) COMPLETE 2026-11-04. Units 1-3, 5, 9 complete; units 4 and 10 WONTSHIP; units 6-8 intent-only.
+- **Current Stage**: CONSTRUCTION - Code Generation for unit-11 (output-format robustness), user-driven via the dev loop. Review round 1 (2026-11-08, operator static review): NEEDS CHANGES - required M2 (gate output mislabeled as claims) and M3 (COMPAT-SHIMS registry for the new wire monkeypatches), minor m4/m5; M1 truncation-on-verdict-step fail-fast accepted as intended; findings at aidlc-docs/construction/unit-11/code/review-2026-11-08.md. FD APPROVED 2026-11-07; docs committed f911676 and pushed. Prior: unit-10 WONTSHIP 2026-11-06; unit-9 COMPLETE 2026-11-04. Units 1-3, 5, 9 complete; units 4 and 10 WONTSHIP; units 6-8 intent-only.
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -217,3 +217,27 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
 - Status: open questions Q1-Q5 (scope, verdict channel shape, acceptance
   criteria, prose-artifact fate, AI-DLC stage plan) pending user answers;
   Functional Design next.
+
+### unit-11 Code Generation - review round 1 (2026-11-08)
+
+- Implementation exists uncommitted in the working tree (last commit
+  55bfe3b). Gate evidence: full suite 1337 passed, 50 skipped; unit-11
+  example tests 26 passed; PBT 5 passed.
+- Operator static review (review.agent.md as guide): NEEDS CHANGES.
+  Findings file: aidlc-docs/construction/unit-11/code/review-2026-11-08.md
+  (auto-resolved into the dev step's docs by the aidlc extension's rglob).
+- Operator decisions: M1 accepted (verdict-step truncation with no
+  record_verdict call fails structurally as no_verdict_tool; FD amended);
+  truncated-plus-empty-capture retry edge accepted as-is.
+- Open findings for the next dev pass: M2, M3 (required), m4, m5 (minor).
+- Outstanding acceptance: live Copilot smoke with Anthropic pins and
+  Responses-path D-5 parity (Build and Test gate).
+- Operational note: the crashed pass-4 run was version skew (pipx-installed
+  pre-unit-11 engine vs the working tree's record_verdict contract). The
+  next run must execute the in-flight repo code.
+- Prompt staging (2026-11-08): active sdk_agents review/qa prompts restored
+  to the HEAD prose contract so the pre-unit-11 pipx engine runs; new
+  record_verdict contracts staged inactive as review.agent.md.new and
+  qa.agent.md.new. test_qa_prompt.py re-point at the staged file is part of
+  the dev fix pass. Flip to active after the record_verdict engine is
+  installed.

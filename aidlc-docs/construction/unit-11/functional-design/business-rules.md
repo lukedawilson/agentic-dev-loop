@@ -134,3 +134,15 @@
   tests/test_outputs_pbt.py).
 - Example-based tests pin the 059 fixture and each failure class's routing
   (PBT-10, advisory: keep both).
+
+## Amendments (2026-11-08, review round 1)
+
+- A-5 / E (truncation): "truncation semantics unchanged" applies to
+  non-verdict steps only. On a verdict step, a truncated conversation with
+  no record_verdict call classifies as NO_VERDICT_TOOL and fails the run
+  structurally (operator decision, review round 1; see
+  ../code/review-2026-11-08.md). The empty-capture edge is accepted:
+  truncated with no captured prose still takes the capture_error
+  attempt-bounded retry.
+- PBT-03(a) alignment (noted by the dev step): zero-action NO_ACTIONS
+  classification applies to FINISHED conversations only.
