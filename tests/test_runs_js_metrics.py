@@ -73,6 +73,10 @@ const results = {
   escaped: metricCard("retry_target_frequency", {
     value: { "a&b": "<tag>" },
     availability: "available"
+  }),
+  snakeKeys: metricCard("retry_target_frequency", {
+    value: { write_plan: 3, run_tests: 2 },
+    availability: "available"
   })
 };
 process.stdout.write(JSON.stringify(results));
@@ -96,13 +100,13 @@ def render_cards(tmp_path):
 def test_dict_metric_renders_entries_not_object_tag(render_cards):
     html = render_cards["dict"]
     assert "[object Object]" not in html
-    assert "pass: 3" in html
-    assert "fail: 1" in html
+    assert "Pass: 3" in html
+    assert "Fail: 1" in html
 
 
 def test_dict_metric_entries_are_sorted(render_cards):
     html = render_cards["dict"]
-    assert html.index("fail: 1") < html.index("pass: 3")
+    assert html.index("Fail: 1") < html.index("Pass: 3")
 
 
 def test_scalar_metric_renders_unchanged(render_cards):
@@ -126,5 +130,19 @@ def test_missing_metric_keeps_unavailable_text(render_cards):
 def test_dict_metric_escapes_keys_and_values(render_cards):
     html = render_cards["escaped"]
     assert "[object Object]" not in html
-    assert "a&amp;b" in html
+    assert "A&amp;b" in html
     assert "&lt;tag&gt;" in html
+
+
+def test_dict_metric_keys_split_on_underscore_and_capitalised(render_cards):
+    html = render_cards["snakeKeys"]
+    assert "Write Plan: 3" in html
+    assert "Run Tests: 2" in html
+
+
+def test_metric_header_prettifies_snake_case_name(render_cards):
+    html = render_cards["snakeKeys"]
+    assert "Retry Target Frequency" in html, (
+        "metric card header must display the name prettified")
+    assert 'data-metric="retry_target_frequency"' in html, (
+        "the machine-readable data-metric attribute must stay snake_case")

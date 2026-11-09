@@ -13,11 +13,19 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  function prettyMetricName(value) {
+    return String(value || "").split("_").filter(function (word) {
+      return word.length > 0;
+    }).map(function (word) {
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(" ");
+  }
+
   function formatMetricValue(value) {
     if (value !== null && typeof value === "object"
         && !Array.isArray(value)) {
       var entries = Object.keys(value).sort().map(function (key) {
-        return esc(key) + ": " + esc(value[key]);
+        return esc(prettyMetricName(key)) + ": " + esc(value[key]);
       });
       return entries.length ? entries.join(", ") : "--";
     }
@@ -125,7 +133,7 @@
     var html = '<div class="metric-card' + (available ? "" : " unavailable")
       + '" data-metric="' + esc(name || (metric && metric.name)) + '">';
     html += '<div class="metric-head"><span class="metric-name">'
-      + esc(name || (metric && metric.name)) + "</span>"
+      + esc(prettyMetricName(name || (metric && metric.name))) + "</span>"
       + provenanceBadge(metric && metric.provenance) + "</div>";
     html += '<div class="metric-value">' + formatMetricValue(value) + "</div>";
     html += '<div class="metric-basis">' + esc(metric && metric.basis) + "</div>";

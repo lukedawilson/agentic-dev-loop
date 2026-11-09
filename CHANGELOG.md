@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.3] - 2026-11-09
+
+### Changed
+
+- The historical runs page now displays metric names as readable titles instead of snake_case keys, and its status filter checkboxes sit in a single row on desktop (stacking on narrow screens).
+
 ## [0.14.2] - 2026-11-09
 
 ### Changed

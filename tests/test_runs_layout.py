@@ -74,3 +74,19 @@ def test_filters_row_stays_one_line_on_desktop():
     assert (".runs-shell { padding: 12px; } "
             ".filters-row { flex-wrap: wrap; }") in css, (
         "filters may only wrap inside the 800px media query")
+
+
+def test_status_checkboxes_in_a_row_on_desktop():
+    css = _collapse(_read("styles.css"))
+    assert ".status-field { border: 0; padding: 0; margin: 0; display: block;" in css, (
+        "status fieldset inherits .field's flex column, stacking the four "
+        "checkboxes vertically on desktop; it must return to block flow")
+    assert ".status-field label { display: inline-flex;" in css, (
+        "status labels must stay inline so they share one row on desktop")
+
+
+def test_status_checkboxes_stack_on_mobile():
+    css = _collapse(_read("styles.css"))
+    assert (".filters-row { flex-wrap: wrap; } "
+            ".status-field label { display: flex; }") in css, (
+        "status labels may only stack vertically inside the 800px media query")

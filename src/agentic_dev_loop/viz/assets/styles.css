@@ -334,7 +334,7 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
   background: var(--cds-layer-01); color: var(--cds-text-primary);
   border: 1px solid var(--cds-border-strong-01); border-radius: var(--adl-radius);
 }
-.status-field { border: 0; padding: 0; margin: 0; }
+.status-field { border: 0; padding: 0; margin: 0; display: block; }
 .status-field legend { padding: 0; margin-bottom: 4px; }
 .status-field label { display: inline-flex; align-items: center; gap: 4px;
   text-transform: none; letter-spacing: 0; font-size: 12px;
@@ -422,5 +422,6 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
 @media (max-width: 800px) {
   .runs-shell { padding: 12px; }
   .filters-row { flex-wrap: wrap; }
+  .status-field label { display: flex; }
   .chart-grid { grid-template-columns: 1fr; }
 }
