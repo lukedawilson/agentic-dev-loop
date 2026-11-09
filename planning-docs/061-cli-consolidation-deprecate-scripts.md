@@ -1,4 +1,4 @@
-# 061 - CLI consolidation: deprecate scripts and the viz launcher
+# 061 - CLI consolidation: deprecate scripts and the viz launcher; add help surface
 
 > **Status: APPROVED**
 
@@ -20,6 +20,10 @@ scripts:
    `run-demo.sh` is deleted.
 6. Docs sweep: all launcher/trigger/demo references replaced by CLI
    documentation.
+7. `agentic-dev-loop help` and bare `agentic-dev-loop` print the command
+   list; top-level `--help`/`-h` shows the same list. All three paths
+   stay side-effect free (no pipeline, extension, or SDK imports), per
+   the lightweight-import pin in `tests/test_cli.py`.
 
 The `upgrade` command already exists (pipx install --force plus pin rewrite)
 and needs no change. Dev-only tooling stays out of scope: `run-smoke.sh`,
@@ -43,6 +47,11 @@ and needs no change. Dev-only tooling stays out of scope: `run-smoke.sh`,
   orchestration (doctor --fast, auto-upgrade, pin commit): dropped.
 - Doctor's `env-files` hard check (refuses `.env*` files inside the
   workspace) is kept unchanged for security.
+- Help surface: bare no-args and `help` print the command list and exit
+  0; top-level `--help`/`-h` prints the same list. `help` takes no
+  arguments. The remaining open items (top-level `--help` content,
+  `help`-with-extra-arguments behavior, bare no-args exit code) are
+  recorded under Open items.
 
 ## Design
 
@@ -51,7 +60,7 @@ and needs no change. Dev-only tooling stays out of scope: `run-smoke.sh`,
 - When omitted, resolve `agentic-dev-loop/pipeline.yaml` relative to the
   current working directory.
 - Bare invocation with no arguments at all shows the command list instead
-  of running (see 062); the default applies when run flags are present
+  of running (see section 7); the default applies when run flags are present
   without a positional.
 - If the default file does not exist, fail loudly with an error naming the
   searched path and the positional (`no pipeline at agentic-dev-loop/pipeline.yaml and none given`).
@@ -158,6 +167,82 @@ and needs no change. Dev-only tooling stays out of scope: `run-smoke.sh`,
 - Public-artefact rules apply: describe the product as it is now, no
   archaeology, ASCII only, unpinned install commands.
 
+### 7. Help surface (merged from 062)
+
+Current behavior: `main()` dispatches the eight subcommands via an
+`argv[0]` if-chain, then falls through to the two-phase pipeline path
+(probe parser with `pipeline` positional `nargs="?"`). Bare
+`agentic-dev-loop` delegates to `_core_parser().parse_args(argv)` and
+argparse exits 2 with the missing-pipeline error (no test pins this,
+verified). Top-level `--help` takes the same path and prints only
+run-path help; no subcommand list exists anywhere.
+`agentic-dev-loop PIPELINE --help` and per-subcommand `--help` already
+work and stay unchanged.
+
+Contract:
+
+- `agentic-dev-loop` (no arguments): print the command list, exit 0.
+- `agentic-dev-loop help`: print the same list, exit 0.
+- `agentic-dev-loop --help` / `-h`: print the same list, exit 0
+  (open item 1).
+- `agentic-dev-loop PIPELINE --help` and per-subcommand `--help`:
+  unchanged.
+- `help` takes no arguments (open item 2).
+
+The section 1 default pipeline still applies when run flags are present
+without a positional (e.g. `agentic-dev-loop --dry-run`), and an
+explicit positional wins as today.
+
+Help text: a module-level `_TOP_HELP` constant (static string, no
+imports). Content: run usage line plus the eight subcommands plus
+`help`, one line each, reusing the existing parser descriptions to
+avoid drift:
+
+```text
+usage: agentic-dev-loop [PIPELINE] [--resume THREAD_ID] [--max-attempts N]
+                        [--no-viz] [--viz-port PORT] [--dry-run] [--version]
+
+Run an OpenHands agent pipeline defined in YAML. PIPELINE defaults to
+agentic-dev-loop/pipeline.yaml; run `agentic-dev-loop <PIPELINE> --help`
+for loader-contributed options (e.g. --plan, --aidlc-unit).
+
+commands:
+  containers       Inspect engine sandbox containers and networks.
+  copilot-login    Run the GitHub device flow and store the Copilot OAuth token.
+  copilot-models   List the Copilot models available to this token's tier.
+  report           Serve the run-history browser view (--markdown for text).
+  run-status       Report the latest agentic-dev-loop run.
+  init             Write agentic-dev-loop pipeline and agent files.
+  doctor           Probe this host and repo for onboarding prerequisites.
+  upgrade          Install the latest engine release and rewrite the project pin.
+  help             Show this list.
+
+Run `agentic-dev-loop <command> --help` for per-command options.
+```
+
+The `report` line reflects section 2 (server default, `--markdown` for
+text); the `init` line already drops "trigger" (section 4).
+
+Mechanics, in `main()` (cli.py):
+
+- `if argv and argv[0] == "help": print(_TOP_HELP); return 0` added to
+  the dispatch chain.
+- `if not argv: print(_TOP_HELP); return 0` before the probe.
+- `--help`/`-h` override in the pipeline-None branch only: when
+  `known.pipeline is None` and argv contains `-h` or `--help`, print
+  `_TOP_HELP` and return 0 before delegating to `_core_parser()`. With a
+  pipeline present, argparse keeps handling `--help` (loader flags
+  included).
+
+All three paths run before any registry/loader import, preserving the
+side-effect-free pin.
+
+Drift guard: the one-liners are hand-written while the parser
+descriptions live in each `_run_*` parser. Add a drift test: construct
+each subcommand parser (all are lightweight, no SDK imports) and assert
+its `description` text appears in `_TOP_HELP`. This catches a
+renamed/redescribed subcommand without a runtime cost.
+
 ## Test impact summary
 
 - Update: `tests/test_unit12_reporting.py`, `tests/test_cli.py`,
@@ -169,3 +254,27 @@ and needs no change. Dev-only tooling stays out of scope: `run-smoke.sh`,
   loud error), `report` server mode and flag exclusivity.
 - Unaffected: `tests/test_unit13_runs_viz.py` (server module imports),
   doctor/checks tests, upgrade tests.
+- Add `TestHelp` in `tests/test_cli.py`:
+  - `main([])` returns 0 and prints all eight subcommand names plus the
+    usage line (capsys).
+  - `main(["help"])` prints the identical text.
+  - `main(["--help"])` prints the same list (SystemExit(0), per argparse
+    convention for other help paths).
+  - `main(["help", "extra"])` behaves per open item 2.
+  - Spot-check `main([PIPELINE, "--help"])` still includes loader flags.
+- Add the drift test (subcommand parser descriptions appear in
+  `_TOP_HELP`).
+- Extend `TestCliLightweightImports` to run `help` and bare invocation
+  in a clean interpreter, asserting no `openhands.sdk` / `langgraph` /
+  `engine.dryrun` / `engine.stages` imports.
+- No existing test pins the old bare no-args exit-2 behavior (verified),
+  so no test breaks.
+
+## Open items
+
+1. Top-level `--help`/`-h` showing the full list: proposed yes (today it
+   shows only run-path help, which hides the subcommands).
+2. `help` with extra arguments: proposed loud error ("help takes no
+   arguments"); alternative is `help <command>` printing that command's
+   `--help`.
+3. Bare no-args exit code: proposed 0 (matches `--help` convention).

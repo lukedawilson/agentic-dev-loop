@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.5] - 2026-11-09
+
+### Changed
+
+- The historical runs page now renders its rate gauges (catch rate, QA pass rate, review missed rate, red-then-green rates): the bundled charting library lacked gauge support, so those key stats rendered blank.
+
 ## [0.14.4] - 2026-11-09
 
 ### Changed

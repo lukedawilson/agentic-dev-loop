@@ -13,6 +13,7 @@ import http.client
 import importlib.util
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -216,12 +217,46 @@ class TestBuildPipeline:
 
     def test_vendored_echarts_is_pinned_and_ascii(self):
         vendor = (ROOT / "src" / "agentic_dev_loop" / "viz" / "assets"
-                  / "echarts.common.min.js")
+                  / "echarts.min.js")
         data = vendor.read_bytes()
-        assert len(data) == 715020
+        assert len(data) == 1122885
         assert hashlib.sha256(data).hexdigest() == (
-            "c86479a36f95b65d8135fc48dffbe1461a76b34e257d21b167eb5561e764b054")
+            "182157aedac7b25b5ea8f5d2ddb1a3a3eb6c3116492c157156ef6dda86270757")
         data.decode("ascii")
+
+    @pytest.mark.skipif(shutil.which("node") is None,
+                        reason="node required to exercise echarts")
+    def test_vendored_echarts_renders_gauge_series(self):
+        # Regression: the common bundle registered a gauge series that
+        # rendered nothing (empty SVG shell), leaving the key-stat gauges
+        # blank on the runs page. The vendored bundle must render real
+        # gauge output.
+        vendor = (ROOT / "src" / "agentic_dev_loop" / "viz" / "assets"
+                  / "echarts.min.js")
+        driver = r"""
+const fs = require("fs");
+const vm = require("vm");
+const code = fs.readFileSync(process.argv[1], "utf8");
+const ctx = {
+  console, setTimeout: () => 0, clearTimeout: () => 0,
+  setInterval: () => 0, clearInterval: () => 0,
+  requestAnimationFrame: () => 0, cancelAnimationFrame: () => 0
+};
+vm.createContext(ctx);
+vm.runInContext(code, ctx);
+const chart = ctx.echarts.init(null, null, {
+  renderer: "svg", ssr: true, width: 400, height: 300
+});
+chart.setOption({ series: [{ type: "gauge", data: [{ value: 50 }] }] });
+console.log(chart.renderToSVGString().length);
+process.exit(0);
+"""
+        result = subprocess.run(
+            ["node", "-e", driver, str(vendor)],
+            capture_output=True, text=True, timeout=60)
+        assert result.returncode == 0, result.stderr
+        svg_len = int(result.stdout.strip())
+        assert svg_len > 1000
 
 
 def _load_build_tool():

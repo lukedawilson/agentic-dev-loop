@@ -123,6 +123,9 @@ def test_trigger_upgrades_once_on_doctor_failure(tmp_path):
     """A failing doctor gate triggers exactly one engine upgrade."""
     counter = tmp_path / "doctor.calls"
     bin_dir = _stub_env(tmp_path, doctor_fail_count=1)
+    # Hermetic git: the script's pin-commit block must never touch the real
+    # repo (a dirty real pin would drive a real commit attempt here).
+    _make_git_stub(bin_dir, tmp_path, dirty=False)
 
     result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
 

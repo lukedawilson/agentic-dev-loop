@@ -7,10 +7,12 @@ server imports ``PAGE`` and ``RUNS_PAGE`` from it). The browser-side
 ``pipeline-layout.js`` is emitted from the normative reference
 implementation so the committed copy cannot silently diverge from it.
 
-The runs page inlines the pinned, vendored ECharts common bundle. Its
-SHA256 is checked before emission; the vendored copy is the ASCII-sanitized
-form of the upstream artifact (upstream SHA256
-61f13280aba3161f77fc801bf5f9c786f55f10432153a0683fc5cc0700b013d5).
+The runs page inlines the pinned, vendored ECharts bundle (the full build:
+the common build's gauge series registers but renders nothing, which left
+the key-stat gauges blank). Its SHA256 is checked before emission; the
+vendored copy is the ASCII-sanitized form of the upstream artifact
+(upstream SHA256
+b66b25aeb4df84e33199dc21694014d336d222cbd9deb0e5a7c14bd6aa0d0fd0).
 
 ``--check`` compares generated content with the committed files and exits
 non-zero on drift instead of writing.
@@ -32,18 +34,18 @@ PAGE_JS = ASSETS / "page.js"
 LAYOUT_JS = ASSETS / "pipeline-layout.js"
 RUNS_HTML = ASSETS / "runs.html"
 RUNS_JS = ASSETS / "runs.js"
-ECHARTS_JS = ASSETS / "echarts.common.min.js"
+ECHARTS_JS = ASSETS / "echarts.min.js"
 PAGE_PY = ROOT / "src" / "agentic_dev_loop" / "viz" / "page.py"
 REFERENCE_LAYOUT = ROOT / "planning-docs" / "design" / "pipeline-layout.js"
 
 STYLE_LINK = '<link rel="stylesheet" href="styles.css">'
 LAYOUT_SCRIPT = '<script src="pipeline-layout.js"></script>'
 PAGE_SCRIPT = '<script src="page.js"></script>'
-ECHARTS_SCRIPT = '<script src="echarts.common.min.js"></script>'
+ECHARTS_SCRIPT = '<script src="echarts.min.js"></script>'
 RUNS_SCRIPT = '<script src="runs.js"></script>'
 
 ECHARTS_SANITIZED_SHA256 = (
-    "c86479a36f95b65d8135fc48dffbe1461a76b34e257d21b167eb5561e764b054")
+    "182157aedac7b25b5ea8f5d2ddb1a3a3eb6c3116492c157156ef6dda86270757")
 
 PAGE_HEADER = '''"""The shipped viz pages.
 
