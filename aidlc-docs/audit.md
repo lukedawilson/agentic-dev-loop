@@ -1115,3 +1115,27 @@ Let's do some brainstorming and then feed into the unit intent"
 **Context**: CONSTRUCTION - unit-12 Functional Design stage complete.
 
 ---
+
+## Unit-12 marked complete; next unit directive
+**Timestamp**: 2026-11-09T10:00:00Z
+**User Input**: "Mark unit 12 as complete and move onto the next unit"
+**AI Response**: Marked unit-12 COMPLETE (2026-11-09) in aidlc-state.md with Code Generation (commit 3c7aa12, attempt 3/10 success) and Build and Test (verification + 1fc2c15 follow-up) entries. Next unit: unit-13 (reporting viz extension), starting Functional Design.
+**Context**: CONSTRUCTION - unit-12 closed; unit-13 FD begins.
+
+---
+
+## Unit-13 FD question answers (inline chat)
+**Timestamp**: 2026-11-09T11:30:00Z
+**User Input**: FD-Q1 "A: same server, separate page (Recommended)"; FD-Q2 first "A: per-request JSON + poll (Recommended)" then CHANGED to "B. Just refresh when you switch to the tab, plus the manual refresh button"; FD-Q3 "A but with charts - we need to do a software selection for charting software"; FD-Q4 "Defer - complete the FD and I'll run a software selection using our FD as an input"
+**AI Response**: All answers written back to the FD plan as they arrived; FD-Q4 recorded as deferred with chart slots + structured data shipped.
+**Context**: CONSTRUCTION - unit-13 Functional Design.
+
+---
+
+## Unit-13 Functional Design approval
+**Timestamp**: 2026-11-09T12:00:00Z
+**User Input**: "Approved, also acknowledge the spike result as updated in your docs"
+**AI Response**: FD approved. FD-Q4 resolved by the user-run selection: ECharts 6.1.0 common bundle (vendored, pinned SHA256 61f13280aba3161f77fc801bf5f9c786f55f10432153a0683fc5cc0700b013d5, Apache-2.0, SVG renderer, 715,020 bytes). FD docs updated to record the selection (plan FD-Q4 answer, domain-entities ChartSlot, BR-15, business-logic-model build pipeline + deferred list); aidlc-state.md unit-13 marked FUNCTIONAL DESIGN APPROVED with FD outcome. Selection process doc: planning-docs/unit-13-charting-selection.md (user-written, gates approved through Phase 5).
+**Context**: CONSTRUCTION - unit-13 Functional Design stage complete.
+
+---

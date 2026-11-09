@@ -242,7 +242,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   the dev fix pass. Flip to active after the record_verdict engine is
   installed.
 
-### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - FUNCTIONAL DESIGN APPROVED (2026-11-08)
+### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - COMPLETE (2026-11-09)
 
 - Intent document: aidlc-docs/unit-12-intent-reporting-cli.md (brainstormed
   with the user 2026-11-08; all three design sections approved)
@@ -270,8 +270,29 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   per-format output parsing; any write into run/state dirs (read-only).
 - Staging (D9): lean - Functional Design (EXTSRF probe of the LangGraph
   checkpoint format) -> user-driven Code Generation -> Build and Test.
+- Code Generation (2026-11-08): user-driven via the dev loop. Run succeeded
+  on attempt 3/10 at 2026-11-08T20:13:21Z (all steps pass); commit 3c7aa12
+  "feat: construct unit unit-12 (agent dev loop)" landed the full
+  implementation + fixture-based test rewrite: src/agentic_dev_loop/
+  reporting/{sources,metrics,render}.py, report subcommand,
+  .opencode/commands/loop-report.md, tests/test_unit12_reporting.py (27
+  tests), tests/fixtures/unit12/ (PROVENANCE.md + regen_fixture.py driving
+  the real engine; real sanitized msgpack dumps for 3 scenario dirs;
+  synthetic rows only for corrupt-blob and legacy-prose edges). Attempt-2
+  review had blocked on synthetic fixtures (postmortem fixture rule);
+  attempt 3 replaced them with real engine dumps.
+- Build and Test (2026-11-09): operator verification - fixtures confirmed
+  genuine (real decodable msgpack checkpoints, zero machine paths after
+  sanitization, regen script drives real graph/SqliteSaver/audit writer
+  with only Runtime.run_agent stubbed); 27 passed 0 failed; read-only
+  immutability confirmed (no -wal/-shm recreation). Follow-up 1fc2c15:
+  PROVENANCE.md regen path fixed to .venv/bin/python + CHANGELOG/README
+  report-command docs.
+- Note: current run-status rendering can show stale/'?' current-step during
+  long agent steps (store records step completions, not starts); fix
+  deferred to a future unit.
 
-### unit-13 (reporting viz extension) - INTENT RECORDED (2026-11-08)
+### unit-13 (reporting viz extension) - FUNCTIONAL DESIGN APPROVED (2026-11-09)
 
 - Intent document: aidlc-docs/unit-13-intent-viz-reporting.md (split from the
   combined reporting intent by user directive)
@@ -280,3 +301,18 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   module directly; historical backfill of the existing runs; unit-9
   hand-written skin and tokens.
 - Hard dependency on unit-12 (metrics module); ordering: unit-12 first.
+- FD outcome (2026-11-09): FD-Q1 same server, separate page (/runs +
+  /runs/<id> routes, History link on live page, --history launcher mode);
+  FD-Q2 no polling (refresh on tab switch + manual button, per-request
+  computation); FD-Q3 structured metric cards with provenance badges +
+  charts; FD-Q4 charting software selection resolved by user-run spike:
+  ECharts 6.1.0 common bundle (vendored, pinned SHA256
+  61f13280aba3161f77fc801bf5f9c786f55f10432153a0683fc5cc0700b013d5,
+  Apache-2.0, SVG renderer, 715,020 bytes inlined; a11y validated via AX
+  tree data exposure; Chart.js runner-up, hand-roll fallback). Selection
+  process + validated model: planning-docs/unit-13-charting-selection.md.
+  Artifacts: aidlc-docs/construction/unit-13/functional-design/
+  {domain-entities,business-rules,business-logic-model}.md + plan
+  (aidlc-docs/construction/plans/unit-13-functional-design-plan.md).
+- Filters (superseding the intent's D8 mention): unit-12 v1 filters only
+  (since/until/status); pipeline/workspace filters deferred by unit-12 FD-Q1.
