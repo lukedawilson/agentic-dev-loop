@@ -119,6 +119,7 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `html, body` | Page height, font stack and background; the app shell has no component wrapper. |
 | `button` | Reset for the header actions, stage headers and copy buttons. |
 | `:focus-visible` | A single product focus ring token (R45). |
+| `[hidden]` | Honour the HTML `hidden` attribute over utility display values; UA behaviour, not design. |
 
 ## Product tokens (no Carbon equivalent)
 
@@ -151,7 +152,8 @@ rules below) is the authoritative styling (R30, R60).
 | `.empty` | Empty-state text | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.facts` | Artifact fact list | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.field` | Filter field label | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.filters` | Filter control row | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.filters` | Filters panel | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.filters-row` | Filter controls row inside the panel | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr-link` | Header navigation link | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr-text` | Text header action | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-basis` | Metric basis caption | Component-class behaviour (status/layout skin); justified in the viz register |
