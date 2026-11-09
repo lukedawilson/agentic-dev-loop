@@ -21,7 +21,7 @@
 | --- | --- |
 | `src/agentic_dev_loop/viz/server.py` | Imports the generated PAGE; `_topology_parts` shared by `topology_mermaid` and new `topology_graph`; `/topology` adds `flow`/`edges`; `serve_viz` accepts them. |
 | `src/agentic_dev_loop/viz/__init__.py` | Exports `topology_graph`. |
-| `src/agentic_dev_loop/viz/__main__.py`, `src/agentic_dev_loop/engine/graph.py`, `viz_demo.py` | Serve the structured topology. |
+| `src/agentic_dev_loop/engine/graph.py`, `tests/smoke/viz_demo.py` | Serve the structured topology. |
 | `tests/test_viz.py` | Topology contract tests for `flow`/`edges`; page assertions for new ids; page-script harness renders layout stations instead of Mermaid. |
 | `frontend/scripts/lint-figma-primitives.mjs` | Optional `--assets`/`--register` mode; defaults unchanged. |
 | `.opencode/skills/frontend-development/SKILL.md` | Viz scope note. |

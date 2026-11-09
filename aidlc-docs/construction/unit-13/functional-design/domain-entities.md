@@ -52,10 +52,10 @@ Placeholder containers in the detail view (and aggregate view) where charts rend
 
 - **Descent**: FD-Q4 answer; planning-docs/unit-13-charting-selection.md (Phase 5 validated model).
 
-### HistoryMode (standalone launcher mode)
-`python -m agentic_dev_loop.viz --history [--port N]`: serves the runs view without a pipeline file; / and /runs serve RunsPage; /topology and /events are absent. Pipeline mode (`--pipeline`) keeps the live page AND serves the /runs routes (History link).
+### HistoryMode (report server mode)
+`agentic-dev-loop report [--port N] [--runs-root DIR] [--audit-dir DIR]`: serves the runs view without a pipeline file; / and /runs serve RunsPage; /topology and /events are absent. The live run viz keeps the live page AND serves the /runs routes (History link).
 
-- **Descent**: FD-Q1 A; viz/__main__.py current launcher.
+- **Descent**: FD-Q1 A; engine/cli.py report command.
 
 ## Relationship summary
 

@@ -14,7 +14,7 @@
 ### Run time (workflow execution)
 
 1. **First JS step** - capture clean-at-start: `git status --porcelain` emptiness → `commit_allowed` flag in workflow state, before any subagent work (FD-3, exact engine semantics).
-2. **Viz step** - launch `python -m agentic_dev_loop.viz`, server generates an ingest token → workflow state; URL surfaced (FD-4).
+2. **Viz step** - launch `agentic-dev-loop report`, server generates an ingest token → workflow state; URL surfaced (FD-4).
 3. **Per step**, in pipeline order:
    - `agent` step → subagent spawns, re-reads its `.agent.md` from the workspace (prompt reference, not embed - FD-1), produces its artifact.
    - `command` step → subagent runs the command in Claude Code's own environment; exit code = verdict (Q1/FR-4.4).

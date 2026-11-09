@@ -8,7 +8,7 @@ FD, NFR Requirements and Infrastructure Design are approved. The implementation 
 
 ## Dogfood pipeline compatibility (--aidlc-unit)
 
-The `agentic-dev-loop/pipeline.yaml` dogfood loop implements this plan through itself, invoked as `./trigger-agentic-dev-loop.sh --aidlc-unit unit-10` (or bare run with Current Stage autodetect). Hard constraints:
+The `agentic-dev-loop/pipeline.yaml` dogfood loop implements this plan through itself, invoked as `agentic-dev-loop agentic-dev-loop/pipeline.yaml --aidlc-unit unit-10` (or bare run with Current Stage autodetect). Hard constraints:
 
 - **The aidlc loader extension stays untouched.** `src/agentic_dev_loop/engine/extensions/aidlc.py` is a document loader feeding `build_context` - it is provider-agnostic and must not change. `tests/test_aidlc.py`, `tests/test_loaders.py`, and the `--aidlc-unit` e2e fixture (`tests/test_e2e_fixtures.py`) must stay green through every commit, including the pure move.
 - **This plan is the loop's build spec.** The loader resolves `aidlc-docs/construction/unit-10/**` plus `plans/unit-10-code-generation-plan.md` (bare-shape glob). The plan must remain precise enough for an agent to implement from. Later amendments to this plan file must not break the plans glob (keep the filename `unit-10-code-generation-plan.md`).
@@ -30,7 +30,7 @@ The `agentic-dev-loop/pipeline.yaml` dogfood loop implements this plan through i
 - [ ] 7. `engine/runtimes/factory.py`: `build_runtime(cfg, ctx)` dispatch + missing-extras fail-fast naming `pip install agentic-dev-loop[claude]` / `[copilot]`.
 - [ ] 8. `stages.py`: `Runtime.run_agent` becomes a thin dispatcher (resolve `RuntimeContext`, build runtime, run, translate `RuntimeResult` -> `AgentResult` per the FD translation table, close in finally). All graph-layer policy untouched.
 - [ ] 9. `tests/test_module_contract.py`: extend for the `runtimes` package if it pins layout (BR-10.10).
-- [ ] CHECKPOINT 1 GATE: full suite green (including `test_aidlc.py`, `test_loaders.py`, `test_e2e_fixtures.py`); zero behavior delta (existing tests unchanged except intentional contract updates); dogfood run `./trigger-agentic-dev-loop.sh --aidlc-unit unit-10` completes byte-identically to pre-change behavior.
+- [ ] CHECKPOINT 1 GATE: full suite green (including `test_aidlc.py`, `test_loaders.py`, `test_e2e_fixtures.py`); zero behavior delta (existing tests unchanged except intentional contract updates); dogfood run `agentic-dev-loop agentic-dev-loop/pipeline.yaml --aidlc-unit unit-10` completes byte-identically to pre-change behavior.
 
 ### Checkpoint 2 - claude driver
 
@@ -60,7 +60,7 @@ The `agentic-dev-loop/pipeline.yaml` dogfood loop implements this plan through i
 
 Who writes the code?
 
-A) **The dogfood loop implements it** (unit-5 precedent): the plan is the loop's build spec via `./trigger-agentic-dev-loop.sh --aidlc-unit unit-10`.
+A) **The dogfood loop implements it** (unit-5 precedent): the plan is the loop's build spec via `agentic-dev-loop agentic-dev-loop/pipeline.yaml --aidlc-unit unit-10`.
 
 B) **You implement inline in this session**, TDD, checkpoint by checkpoint, running the suite at each gate; I present checkpoint results as we go. (This answer is the explicit inline-implementation approval the repo's ASK-BEFORE-CODING rule requires.)
 

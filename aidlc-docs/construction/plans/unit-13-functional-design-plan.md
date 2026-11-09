@@ -1,7 +1,7 @@
 # Functional Design Plan - Unit 13 (Reporting Viz Extension)
 
 Unit intent: `aidlc-docs/unit-13-intent-viz-reporting.md` (approved 2026-11-08). Hard dependency on unit-12 (COMPLETE): consumes `reporting/sources.py` + `reporting/metrics.py` directly, no duplicated computation.
-Normative ground: live reads of viz/server.py, viz/__main__.py, viz/page.py, tools/build_viz_page.py, viz/assets/*, reporting/{sources,metrics,render}.py (unit-12 API), engine/graph.py:292 viz call.
+Normative ground: live reads of viz/server.py, engine/cli.py, viz/page.py, tools/build_viz_page.py, viz/assets/*, reporting/{sources,metrics,render}.py (unit-12 API), engine/graph.py:292 viz call.
 
 ## Requirements mapping (trace source: unit-13 intent doc)
 

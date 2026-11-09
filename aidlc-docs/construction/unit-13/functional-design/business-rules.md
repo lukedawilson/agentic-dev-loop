@@ -29,5 +29,5 @@ Numbered rules the implementation must honor. Rules trace to the intent doc (FR-
 
 ## Launcher and build
 
-- BR-17 LAUNCHER. `python -m agentic_dev_loop.viz --history [--port N]` serves the runs view with no --pipeline required; --pipeline mode is unchanged except for the added /runs routes. Port fallback and loud --viz-port errors keep existing behavior.
+- BR-17 REPORT SERVER. `agentic-dev-loop report [--port N] [--runs-root DIR] [--audit-dir DIR]` serves the runs view, blocks until ctrl+c, and prints the URL; the port falls back to a free one when busy. Markdown output is behind `--markdown` (with the optional run-id deep dive and --since/--until/--status filters); `--markdown` and `--port` are mutually exclusive. The live page keeps the /runs routes and the History link.
 - BR-18 BUILD PIPELINE. tools/build_viz_page.py is extended to emit both PAGE and RUNS_PAGE from viz/assets/*; the single-marker rule applies per template; a test asserts generated output equals the rebuilt output (drift guard).

@@ -1,6 +1,6 @@
 # Business Logic Model - Unit 13 (Reporting Viz Extension)
 
-Control flow for the historical runs view. No new data sources: everything flows through unit-12 reporting.sources + reporting.metrics. Changes land in: viz/server.py (routes), viz/assets/ (new runs.html/runs.js, shared styles.css), tools/build_viz_page.py (second generated page), viz/__main__.py (--history mode).
+Control flow for the historical runs view. No new data sources: everything flows through unit-12 reporting.sources + reporting.metrics. Changes land in: viz/server.py (routes), viz/assets/ (new runs.html/runs.js, shared styles.css), tools/build_viz_page.py (second generated page), engine/cli.py (report command).
 
 ## Request flows
 
@@ -17,12 +17,13 @@ Serve the generated RUNS_PAGE HTML (200 text/html). The client-side JS decides l
 
 - do_GET gains the four routes before the existing ones (BR-2); /events and /topology keep their behavior in pipeline mode; in history mode they are absent (BR-17).
 - The handler needs no topology data for the runs routes; the routes call reporting functions per request (BR-3), which use the default runs root and state dir (env-aware, unit-12 sources).
-- serve_viz keeps its existing signature for pipeline mode (graph.py:292 call site unchanged). History mode uses a new entry that serves the runs page without a topology (BR-17).
+- serve_viz keeps its existing signature for pipeline mode (graph.py:292 call site unchanged). serve_history serves the runs page without a topology, and the report command passes the --runs-root/--audit-dir overrides through it (BR-17).
 
-## Launcher (viz/__main__.py)
+## Report command (engine/cli.py)
 
-- New flag --history: no load_config, no pipeline file required; starts the same server with the runs routes and / serving the runs page; prints the bound URL (existing port-fallback behavior).
-- --pipeline mode: unchanged topology flow, plus the /runs routes and the live-page History link (BR-14).
+- Default mode: no load_config, no pipeline file required; starts serve_history with the runs routes and / serving the runs page, prints the bound URL (existing port-fallback behavior), and blocks until ctrl+c.
+- --markdown mode: renders the same records as ASCII markdown, including the optional run-id deep dive and --since/--until/--status filters.
+- The live run viz keeps the unchanged topology flow, plus the /runs routes and the live-page History link (BR-14).
 
 ## Client flow (viz/assets/runs.js)
 

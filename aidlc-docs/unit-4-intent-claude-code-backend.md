@@ -149,7 +149,7 @@ Two facts shape its Unit 4 fit:
   `run_pipeline` (graph.py): it translates the live `graph.invoke` stream and
   tees stdout/stderr. In workflow mode that runner is bypassed - subagent
   activity happens inside Claude Code, invisible to the engine's bus.
-- **It is event-driven by design.** `viz_demo.py` already drives the full viz
+- **It is event-driven by design.** `tests/smoke/viz_demo.py` already drives the full viz
   surface from fabricated events - no pipeline, no checkpoints, no LLM -
   proving the viz does not care where events come from.
 
@@ -226,7 +226,7 @@ engine side of the division of labor:
   localhost); open questions 9–11 cover subagent-side visibility, terminal
   output, and URL surfacing.
 - Fallback if the viz must not live in the engine process: the event log is
-  bus-shaped, so a `viz_demo`-style harness can replay a saved run - same
+  bus-shaped, so a `tests/smoke/viz_demo.py`-style harness can replay a saved run - same
   page, no engine. Not the target; kept as an option.
 
 **Agent terminal output.** Today the console stream works because the agent

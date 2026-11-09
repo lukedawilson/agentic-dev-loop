@@ -1,6 +1,6 @@
 # 061 - CLI consolidation: deprecate scripts and the viz launcher; add help surface
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 

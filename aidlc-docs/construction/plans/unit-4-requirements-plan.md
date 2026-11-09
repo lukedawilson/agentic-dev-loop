@@ -37,7 +37,7 @@ Prior analysis basis: `aidlc-docs/unit-4-intent-claude-code-backend.md` (pillars
 
 ### Q6 - Visualiser in workflow mode
 
-[Answer]: A - subagent-launched live server. A workflow step's subagent starts `python -m agentic_dev_loop.viz` in the background (free-port fallback) and emits the URL into chat/state; each step's subagent POSTs stage events to the server's local HTTP ingest endpoint; browser keeps the live SSE stream. Viz gains a small write path (POST events) alongside its read path (SSE); engine mode keeps its in-process VizBus unchanged. (Raw: "A")
+[Answer]: A - subagent-launched live server. A workflow step's subagent starts `agentic-dev-loop report` in the background (free-port fallback) and emits the URL into chat/state; each step's subagent POSTs stage events to the server's local HTTP ingest endpoint; browser keeps the live SSE stream. Viz gains a small write path (POST events) alongside its read path (SSE); engine mode keeps its in-process VizBus unchanged. (Raw: "A")
 
 ### Q7 - Verdict protocol and retry loops in workflow mode
 
@@ -49,7 +49,7 @@ Claude Code's install-time feedback on the shipped skill was evaluated and verif
 
 ### R2-Q1 - Visualiser in the claude-code target
 
-[Answer]: Viz is NON-NEGOTIABLE. Raw: "without viz, this whole adapter is pointless. So either it's possible to do viz, or we forget about plugging this into Claude". Resolution: viz IS possible via agent mediation - a step-agent launches `python -m agentic_dev_loop.viz pipeline.yaml` (agents have full tools incl. Bash; server parses topology itself via core and serves SSE), later step-agents POST stage events to the ingest endpoint (prompt-instructed, best-effort), final agent terminates the server (or TTL). Event emission = prompt-enforced best-effort observability (not a security boundary); the /workflows progress view remains the guaranteed fallback; verdict routing stays deterministic in the script.
+[Answer]: Viz is NON-NEGOTIABLE. Raw: "without viz, this whole adapter is pointless. So either it's possible to do viz, or we forget about plugging this into Claude". Resolution: viz IS possible via agent mediation - a step-agent launches `agentic-dev-loop report` (agents have full tools incl. Bash; the server serves the runs view and SSE), later step-agents POST stage events to the ingest endpoint (prompt-instructed, best-effort), final agent terminates the server (or TTL). Event emission = prompt-enforced best-effort observability (not a security boundary); the /workflows progress view remains the guaranteed fallback; verdict routing stays deterministic in the script.
 
 ### R2-Q2 - Prompt strategy in the claude-code target (BR-5)
 

@@ -44,7 +44,7 @@ flowchart TD
 - `agent-engine/sdk_agents/review.agent.md` - review agent (tools: terminal, file_editor).
 - `agent-engine/sdk_agents/qa.agent.md` - qa agent (tools: terminal only).
 - `tests/` - 16 test files (conftest, sample_ext, per-module tests, e2e fixtures, sdk compat).
-- `viz_demo.py` - scripted viz replay demo (no live pipeline).
+- `tests/smoke/viz_demo.py` - scripted viz replay demo (no live pipeline).
 - `COMPAT-SHIMS.md` - registry of SDK monkeypatches with removal criteria.
 - `README.md` - user documentation.
 - `AGENTS.md` - agent instructions for this repo (incl. AI-DLC invocation).

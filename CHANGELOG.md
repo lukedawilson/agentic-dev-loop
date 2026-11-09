@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-09
+
+### Changed
+
+- `agentic-dev-loop report` now serves the run-history browser view by default, blocking until ctrl+c and printing the URL; the ASCII markdown report moved behind `--markdown`.
+- `PIPELINE` is optional and defaults to `agentic-dev-loop/pipeline.yaml` relative to the current directory; a missing default fails loudly.
+- Bare `agentic-dev-loop`, `agentic-dev-loop help`, and top-level `--help`/`-h` print the command list. `help` takes no arguments.
+- The run path accepts `--env FILE` to load secrets from a host env file outside the workspace; values already set in the process environment win.
+- The standalone viz launcher (`python -m agentic_dev_loop.viz`) and `trigger-agentic-dev-loop.sh` are gone; doctor, upgrade, and pin commits are explicit operator steps instead of trigger orchestration.
+### Consumer adoption
+Consumer repos running `trigger-agentic-dev-loop.sh` switch to invoking `agentic-dev-loop` directly: PIPELINE defaults to `agentic-dev-loop/pipeline.yaml`, secrets come from the process environment or `--env FILE`, and `doctor` and `upgrade` are run explicitly; the removed orchestration (doctor gate, auto-upgrade, pin commit) has no replacement.
+
 ## [0.14.5] - 2026-11-09
 
 ### Changed

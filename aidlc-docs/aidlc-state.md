@@ -306,7 +306,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   results, PROVENANCE.md with upstream + sanitized SHA256); dev-loop run
   pending, user-driven.
 - FD outcome (2026-11-09): FD-Q1 same server, separate page (/runs +
-  /runs/<id> routes, History link on live page, --history launcher mode);
+  /runs/<id> routes, History link on live page, report server mode);
   FD-Q2 no polling (refresh on tab switch + manual button, per-request
   computation); FD-Q3 structured metric cards with provenance badges +
   charts; FD-Q4 charting software selection resolved by user-run spike:

@@ -81,7 +81,12 @@ agentic-dev-loop agentic-dev-loop/pipeline.yaml            # run it
 | `--dry-run` | Full load-and-validate pass, then print the resolved plan. No LLM, no Docker, no state writes, no API key. Exit `0` on a clean load. |
 | `--resume <thread-id>` | Continue the latest checkpoint of a previous run (crash, Ctrl-C, exhaustion) with all accumulated notes intact. |
 | `--max-attempts <n>` | Override the pipeline's `max_attempts`. |
+| `--env <file>` | Load secrets from a host env file outside the workspace. Optional: the process environment is the default, a named-but-missing file is a loud error, and values already set in the environment win. |
 | `--no-viz` / `--viz-port <port>` | Suppress the live graph view / set a preferred port (default 8321; falls back to a free port when busy). |
+
+`PIPELINE` is optional and defaults to `agentic-dev-loop/pipeline.yaml`
+(relative to the current directory). Run flags without a positional use that
+default; a missing default fails loudly instead of falling back.
 
 Exit code is `0` on pipeline success, `1` otherwise.
 
@@ -91,18 +96,19 @@ Other commands:
   mermaid flowchart with the current step highlighted, reading the run-state
   checkpoint database directly. `run-status --install` installs the bundled
   `/run-status` command into OpenCode.
-- `agentic-dev-loop report [<run-id>]` renders accumulated run history as
-  ASCII markdown: an aggregate dashboard by default (loop health, TDD,
+- `agentic-dev-loop report` serves the **historical runs view** in the
+  browser (default port 8321, falling back to a free port when busy; blocks
+  until ctrl+c and prints the URL). It reads the same run records as the
+  markdown report and lists past runs with since / until / status filters,
+  an aggregate metrics panel, and a per-run detail page carrying the brief,
+  implementation summary, review findings, and QA report. The live viz also
+  links to it from the **History** button in the graph page header (or
+  `/runs`).
+- `agentic-dev-loop report --markdown [<run-id>]` renders the same history
+  as ASCII markdown instead: an aggregate dashboard (loop health, TDD,
   review, and QA metrics with provenance labels) or a deep dive for one
   12-hex run directory. `--since` / `--until` / `--status` filter the set.
-  Reporting is strictly read-only.
-- The live viz also serves a **historical runs view**: click **History** in
-  the graph page header (or open `/runs`), or launch it standalone with
-  `python -m agentic_dev_loop.viz --history`, which needs no pipeline file
-  (default port 8321, falling back to a free port when busy). It lists past
-  runs with since / until / status filters, an aggregate metrics panel, and
-  a per-run detail page carrying the brief, implementation summary, review
-  findings, and QA report.
+  `--markdown` cannot be combined with `--port`.
 - `agentic-dev-loop containers` inspects the engine's sandbox containers and
   networks from the host; `containers --reap` removes registry-owned orphans
   whose owner process is dead. A SIGTERM to a running pipeline still closes
@@ -444,20 +450,20 @@ agentic-dev-loop init --profile python        # or: --profile dotnet-node
 ```
 
 `init` writes the onboarding surface from a bundled toolchain profile:
-`agentic-dev-loop/pipeline.yaml`, the three agent files, an executable
-`trigger-agentic-dev-loop.sh`, `agentic-dev-loop/.engine-version` (the exact
-installed engine version), any missing premise files, gitignore additions,
-and an env-file template. It detects solution files, `package.json`
-directories, lockfiles, README, and AGENTS.md, asks only what detection
-cannot answer, and refuses to overwrite an existing `agentic-dev-loop/`
-directory. A consumer-authored profile file can be passed by path instead of
-a bundled name.
+`agentic-dev-loop/pipeline.yaml`, the three agent files,
+`agentic-dev-loop/.engine-version` (the exact installed engine version), any
+missing premise files, gitignore additions, and an env-file template. It
+detects solution files, `package.json` directories, lockfiles, README, and
+AGENTS.md, asks only what detection cannot answer, and refuses to overwrite
+an existing `agentic-dev-loop/` directory. A consumer-authored profile file
+can be passed by path instead of a bundled name.
 
-`agentic-dev-loop doctor --fast` is the per-run gate the trigger runs first:
-hard failures abort the run (engine pin mismatch, engine runtime
+`agentic-dev-loop doctor --fast` probes the host and repo before you run:
+hard failures stop you here (engine pin mismatch, engine runtime
 availability, API version, git repo, `.env*` files); warnings print and
-continue. On a hard failure the trigger runs `agentic-dev-loop upgrade`
-exactly once, then the run fails hard if doctor still fails.
+continue. `agentic-dev-loop upgrade` installs the latest engine release and
+rewrites the pin, so the host install and the committed pin converge in one
+explicit action. Run both yourself; the CLI never runs them for you.
 
 A consumer repo needs a pipeline file and the agent files it names, both
 committed before the first run. `init` writes them; the layout is:
@@ -570,7 +576,7 @@ export OPENAI_API_KEY=...                     # set your LLM key in the host env
 python -m pytest tests/ -q                    # fast suite (in-repo .venv is for tests only)
 python -m pytest tests/ -q -m "not docker"    # skip engine-dependent tests
 agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run   # run the shipped pipeline
-./run-demo.sh                                 # viz demo - scripted run replay, no pipeline needed
+.venv-sandbox/bin/python tests/smoke/viz_demo.py  # viz demo - scripted replay, no pipeline needed
 ```
 
 - `setup-venv.sh` builds the throwaway `.venv` for local `pytest` runs. The
