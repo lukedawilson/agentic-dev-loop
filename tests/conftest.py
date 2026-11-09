@@ -6,10 +6,10 @@ import os
 import sys
 from pathlib import Path
 
-# `viz_demo.py` lives at the repo root (a demo script, not part of the
-# package), and plain `pytest` does not put the working directory on
-# sys.path (unlike `python -m pytest`). Insert the repo root - idempotently -
-# so the suite passes under any invocation, including CI.
+# Human-run smoke tools live under tests/smoke (namespace packages). Plain
+# `pytest` does not put the working directory on sys.path (unlike
+# `python -m pytest`), so insert the repo root - idempotently - to import
+# `tests.smoke.viz_demo` under any invocation, including CI.
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)

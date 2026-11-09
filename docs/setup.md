@@ -61,12 +61,13 @@ agentic-dev-loop init --profile ./my-profile.yaml --recipe python
 
 `init` detects solution files, `package.json` directories, lockfiles, README,
 AGENTS.md, and a conformance script; asks only what it cannot detect; and
-writes `agentic-dev-loop/pipeline.yaml`, the agent files, an executable
-`trigger-agentic-dev-loop.sh`, `agentic-dev-loop/.engine-version`, missing
-premise files, gitignore additions, and an env-file template. It refuses to
-overwrite an existing `agentic-dev-loop/` directory.
+writes `agentic-dev-loop/pipeline.yaml`, the agent files,
+`agentic-dev-loop/.engine-version`, missing premise files, gitignore
+additions, and an env-file template. It refuses to overwrite an existing
+`agentic-dev-loop/` directory.
 
-`doctor` is the per-run host gate the trigger runs before every run:
+`doctor` probes the host and repo before every run. Run it yourself: the CLI
+never runs doctor or upgrade for you.
 
 ```bash
 agentic-dev-loop doctor --fast      # per-run gate: hard failures abort
@@ -83,9 +84,13 @@ quick network round trip; the pin-vs-latest check stays in.
 
 `agentic-dev-loop upgrade` installs the latest release with pipx and rewrites
 `.engine-version` to the installed version, so the host install and the
-committed pin converge in one action. The trigger script runs it
-automatically when doctor fails hard; upgrading the pipx install updates the
-project reference on the next run, with no separate pin edit.
+committed pin converge in one explicit action. Run it when doctor reports a
+pin mismatch.
+
+Secrets live in the host environment. A run reads the process environment by
+default; pass `--env FILE` to load a host env file outside the workspace. A
+named-but-missing file fails loudly, and values already set in the process
+environment win over the file.
 
 ## 3. Writing pipeline.yaml
 

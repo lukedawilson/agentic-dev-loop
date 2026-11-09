@@ -24,13 +24,17 @@ def _resolve(name: str, env: dict | None) -> str | None:
     return shutil.which(name)
 
 
-def run_upgrade(argv: list[str], *, workspace: Path | None = None,
-                env: dict | None = None) -> int:
+def _upgrade_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop upgrade",
         description="Install the latest engine release and rewrite the "
-                    "project pin file to match.")
-    parser.parse_args(argv)
+                    "project pin.")
+    return parser
+
+
+def run_upgrade(argv: list[str], *, workspace: Path | None = None,
+                env: dict | None = None) -> int:
+    _upgrade_parser().parse_args(argv)
 
     root = Path(workspace or Path.cwd()).resolve()
     pipx = _resolve("pipx", env)

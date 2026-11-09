@@ -311,7 +311,7 @@ def install_command(dest_dir: Path | None = None) -> Path:
     return target
 
 
-def _run_status(argv: list[str]) -> int:
+def _run_status_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop run-status",
         description="Report the latest agentic-dev-loop run.",
@@ -330,7 +330,11 @@ def _run_status(argv: list[str]) -> int:
         help="install the /run-status OpenCode command into the consumer "
         "commands directory and exit",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _run_status(argv: list[str]) -> int:
+    args = _run_status_parser().parse_args(argv)
 
     if args.install:
         target = install_command()

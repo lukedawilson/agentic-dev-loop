@@ -114,10 +114,10 @@ def _sort_key(record: RunRecord) -> tuple[str, str]:
     return (record.ts_start or "", record.thread_id)
 
 
-def _read_record_dirs() -> tuple[list[DirData], list[str]]:
+def _read_record_dirs(runs_root: str | None = None) -> tuple[list[DirData], list[str]]:
     dirs: list[DirData] = []
     notices: list[str] = []
-    for path in discover():
+    for path in discover(runs_root):
         data = read_dir(path)
         dirs.append(data)
         if data.notice:
@@ -129,10 +129,12 @@ def list_payload(
     since: str | None = None,
     until: str | None = None,
     statuses: list[str] | None = None,
+    runs_root: str | None = None,
+    audit_dir: str | None = None,
 ) -> dict:
     """Recompute the runs list for the current filters (BR-3, BR-7)."""
-    dirs, notices = _read_record_dirs()
-    audit = read_audit()
+    dirs, notices = _read_record_dirs(runs_root)
+    audit = read_audit(audit_dir)
     records = build_run_records(dirs, audit)
     filtered = apply_filters(records, since, until, statuses or [])
     filtered.sort(key=_sort_key, reverse=True)
@@ -185,13 +187,15 @@ def _attempts_payload(record: RunRecord) -> list[dict]:
     ]
 
 
-def detail_payload(run_id: str) -> dict | None:
+def detail_payload(run_id: str,
+                   runs_root: str | None = None,
+                   audit_dir: str | None = None) -> dict | None:
     """Per-run detail, or ``None`` when the run dir is unknown (BR-6)."""
-    path: Path | None = find_run_dir(run_id)
+    path: Path | None = find_run_dir(run_id, runs_root)
     if path is None:
         return None
     data = read_dir(path)
-    audit = read_audit()
+    audit = read_audit(audit_dir)
     records = build_run_records(data, audit)
     metrics = pure_metrics(records, audit)
     threads = []

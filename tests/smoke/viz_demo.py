@@ -3,20 +3,20 @@
 Serves the real embedded page + the real self-loop topology (built from
 agentic-dev-loop/pipeline.yaml, no LLM construction), then publishes a scripted
 run to the bus so every visual state can be eyeballed in the browser: pending
-→ running → passed/failed nodes across the FULL chain (brief, deps, dev,
+-> running -> passed/failed nodes across the FULL chain (brief, deps, dev,
 restore, test, review, qa, commit, success), verdict badges (qa fails its
 verdict on attempt 1, the retry resets verdicts and re-runs dev through qa on
 attempt 2), the attempt counter, the scrolling event log, and the
 run_finished banner.
 
 Usage:
-    .venv-sandbox/bin/python viz_demo.py [--port 8321] [--scenario success|failure]
+    .venv-sandbox/bin/python tests/smoke/viz_demo.py [--port 8321] [--scenario success|failure]
                                  [--no-browser] [--flood N]
 
 --flood N makes the attempt-1 dev node publish N console lines while it
 "runs", so the sidebar's tailing can be eyeballed: the stage panel should
 stay pinned to the bottom as lines stream in, and past 500 lines a
-"…N lines omitted" counter should appear at the top while the last lines
+"...N lines omitted" counter should appear at the top while the last lines
 stay visible. N must exceed ~13 to overflow the 240px panel and 500 to hit
 the eviction path (600 is a good default).
 
@@ -33,10 +33,15 @@ import time
 import webbrowser
 from pathlib import Path
 
-from agentic_dev_loop import viz
-from agentic_dev_loop.core.config import load_config
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SRC_DIR = REPO_ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-EXAMPLE = Path(__file__).parent / "agentic-dev-loop" / "pipeline.yaml"
+from agentic_dev_loop import viz  # noqa: E402 - src/ inserted first
+from agentic_dev_loop.core.config import load_config  # noqa: E402
+
+EXAMPLE = REPO_ROOT / "agentic-dev-loop" / "pipeline.yaml"
 SUBJECT = "plan demo.md"
 
 NODE_GAP = 1.0    # between nodes - the pace a watcher sees
@@ -83,8 +88,8 @@ SUCCESS_LINES = ("[demo] run complete - all steps passed",)
 def emit_node(bus: viz.VizBus, name: str, state: dict | None = None,
               ok: bool = True, flood: int = 0, kind: str = "agent",
               lines: tuple[str, ...] = ()) -> None:
-    """One node's real event cadence: started → console → heartbeat → state →
-    heartbeat → finished, so the elapsed line is eyeballable without an LLM.
+    """One node's real event cadence: started -> console -> heartbeat -> state ->
+    heartbeat -> finished, so the elapsed line is eyeballable without an LLM.
 
     ``kind="agent"`` (default) makes the node look like an SDK conversation
     (one yellow "[SDK] step 1 - thinking" stderr line). ``kind="command"``
@@ -124,12 +129,12 @@ def emit_node(bus: viz.VizBus, name: str, state: dict | None = None,
 
 def run_scenario(bus: viz.VizBus, scenario: str, flood: int = 0,
                  max_attempts: int | None = None) -> None:
-    """Fabricate one run over the REAL pipeline topology: brief → deps → dev
-    → restore → test → review → qa → commit → success.
+    """Fabricate one run over the REAL pipeline topology: brief -> deps -> dev
+    -> restore -> test -> review -> qa -> commit -> success.
 
     `success`: brief/deps/dev/restore/test/review all pass; qa fails its
-    verdict on attempt 1; the retry resets verdicts and re-runs the dev →
-    restore → test → review → qa chain (dev re-enters per the pipeline's
+    verdict on attempt 1; the retry resets verdicts and re-runs the dev ->
+    restore -> test -> review -> qa chain (dev re-enters per the pipeline's
     `on_fail: goto dev`; restore re-audits the pins dev bumped); everything
     passes on attempt 2 and commit runs. `failure`: the same chain through
     review, then the qa node itself hard-fails (red node, failure banner).

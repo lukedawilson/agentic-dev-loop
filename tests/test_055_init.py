@@ -68,7 +68,7 @@ def test_python_init_renders_loadable_pipeline(tmp_path: Path):
     assert cfg.profile == "python"
     installed = importlib.metadata.version("agentic-dev-loop")
     assert (tmp_path / "agentic-dev-loop" / ".engine-version").read_text().strip() == installed
-    assert (tmp_path / "trigger-agentic-dev-loop.sh").stat().st_mode & 0o111
+    assert not (tmp_path / "trigger-agentic-dev-loop.sh").exists()
     assert (tmp_path / "agentic-dev-loop" / "sdk_agents" / "dev.agent.md").is_file()
 
 

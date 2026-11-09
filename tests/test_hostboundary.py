@@ -83,16 +83,15 @@ class TestToolingRelPaths:
             "agentic-dev-loop/shared/spec.yaml",
             "aidlc-docs",
             "tools",
-            "trigger-agentic-dev-loop.sh",
         ]
 
-    def test_trigger_and_engine_pin_are_tooling(self, tmp_path):
+    def test_engine_pin_is_tooling(self, tmp_path):
         ws = tmp_path / "ws"
         ws.mkdir()
         cfg = _cfg()
         rels = tooling_rel_paths(cfg, ws / "pipeline.yaml", ws, ws)
-        assert "trigger-agentic-dev-loop.sh" in rels
         assert "agentic-dev-loop/.engine-version" in rels
+        assert "trigger-agentic-dev-loop.sh" not in rels
 
     def test_outside_workspace_paths_are_excluded(self, tmp_path):
         ws = tmp_path / "ws"

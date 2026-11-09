@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+import agentic_dev_loop.engine.cli as cli_mod
 from agentic_dev_loop.engine.cli import build_parser, main
 
 PLAIN_YAML = """\
@@ -352,29 +353,43 @@ steps:
 
 
 class TestCliLightweightImports:
-    def test_containers_path_does_not_import_sdk(self):
-        # Change 5: `containers`, `--help`, and `--version` must load no
+    def _clean_imports(self, code: str) -> list[str]:
+        # Change 5: help, --help, --version, and `containers` must load no
         # pipeline, extension, or SDK imports. Importing cli in a clean
         # interpreter must not pull in dryrun -> stages -> openhands.sdk /
-        # langgraph (the pre-fix top-level `from .dryrun import dry_run` did).
+        # langgraph, and the help surface must stay side-effect free.
         root = Path(__file__).resolve().parents[1]
         src = root / "src"
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(
             filter(None, [str(src), str(root), env.get("PYTHONPATH", "")]))
-        code = (
+        result = subprocess.run(
+            [sys.executable, "-c", code], cwd=root, env=env,
+            capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip().splitlines()[-4:]
+
+    def test_import_of_cli_does_not_import_sdk(self):
+        assert self._clean_imports(
             "import sys, agentic_dev_loop.engine.cli;"
             "print('openhands.sdk' in sys.modules);"
             "print('langgraph' in sys.modules);"
             "print('agentic_dev_loop.engine.dryrun' in sys.modules);"
             "print('agentic_dev_loop.engine.stages' in sys.modules)"
-        )
-        result = subprocess.run(
-            [sys.executable, "-c", code], cwd=root, env=env,
-            capture_output=True, text=True)
-        assert result.returncode == 0, result.stderr
-        assert result.stdout.strip().splitlines() == [
-            "False", "False", "False", "False"]
+        ) == ["False", "False", "False", "False"]
+
+    @pytest.mark.parametrize("call", ["main([])", "main(['help'])",
+                                      "main(['--help'])"])
+    def test_help_paths_do_not_import_sdk(self, call):
+        assert self._clean_imports(
+            "import sys;"
+            "from agentic_dev_loop.engine.cli import main;"
+            f"assert {call} == 0;"
+            "print('openhands.sdk' in sys.modules);"
+            "print('langgraph' in sys.modules);"
+            "print('agentic_dev_loop.engine.dryrun' in sys.modules);"
+            "print('agentic_dev_loop.engine.stages' in sys.modules)"
+        ) == ["False", "False", "False", "False"]
 
 
 class TestSigtermHandler:
@@ -419,3 +434,166 @@ class TestSigtermHandler:
                              "--no-viz"]) == 0
         assert installed == [True]
         assert len(restored) == 1
+
+
+TOP_HELP_COMMANDS = ["containers", "copilot-login", "copilot-models", "report",
+                     "run-status", "init", "doctor", "upgrade", "help"]
+
+SUBCOMMAND_PARSERS = [
+    ("containers", "agentic_dev_loop.engine.cli", "_containers_parser"),
+    ("copilot-login", "agentic_dev_loop.engine.cli", "_copilot_login_parser"),
+    ("copilot-models", "agentic_dev_loop.engine.cli", "_copilot_models_parser"),
+    ("report", "agentic_dev_loop.engine.cli", "_report_parser"),
+    ("run-status", "agentic_dev_loop.engine.run_status", "_run_status_parser"),
+    ("init", "agentic_dev_loop.engine.onboarding.init", "_init_parser"),
+    ("doctor", "agentic_dev_loop.engine.onboarding.doctor", "_doctor_parser"),
+    ("upgrade", "agentic_dev_loop.engine.onboarding.upgrade", "_upgrade_parser"),
+]
+
+
+class TestHelp:
+    def test_bare_invocation_prints_command_list(self, capsys):
+        assert main([]) == 0
+        out = capsys.readouterr().out
+        assert out.startswith("usage: agentic-dev-loop")
+        for name in TOP_HELP_COMMANDS:
+            assert name in out
+
+    def test_help_subcommand_prints_identical_text(self, capsys):
+        assert main([]) == 0
+        bare = capsys.readouterr().out
+        assert main(["help"]) == 0
+        assert capsys.readouterr().out == bare
+
+    def test_top_level_help_flags_print_same_list(self, capsys):
+        assert main(["help"]) == 0
+        expected = capsys.readouterr().out
+        for flag in ("--help", "-h"):
+            assert main([flag]) == 0
+            assert capsys.readouterr().out == expected
+
+    def test_help_rejects_extra_arguments(self, capsys):
+        assert main(["help", "extra"]) == 2
+        assert "help takes no arguments" in capsys.readouterr().err
+
+    def test_pipeline_help_still_shows_loader_flags(self, repo, capsys):
+        with pytest.raises(SystemExit) as excinfo:
+            main(["pipeline.yaml", "--help"])
+        assert excinfo.value.code == 0
+        assert "--plan" in capsys.readouterr().out
+
+
+class TestTopHelpDrift:
+    @pytest.mark.parametrize("command,module,attr", SUBCOMMAND_PARSERS)
+    def test_subcommand_description_appears_in_top_help(self, command, module,
+                                                        attr):
+        import importlib
+        parser = getattr(importlib.import_module(module), attr)()
+        assert parser.description in cli_mod._TOP_HELP, command
+
+
+class TestDefaultPipeline:
+    def test_default_pipeline_is_used(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        default = tmp_path / "agentic-dev-loop" / "pipeline.yaml"
+        default.parent.mkdir()
+        default.write_text("name: tiny\n")
+        seen = {}
+
+        def fake_registry(path):
+            seen["path"] = path
+            raise RuntimeError("registry reached")
+
+        monkeypatch.setattr(cli_mod, "_registry_for", fake_registry)
+        with pytest.raises(RuntimeError, match="registry reached"):
+            main(["--dry-run"])
+        assert seen["path"] == Path("agentic-dev-loop/pipeline.yaml")
+
+    def test_missing_default_is_a_loud_error(self, tmp_path, monkeypatch,
+                                             capsys):
+        monkeypatch.chdir(tmp_path)
+        called = []
+        monkeypatch.setattr(cli_mod, "_registry_for", called.append)
+        assert main(["--dry-run"]) == 1
+        assert called == []
+        err = capsys.readouterr().err
+        assert ("no pipeline at agentic-dev-loop/pipeline.yaml and none given"
+                in err)
+
+    def test_explicit_positional_wins_over_default(self, tmp_path,
+                                                   monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        seen = {}
+
+        def fake_registry(path):
+            seen["path"] = path
+            raise RuntimeError("registry reached")
+
+        monkeypatch.setattr(cli_mod, "_registry_for", fake_registry)
+        with pytest.raises(RuntimeError, match="registry reached"):
+            main(["named.yaml", "--dry-run"])
+        assert seen["path"] == Path("named.yaml")
+
+
+def _capture_registry(monkeypatch):
+    calls = []
+
+    def fake_registry(path):
+        calls.append(path)
+        raise RuntimeError("registry reached")
+
+    monkeypatch.setattr(cli_mod, "_registry_for", fake_registry)
+    return calls
+
+
+class TestEnvFlag:
+    def test_env_file_is_loaded_before_registry(self, repo, tmp_path,
+                                                monkeypatch):
+        env_file = tmp_path / "secrets.env"
+        env_file.write_text("NEW_SECRET=from-file\nTEST_LLM_KEY=file-value\n",
+                            encoding="utf-8")
+        monkeypatch.delenv("NEW_SECRET", raising=False)
+        _capture_registry(monkeypatch)
+
+        with pytest.raises(RuntimeError, match="registry reached"):
+            main(["pipeline.yaml", "--env", str(env_file)])
+
+        assert os.environ["NEW_SECRET"] == "from-file"
+        assert os.environ["TEST_LLM_KEY"] == "sk-test"
+
+    def test_env_file_inside_workspace_is_refused(self, repo, monkeypatch,
+                                                  capsys):
+        (repo / "secrets.env").write_text("NEW_SECRET=1\n", encoding="utf-8")
+        calls = _capture_registry(monkeypatch)
+
+        assert main(["pipeline.yaml", "--env", "secrets.env"]) == 1
+
+        assert calls == []
+        assert "inside the workspace" in capsys.readouterr().err
+
+    def test_workspace_itself_is_refused(self, repo, monkeypatch, capsys):
+        calls = _capture_registry(monkeypatch)
+
+        assert main(["pipeline.yaml", "--env", "."]) == 1
+
+        assert calls == []
+        assert "inside the workspace" in capsys.readouterr().err
+
+    def test_missing_env_file_fails_loudly(self, repo, tmp_path, monkeypatch,
+                                           capsys):
+        calls = _capture_registry(monkeypatch)
+
+        code = main(["pipeline.yaml", "--env", str(tmp_path / "absent.env")])
+
+        assert code == 1
+        assert calls == []
+        assert "not found" in capsys.readouterr().err
+
+    def test_no_env_flag_leaves_environment_alone(self, repo, monkeypatch):
+        monkeypatch.delenv("NEW_SECRET", raising=False)
+        _capture_registry(monkeypatch)
+
+        with pytest.raises(RuntimeError, match="registry reached"):
+            main(["pipeline.yaml"])
+
+        assert "NEW_SECRET" not in os.environ

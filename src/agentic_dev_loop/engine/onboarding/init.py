@@ -308,11 +308,6 @@ def _write(root: Path, profile: Profile, pipeline: dict, texts: dict,
         (agents / f"{name}.agent.md").write_text(
             load_template(f"{name}.agent.md"), encoding="utf-8")
 
-    trigger = root / "trigger-agentic-dev-loop.sh"
-    trigger.write_text(load_template("trigger-agentic-dev-loop.sh"),
-                       encoding="utf-8")
-    trigger.chmod(0o755)
-
     (out / ".engine-version").write_text(installed + "\n", encoding="utf-8")
 
     for premise in profile.premise_files:
@@ -368,11 +363,10 @@ def _answers(root: Path, profile_ref: str, yes: bool) -> dict:
     }
 
 
-def run_init(argv: list[str]) -> int:
+def _init_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop init",
-        description="Write agentic-dev-loop pipeline, agent, and trigger "
-                    "files for this repo.")
+        description="Write agentic-dev-loop pipeline and agent files.")
     parser.add_argument("--profile", default="python",
                         help="bundled profile name or path (default: python)")
     parser.add_argument("--recipe", default=None,
@@ -382,7 +376,11 @@ def run_init(argv: list[str]) -> int:
                         help="accept defaults without prompting")
     parser.add_argument("--dir", default=".",
                         help="repo root to write into (default: .)")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def run_init(argv: list[str]) -> int:
+    args = _init_parser().parse_args(argv)
     root = Path(args.dir).resolve()
     try:
         pipeline_path = root / "agentic-dev-loop" / "pipeline.yaml"
@@ -423,10 +421,10 @@ def _print_next_steps(pipeline_path: Path) -> None:
         Wrote {pipeline_path}
         Next steps:
           1. Export the LLM key named by api_key_env in the host environment
-             (or set AGENTIC_DEV_LOOP_ENV_FILE to a host env file).
+             (or pass --env FILE, a host env file outside the workspace).
           2. Review agentic-dev-loop/pipeline.yaml and the agent files under
              agentic-dev-loop/sdk_agents/.
           3. Validate: agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run
-          4. Run: ./trigger-agentic-dev-loop.sh --plan <path> (or --aidlc-unit,
-             or --resume).
+          4. Run: agentic-dev-loop agentic-dev-loop/pipeline.yaml --plan <path>
+             (or --aidlc-unit, or --resume).
         """))

@@ -22,6 +22,31 @@ from .loaders import mark_plan_completed
 from .registry import Registry, default_registry, load_extensions
 
 
+_DEFAULT_PIPELINE = Path("agentic-dev-loop") / "pipeline.yaml"
+
+_TOP_HELP = """\
+usage: agentic-dev-loop [PIPELINE] [--resume THREAD_ID] [--max-attempts N]
+                        [--no-viz] [--viz-port PORT] [--dry-run] [--version]
+
+Run an OpenHands agent pipeline defined in YAML. PIPELINE defaults to
+agentic-dev-loop/pipeline.yaml; run `agentic-dev-loop <PIPELINE> --help`
+for loader-contributed options (e.g. --plan, --aidlc-unit).
+
+commands:
+  containers       Inspect engine sandbox containers and networks.
+  copilot-login    Run the GitHub device flow and store the Copilot OAuth token.
+  copilot-models   List the Copilot models available to this token's tier.
+  report           Serve the run-history browser view (--markdown for text).
+  run-status       Report the latest agentic-dev-loop run.
+  init             Write agentic-dev-loop pipeline and agent files.
+  doctor           Probe this host and repo for onboarding prerequisites.
+  upgrade          Install the latest engine release and rewrite the project pin.
+  help             Show this list.
+
+Run `agentic-dev-loop <command> --help` for per-command options.
+"""
+
+
 _sigterm_in_progress = False
 
 
@@ -79,8 +104,9 @@ def _core_parser() -> argparse.ArgumentParser:
                     "Document-loader flags contributed by the pipeline's "
                     "extensions appear once PIPELINE is known - see "
                     "`agentic-dev-loop PIPELINE --help`.")
-    parser.add_argument("pipeline", type=Path,
-                        help="path to the pipeline YAML")
+    parser.add_argument("pipeline", type=Path, nargs="?", default=None,
+                        help="path to the pipeline YAML (default: "
+                             "agentic-dev-loop/pipeline.yaml)")
     parser.add_argument("--resume", metavar="THREAD_ID", default=None,
                         help="resume a checkpointed run by thread id")
     parser.add_argument("--max-attempts", type=int, default=None,
@@ -96,6 +122,9 @@ def _core_parser() -> argparse.ArgumentParser:
                         help="validate the pipeline and print a summary plan "
                              "without executing anything (no LLM, no "
                              "sandbox, no state writes)")
+    parser.add_argument("--env", metavar="FILE", default=None,
+                        help="load secrets from a host env file outside the "
+                             "workspace (default: the process environment)")
     _add_version_flag(parser)
     return parser
 
@@ -164,15 +193,19 @@ def _token_path(value: str | None) -> Path:
     return Path(value).expanduser() if value else TOKEN_PATH.expanduser()
 
 
-def _run_copilot_login(argv: list[str]) -> int:
+def _copilot_login_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop copilot-login",
         description="Run the GitHub device flow and store the Copilot OAuth "
-                    "token (~/.agentic-dev-loop/auth/copilot.json, mode 600).")
+                    "token.")
     parser.add_argument("--token-file", default=None,
                         help="token path (default: "
                              "~/.agentic-dev-loop/auth/copilot.json)")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _run_copilot_login(argv: list[str]) -> int:
+    args = _copilot_login_parser().parse_args(argv)
     path = _token_path(args.token_file)
     try:
         login(token_path=path)
@@ -183,7 +216,7 @@ def _run_copilot_login(argv: list[str]) -> int:
     return 0
 
 
-def _run_copilot_models(argv: list[str]) -> int:
+def _copilot_models_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop copilot-models",
         description="List the Copilot models available to this token's tier.")
@@ -192,7 +225,11 @@ def _run_copilot_models(argv: list[str]) -> int:
                              "~/.agentic-dev-loop/auth/copilot.json)")
     parser.add_argument("--json", action="store_true",
                         help="emit the model list as JSON")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _run_copilot_models(argv: list[str]) -> int:
+    args = _copilot_models_parser().parse_args(argv)
     try:
         models = list_copilot_models(read_token(_token_path(args.token_file)))
     except CopilotAuthError as e:
@@ -209,11 +246,16 @@ def _run_copilot_models(argv: list[str]) -> int:
 def _report_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop report",
-        description="Report accumulated agentic-dev-loop run history as "
-                    "read-only markdown.")
+        description="Serve the run-history browser view (--markdown for text).")
     parser.add_argument("run_id", nargs="?", default=None,
                         help="12-hex run dir name for a deep dive "
-                             "(default: aggregate report)")
+                             "(markdown mode only)")
+    parser.add_argument("--markdown", action="store_true",
+                        help="render read-only markdown instead of serving "
+                             "the browser view")
+    parser.add_argument("--port", type=int, default=None,
+                        help="server port (default: 8321; falls back to a "
+                             "free port when busy)")
     parser.add_argument("--since", default=None,
                         help="only threads starting at or after this ISO "
                              "datetime")
@@ -234,11 +276,28 @@ def _report_parser() -> argparse.ArgumentParser:
 
 
 def _run_report(argv: list[str]) -> int:
+    args = _report_parser().parse_args(argv)
+    if args.markdown:
+        if args.port is not None:
+            print("report: --markdown and --port are mutually exclusive",
+                  file=sys.stderr)
+            return 2
+        return _render_report(args)
+    markdown_only = [flag for flag, value in (
+        ("run_id", args.run_id), ("--since", args.since),
+        ("--until", args.until), ("--status", args.status)) if value]
+    if markdown_only:
+        print(f"report: {markdown_only[0]} requires --markdown",
+              file=sys.stderr)
+        return 2
+    return _serve_report(args)
+
+
+def _render_report(args) -> int:
     from agentic_dev_loop.reporting import (
         apply_filters, build_run_records, discover, find_run_dir,
         pure_metrics, read_audit, read_dir, render_markdown, runs_root)
 
-    args = _report_parser().parse_args(argv)
     root = runs_root(args.runs_root)
     notice = None
     if args.run_id is not None:
@@ -271,6 +330,78 @@ def _run_report(argv: list[str]) -> int:
     return 0
 
 
+def _serve_report(args) -> int:
+    from agentic_dev_loop.viz import serve_history
+
+    port = 8321 if args.port is None else args.port
+    try:
+        httpd, _thread = serve_history(port, runs_root=args.runs_root,
+                                       audit_dir=args.audit_dir)
+    except OSError as exc:
+        print(f"report: {exc}", file=sys.stderr)
+        return 1
+    bound = httpd.server_address[1]
+    url = f"http://127.0.0.1:{bound}"
+    print(f"Run history viz: {url}", flush=True)
+    if port and bound != port:
+        print(f"report port {port} busy - serving on {url}", flush=True)
+    try:
+        _wait_for_interrupt()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        httpd.shutdown()
+    return 0
+
+
+def _probe_parser() -> argparse.ArgumentParser:
+    """Phase-1 parser: find PIPELINE (or the default) without loading any
+    extension or SDK module."""
+    probe = argparse.ArgumentParser(add_help=False)
+    probe.add_argument("pipeline", type=Path, nargs="?")
+    probe.add_argument("--resume", default=None)
+    probe.add_argument("--max-attempts", default=None)
+    probe.add_argument("--viz-port", default=None)
+    probe.add_argument("--env", default=None)
+    probe.add_argument("--no-viz", action="store_true")
+    probe.add_argument("--dry-run", action="store_true")
+    _add_version_flag(probe)
+    return probe
+
+
+def _load_env_file(path: Path) -> str | None:
+    """Load KEY=VALUE lines from a host file into the process environment.
+
+    The file must live outside the workspace (doctor refuses workspace
+    ``.env*`` files; the run path uses the same boundary). Values already set
+    in the environment win, so a file never overrides the operator's shell.
+    Returns an error message, or ``None`` on success.
+    """
+    target = path.expanduser().resolve()
+    workspace = Path.cwd().resolve()
+    if target == workspace or target.is_relative_to(workspace):
+        return (f"--env file {target} is inside the workspace {workspace}; "
+                "secret files must live outside the workspace")
+    if not target.is_file():
+        return f"--env file not found: {target}"
+    for raw in target.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):].strip()
+        key, sep, value = line.partition("=")
+        key = key.strip()
+        if not sep or not key:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        if key not in os.environ:
+            os.environ[key] = value
+    return None
+
+
 def build_parser(cfg_path) -> argparse.ArgumentParser:
     """The full parser for one pipeline: core flags + loader-contributed."""
     registry, _ = _registry_for(cfg_path)
@@ -285,6 +416,12 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
         argv = sys.argv[1:]
     else:
         argv = list(argv)
+    if argv and argv[0] == "help":
+        if len(argv) > 1:
+            print("error: help takes no arguments", file=sys.stderr)
+            return 2
+        print(_TOP_HELP)
+        return 0
     if argv and argv[0] == "containers":
         return _run_containers(argv[1:])
     if argv and argv[0] == "copilot-login":
@@ -305,20 +442,32 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
     if argv and argv[0] == "upgrade":
         from .onboarding.upgrade import run_upgrade
         return run_upgrade(argv[1:])
-    probe = argparse.ArgumentParser(add_help=False)
-    probe.add_argument("pipeline", type=Path, nargs="?")
-    _add_version_flag(probe)
-    known, _ = probe.parse_known_args(argv)
+    if not argv:
+        print(_TOP_HELP)
+        return 0
+    known, _ = _probe_parser().parse_known_args(argv)
     if known.pipeline is None:
-        # No pipeline → the extension surface is unknowable; the core parser
-        # handles --help and the missing-positional error itself (both exit).
-        _core_parser().parse_args(argv)
-        return 2  # unreachable - parse_args exits first
-    registry, cfg = _registry_for(known.pipeline)
+        if "-h" in argv or "--help" in argv:
+            print(_TOP_HELP)
+            return 0
+        if not _DEFAULT_PIPELINE.is_file():
+            print(f"agentic-dev-loop: no pipeline at {_DEFAULT_PIPELINE} "
+                  "and none given", file=sys.stderr)
+            return 1
+        pipeline = _DEFAULT_PIPELINE
+    else:
+        pipeline = known.pipeline
+    if known.env is not None:
+        error = _load_env_file(Path(known.env))
+        if error is not None:
+            print(f"agentic-dev-loop: {error}", file=sys.stderr)
+            return 1
+    registry, cfg = _registry_for(pipeline)
     parser = _core_parser()
     for loader in registry.document_loaders:
         loader.add_cli_args(parser)
     args = parser.parse_args(argv)
+    args.pipeline = pipeline
     if args.dry_run:
         from .dryrun import dry_run
         return dry_run(args.pipeline, args, registry)

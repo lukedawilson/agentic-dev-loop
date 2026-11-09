@@ -13,7 +13,7 @@ from pathlib import Path
 from agentic_dev_loop import viz
 from agentic_dev_loop.core.config import load_config
 
-import viz_demo
+from tests.smoke import viz_demo
 
 SELF_PIPELINE = Path(__file__).parent.parent / "agentic-dev-loop" / "pipeline.yaml"
 

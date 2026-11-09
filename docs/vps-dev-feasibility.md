@@ -184,9 +184,10 @@ No architecture blockers found. Unknowns: none material for dev.
    this path does not exist; the dev agent's network-off NuGet restores would
    fall back to an empty global cache and fail. Needs a workspace-relative or
    env-expanded form before the the consumer repo loop can run on the box.
-2. **Secrets bootstrap**: `trigger-agentic-dev-loop.sh` reads
-   `~/.config/consumer/agentic-dev-loop.env` (Kinde + API keys). The box needs its
-   own copy of that env file (or a unit-6 secrets story) before any loop run.
+2. **Secrets bootstrap**: a run reads a host env file passed with `--env FILE`
+   (for example `~/.config/consumer/agentic-dev-loop.env`, Kinde + API keys).
+   The box needs its own copy of that env file (or a unit-6 secrets story)
+   before any loop run.
 3. **Kinde dev flows**: local dev callbacks are localhost-bound; on the box
    they work through an SSH tunnel (`ssh -L`) or a dev subdomain on the
    existing Caddy. Minor, but must be set up once.

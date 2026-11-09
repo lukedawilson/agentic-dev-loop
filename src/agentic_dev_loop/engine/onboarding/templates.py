@@ -1,4 +1,4 @@
-"""Onboarding templates: agent prompts, the trigger script, env template."""
+"""Onboarding templates: agent prompts and the env template."""
 
 from __future__ import annotations
 

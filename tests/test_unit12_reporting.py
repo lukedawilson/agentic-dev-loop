@@ -12,6 +12,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import agentic_dev_loop.engine.cli as cli
+
 import pytest
 
 from agentic_dev_loop.engine.cli import main
@@ -252,14 +254,15 @@ def test_deep_dive_renders_attempt_tables():
 
 # --- CLI -----------------------------------------------------------------
 
-def test_cli_aggregate_and_deep_dive(capsys):
-    assert main(["report", "--runs-root", str(FIXTURE_RUNS),
+def test_cli_markdown_aggregate_and_deep_dive(capsys):
+    assert main(["report", "--markdown", "--runs-root", str(FIXTURE_RUNS),
                  "--audit-dir", str(FIXTURE_STATE)]) == 0
     out = capsys.readouterr().out
     assert "# Run history report" in out
     assert "abcdef123456" in out
 
-    assert main(["report", "abcdef123456", "--runs-root", str(FIXTURE_RUNS),
+    assert main(["report", "--markdown", "abcdef123456",
+                 "--runs-root", str(FIXTURE_RUNS),
                  "--audit-dir", str(FIXTURE_STATE)]) == 0
     assert "Attempt 2" in capsys.readouterr().out
 
@@ -268,15 +271,17 @@ def test_cli_unknown_run_id_and_bad_datetime_are_clean_nonzero(tmp_path,
                                                                capsys):
     root = tmp_path / "runs"
     root.mkdir()
-    assert main(["report", "ffffffffffff", "--runs-root", str(root)]) == 1
+    assert main(["report", "--markdown", "ffffffffffff",
+                 "--runs-root", str(root)]) == 1
     assert "unknown run id" in capsys.readouterr().err
-    assert main(["report", "--runs-root", str(root),
+    assert main(["report", "--markdown", "--runs-root", str(root),
                  "--since", "nope"]) == 1
     assert "since" in capsys.readouterr().err.lower()
 
 
 def test_cli_missing_root_still_succeeds(tmp_path, capsys):
-    code = main(["report", "--runs-root", str(tmp_path / "absent")])
+    code = main(["report", "--markdown",
+                 "--runs-root", str(tmp_path / "absent")])
     assert code == 0
     assert "unavailable" in capsys.readouterr().out.lower()
 
@@ -307,3 +312,58 @@ def test_crash_rate_from_last_error(tmp_path):
     metrics = pure_metrics(records)
     assert metrics["loop_health"]["last_error_threads"].value == 1
     assert metrics["loop_health"]["crash_rate"].value == 100.0
+
+
+def _interrupt():
+    raise KeyboardInterrupt
+
+
+class TestReportServer:
+    @staticmethod
+    def _fake_server(captured, bound=45123):
+        class FakeHTTP:
+            server_address = ("127.0.0.1", bound)
+
+            def shutdown(self):
+                captured["shutdown"] = True
+
+        def fake_serve_history(port, runs_root=None, audit_dir=None):
+            captured.update(port=port, runs_root=runs_root,
+                            audit_dir=audit_dir)
+            return FakeHTTP(), object()
+
+        return fake_serve_history
+
+    def test_server_is_the_default_mode(self, monkeypatch, capsys):
+        captured = {}
+        monkeypatch.setattr("agentic_dev_loop.viz.serve_history",
+                            self._fake_server(captured))
+        monkeypatch.setattr(cli, "_wait_for_interrupt", _interrupt)
+
+        code = main(["report", "--runs-root", str(FIXTURE_RUNS),
+                     "--audit-dir", str(FIXTURE_STATE), "--port", "0"])
+
+        assert code == 0
+        assert captured["port"] == 0
+        assert captured["runs_root"] == str(FIXTURE_RUNS)
+        assert captured["audit_dir"] == str(FIXTURE_STATE)
+        assert captured["shutdown"] is True
+        assert "http://127.0.0.1:45123" in capsys.readouterr().out
+
+    def test_default_port_is_8321(self, monkeypatch):
+        captured = {}
+        monkeypatch.setattr("agentic_dev_loop.viz.serve_history",
+                            self._fake_server(captured))
+        monkeypatch.setattr(cli, "_wait_for_interrupt", _interrupt)
+
+        assert main(["report"]) == 0
+
+        assert captured["port"] == 8321
+
+    def test_markdown_and_port_are_mutually_exclusive(self, capsys):
+        assert main(["report", "--markdown", "--port", "0"]) == 2
+        assert "mutually exclusive" in capsys.readouterr().err
+
+    def test_markdown_only_options_require_markdown(self, capsys):
+        assert main(["report", "--since", "2026-01-01"]) == 2
+        assert "--markdown" in capsys.readouterr().err

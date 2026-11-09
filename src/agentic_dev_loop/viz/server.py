@@ -375,7 +375,9 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
                    edges: Iterable[dict] | None = None,
                    provider: str | None = None,
                    runs_page: str | None = RUNS_PAGE,
-                   history: bool = False) -> type[BaseHTTPRequestHandler]:
+                   history: bool = False,
+                   runs_root: str | None = None,
+                   audit_dir: str | None = None) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         viz_bus = bus
@@ -387,6 +389,8 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
         viz_edges = list(edges or ())
         viz_runs_page = runs_page
         viz_history = history
+        viz_runs_root = runs_root
+        viz_audit_dir = audit_dir
 
         def log_message(self, *_args) -> None:  # keep test output quiet
             pass
@@ -462,10 +466,14 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
                 self._json(400, {"error": error})
                 return
             self._json(200, runs_view.list_payload(
-                filters["since"], filters["until"], filters["statuses"]))
+                filters["since"], filters["until"], filters["statuses"],
+                runs_root=self.viz_runs_root,
+                audit_dir=self.viz_audit_dir))
 
         def _runs_detail(self, run_id: str) -> None:
-            payload = runs_view.detail_payload(run_id)
+            payload = runs_view.detail_payload(
+                run_id, runs_root=self.viz_runs_root,
+                audit_dir=self.viz_audit_dir)
             if payload is None:
                 self._json(404, {"error": f"unknown run: {run_id}"})
                 return
@@ -558,8 +566,15 @@ def serve_viz(bus: VizBus, topology_mermaid: str, subject: str,
     return _bind_server(handler, port)
 
 
-def serve_history(port: int) -> tuple[_ReuseSafeServer, threading.Thread]:
-    """Serve the historical runs view with no pipeline topology (BR-17)."""
+def serve_history(port: int, runs_root: str | None = None,
+                  audit_dir: str | None = None
+                  ) -> tuple[_ReuseSafeServer, threading.Thread]:
+    """Serve the historical runs view with no pipeline topology (BR-17).
+
+    ``runs_root`` and ``audit_dir`` override the discovery defaults; both
+    resolve through the same ``reporting`` helpers the markdown report uses.
+    """
     handler = _handler_class(VizBus(), "", "", [], runs_page=RUNS_PAGE,
-                             history=True)
+                             history=True, runs_root=runs_root,
+                             audit_dir=audit_dir)
     return _bind_server(handler, port)

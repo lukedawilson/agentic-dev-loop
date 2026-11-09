@@ -113,7 +113,7 @@ the pipeline parser; no extension loading; deferred imports:
    directories get test gates. `--yes` accepts detected defaults.
 5. Write: `agentic-dev-loop/pipeline.yaml` (with the `profile:` reference and
    only deltas), `sdk_agents/{dev,review,qa}.agent.md` from templates,
-   `trigger-agentic-dev-loop.sh` (pin-based), premise files that are missing,
+   `agentic-dev-loop/.engine-version` (the pin), premise files that are missing,
    missing gitignore lines appended, an env-file template, and
    `agentic-dev-loop/.engine-version`.
 6. Print one screen of next steps.

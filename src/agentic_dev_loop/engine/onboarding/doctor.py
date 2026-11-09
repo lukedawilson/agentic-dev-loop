@@ -38,9 +38,7 @@ def _print_failures(checks: list[Check]) -> None:
                 print(f"  fix: {check.fix_text}")
 
 
-def run_doctor(argv: list[str], *, workspace: Path | None = None,
-               probes: HostProbes | None = None,
-               installed: str | None = None) -> int:
+def _doctor_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agentic-dev-loop doctor",
         description="Probe this host and repo for onboarding prerequisites.")
@@ -49,7 +47,13 @@ def run_doctor(argv: list[str], *, workspace: Path | None = None,
                              "round trip")
     parser.add_argument("--json", action="store_true",
                         help="emit machine-readable JSON results")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def run_doctor(argv: list[str], *, workspace: Path | None = None,
+               probes: HostProbes | None = None,
+               installed: str | None = None) -> int:
+    args = _doctor_parser().parse_args(argv)
 
     root = Path(workspace or Path.cwd()).resolve()
     probes = probes or HostProbes()
