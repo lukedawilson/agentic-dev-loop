@@ -21,11 +21,21 @@
     }).join(" ");
   }
 
-  function formatMetricValue(value) {
+  function formatEntryValue(value, depth) {
+    if (depth < 1 && value !== null && typeof value === "object"
+        && !Array.isArray(value)) {
+      return " (" + formatMetricValue(value, depth + 1) + ")";
+    }
+    return ": " + esc(value !== null && typeof value === "object"
+      ? String(value) : value);
+  }
+
+  function formatMetricValue(value, depth) {
+    depth = depth || 0;
     if (value !== null && typeof value === "object"
         && !Array.isArray(value)) {
       var entries = Object.keys(value).sort().map(function (key) {
-        return esc(prettyMetricName(key)) + ": " + esc(value[key]);
+        return esc(prettyMetricName(key)) + formatEntryValue(value[key], depth);
       });
       return entries.length ? entries.join(", ") : "--";
     }
@@ -126,6 +136,38 @@
   }
 
   /* Metric cards ------------------------------------------------------ */
+  var KEY_STATS = {
+    loop_health: {
+      verdict_distribution: "verdictMix",
+      attempt_count_distribution: "attemptBars",
+      thread_count: "bigNumber"
+    },
+    tdd: {
+      pct_attempts_red_then_green: "gauge",
+      pct_threads_red_then_green: "gauge",
+      attempts_zero_test_verdicts: "bigNumber"
+    },
+    review: {
+      review_missed_rate: "gauge",
+      defect_yield: "bigNumber",
+      rubber_stamp: "bigNumber"
+    },
+    qa: {
+      catch_rate: "gauge",
+      qa_pass_rate: "gauge",
+      unverifiable_rate: "bigNumber"
+    }
+  };
+
+  var THREAD_KEY_STATS = {
+    attempt_count: "bigNumber",
+    pct_attempts_red_then_green: "gauge",
+    qa_pass_rate: "gauge"
+  };
+
+  var VERDICT_ORDER = ["pass", "fail", "unverifiable", "env"];
+  var keyStatBodies = {};
+
   function metricCard(name, metric) {
     var available = metric && metric.availability === "available";
     var value = metric && metric.value !== null && metric.value !== undefined
@@ -144,29 +186,288 @@
     return html;
   }
 
-  function metricsSection(label, metrics) {
-    var names = Object.keys(metrics || {}).sort();
+  function metricGrid(names, metrics) {
     if (!names.length) {
-      return '<div class="metric-section"><h2>' + esc(label)
-        + '</h2><p class="empty">No metrics.</p></div>';
+      return '<p class="empty">No metrics.</p>';
     }
-    var cards = names.map(function (name) {
+    return '<div class="metric-grid">' + names.map(function (name) {
       return metricCard(name, metrics[name]);
+    }).join("") + "</div>";
+  }
+
+  function metricAvailable(metric) {
+    return Boolean(metric) && metric.availability === "available"
+      && metric.value !== null && metric.value !== undefined;
+  }
+
+  function metricSlug(name) {
+    return String(name || "").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  }
+
+  /* Key-stat renderers ------------------------------------------------ */
+  function statBaseOption() {
+    var c = colors();
+    return {
+      backgroundColor: "transparent",
+      textStyle: { color: c.text, fontFamily: token("--adl-font-sans") }
+    };
+  }
+
+  function gaugeOption(metric) {
+    if (!metricAvailable(metric)) { return null; }
+    var c = colors();
+    var value = Number(metric.value);
+    if (isNaN(value)) { return null; }
+    var option = statBaseOption();
+    option.series = [{
+      type: "gauge",
+      startAngle: 180,
+      endAngle: 0,
+      min: 0,
+      max: 100,
+      radius: "100%",
+      center: ["50%", "75%"],
+      axisLine: { lineStyle: { width: 10, color: [[1, c.line]] } },
+      axisTick: { show: false },
+      axisLabel: { show: false },
+      splitLine: { show: false },
+      pointer: { show: true, itemStyle: { color: c.text } },
+      progress: { show: true, width: 10, itemStyle: { color: c.ok } },
+      detail: {
+        valueAnimation: false,
+        formatter: "{value}%",
+        color: c.text,
+        fontSize: 18,
+        offsetCenter: [0, "-10%"]
+      },
+      data: [{ value: value, name: "" }]
+    }];
+    return option;
+  }
+
+  function verdictKindOrder(kinds) {
+    var ordered = VERDICT_ORDER.filter(function (kind) {
+      return kinds.indexOf(kind) !== -1;
+    });
+    kinds.slice().sort().forEach(function (kind) {
+      if (ordered.indexOf(kind) === -1) { ordered.push(kind); }
+    });
+    return ordered;
+  }
+
+  function verdictMixOption(metric) {
+    var dist = metric && metric.value;
+    if (!dist || typeof dist !== "object" || Array.isArray(dist)) {
+      return null;
+    }
+    var steps = Object.keys(dist);
+    if (!steps.length) { return null; }
+    var kinds = [];
+    steps.forEach(function (step) {
+      Object.keys(dist[step] || {}).forEach(function (kind) {
+        var key = String(kind).toLowerCase();
+        if (kinds.indexOf(key) === -1) { kinds.push(key); }
+      });
+    });
+    kinds = verdictKindOrder(kinds);
+    var c = colors();
+    var colorsBy = { pass: c.ok, fail: c.warn, unverifiable: c.unv, env: c.err };
+    var option = statBaseOption();
+    option.tooltip = { trigger: "axis" };
+    option.legend = { show: true, top: 0, textStyle: { color: c.muted } };
+    option.grid = { left: 64, right: 16, top: 28, bottom: 24 };
+    option.xAxis = {
+      type: "value", minInterval: 1,
+      axisLabel: { color: c.muted },
+      splitLine: { lineStyle: { color: c.line } }
+    };
+    option.yAxis = {
+      type: "category", data: steps,
+      axisLabel: { color: c.muted },
+      axisLine: { lineStyle: { color: c.line } }
+    };
+    option.series = kinds.map(function (kind) {
+      return {
+        name: titleCase(kind),
+        type: "bar",
+        stack: "verdicts",
+        itemStyle: { color: colorsBy[kind] || c.info },
+        data: steps.map(function (step) {
+          var bucket = dist[step] || {};
+          var found = Object.keys(bucket).filter(function (key) {
+            return String(key).toLowerCase() === kind;
+          })[0];
+          return found === undefined ? 0 : Number(bucket[found]) || 0;
+        })
+      };
+    });
+    return option;
+  }
+
+  function attemptBarsOption(metric) {
+    var dist = metric && metric.value;
+    if (!dist || typeof dist !== "object" || Array.isArray(dist)) {
+      return null;
+    }
+    var keys = Object.keys(dist);
+    if (!keys.length) { return null; }
+    keys.sort(function (a, b) {
+      var left = Number(a);
+      var right = Number(b);
+      if (!isNaN(left) && !isNaN(right)) { return left - right; }
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    var c = colors();
+    var option = statBaseOption();
+    option.tooltip = { trigger: "axis" };
+    option.grid = { left: 40, right: 16, top: 16, bottom: 28 };
+    option.xAxis = {
+      type: "category", data: keys,
+      axisLabel: { color: c.muted },
+      axisLine: { lineStyle: { color: c.line } }
+    };
+    option.yAxis = {
+      type: "value", minInterval: 1,
+      axisLabel: { color: c.muted },
+      splitLine: { lineStyle: { color: c.line } }
+    };
+    option.series = [{
+      type: "bar",
+      itemStyle: { color: c.info },
+      data: keys.map(function (key) { return Number(dist[key]) || 0; })
+    }];
+    return option;
+  }
+
+  function bigNumberStat(name, metric) {
+    var available = metricAvailable(metric);
+    var html = '<div class="stat stat-big' + (available ? "" : " stat-empty")
+      + '" data-metric="' + esc(name) + '">';
+    html += '<div class="stat-label">' + esc(prettyMetricName(name)) + "</div>";
+    html += '<div class="stat-value">'
+      + (available ? formatMetricValue(metric.value) : "--") + "</div>";
+    html += '<div class="stat-basis">' + esc(metric && metric.basis) + "</div>";
+    if (metric && metric.provenance) {
+      html += provenanceBadge(metric.provenance);
+    }
+    html += "</div>";
+    return html;
+  }
+
+  function chartStat(scope, name, size, option, metric) {
+    if (!option) {
+      return '<div class="stat stat-empty" data-metric="' + esc(name) + '">'
+        + '<div class="stat-label">' + esc(prettyMetricName(name)) + "</div>"
+        + '<div class="stat-value mono">--</div>'
+        + '<div class="stat-basis">' + esc(metric && metric.basis) + "</div>"
+        + "</div>";
+    }
+    var id = "stat-" + metricSlug(scope) + "-" + metricSlug(name);
+    return { id: id, html: '<div class="stat stat-chart" data-metric="'
+      + esc(name) + '">'
+      + '<div class="stat-label">' + esc(prettyMetricName(name)) + "</div>"
+      + '<div id="' + id + '" class="' + size + '"></div>'
+      + '<div class="stat-basis">' + esc(metric && metric.basis) + "</div>"
+      + "</div>" };
+  }
+
+  function keyStatsBand(scope, metrics, table) {
+    var mounts = [];
+    var bars = Object.keys(table || {}).map(function (name) {
+      if (!metrics || !(name in metrics)) { return ""; }
+      var metric = metrics[name];
+      var renderer = table[name];
+      if (renderer === "bigNumber") {
+        return bigNumberStat(name, metric);
+      }
+      var size = renderer === "gauge" ? "stat-gauge"
+        : renderer === "verdictMix" ? "stat-mix" : "stat-bars";
+      var option = null;
+      if (renderer === "gauge") { option = gaugeOption(metric); }
+      if (renderer === "verdictMix") { option = verdictMixOption(metric); }
+      if (renderer === "attemptBars") { option = attemptBarsOption(metric); }
+      var stat = chartStat(scope, name, size, option, metric);
+      if (stat && stat.html) {
+        mounts.push({ id: stat.id, option: option });
+        return stat.html;
+      }
+      return stat;
     }).join("");
-    return '<div class="metric-section"><h2>' + esc(label) + "</h2>"
-      + '<div class="metric-grid">' + cards + "</div></div>";
+    return { html: '<div class="stat-band" data-scope="' + esc(scope) + '">'
+      + bars + "</div>", mounts: mounts };
+  }
+
+  function expanderHTML(scope, names, detailHtml) {
+    var id = "details-" + metricSlug(scope);
+    keyStatBodies[id] = detailHtml;
+    return '<details class="metric-expander" id="' + esc(id) + '">'
+      + '<summary class="metric-summary">Details (' + names.length
+      + " metrics)</summary>"
+      + '<div class="metric-detail-body"></div></details>';
+  }
+
+  function populateExpander(node) {
+    if (!node || !node.open) { return; }
+    var body = node.querySelector
+      && node.querySelector(".metric-detail-body");
+    if (body && !body.innerHTML) {
+      body.innerHTML = keyStatBodies[node.id] || "";
+    }
+  }
+
+  function wireExpanders(root) {
+    if (!root || !root.querySelectorAll) { return; }
+    var nodes = root.querySelectorAll("details.metric-expander");
+    for (var i = 0; i < nodes.length; i++) {
+      (function (node) {
+        if (node.__adlWired) { return; }
+        node.__adlWired = true;
+        node.addEventListener("toggle", function () {
+          populateExpander(node);
+        });
+      })(nodes[i]);
+    }
+  }
+
+  function categoryPanel(label, metrics, table, scope) {
+    var available = metrics || {};
+    var promoted = Object.keys(table).filter(function (name) {
+      return name in available;
+    });
+    var detail = Object.keys(available).filter(function (name) {
+      return promoted.indexOf(name) === -1;
+    }).sort();
+    var band = keyStatsBand(scope, available, table);
+    var html = '<div class="metric-section"><h2>' + esc(label) + "</h2>"
+      + band.html;
+    if (detail.length) {
+      html += expanderHTML(scope, detail, metricGrid(detail, available));
+    }
+    html += "</div>";
+    return { html: html, mounts: band.mounts };
   }
 
   function renderAggregate(payload) {
     var container = el("aggregate");
     if (!container) { return; }
+    disposeCharts();
     var metrics = payload.metrics || {};
-    container.innerHTML = [
-      metricsSection("Loop health", metrics.loop_health),
-      metricsSection("TDD", metrics.tdd),
-      metricsSection("Review", metrics.review),
-      metricsSection("QA", metrics.qa)
-    ].join("");
+    var panels = [
+      categoryPanel("Loop health", metrics.loop_health,
+        KEY_STATS.loop_health, "loop-health"),
+      categoryPanel("TDD", metrics.tdd, KEY_STATS.tdd, "tdd"),
+      categoryPanel("Review", metrics.review, KEY_STATS.review, "review"),
+      categoryPanel("QA", metrics.qa, KEY_STATS.qa, "qa")
+    ];
+    container.innerHTML = panels.map(function (panel) {
+      return panel.html;
+    }).join("");
+    wireExpanders(container);
+    panels.forEach(function (panel) {
+      panel.mounts.forEach(function (mount) {
+        mountChart(mount.id, mount.option);
+      });
+    });
   }
 
   /* List -------------------------------------------------------------- */
@@ -270,6 +571,7 @@
       container.innerHTML = '<p class="empty">No threads in this run.</p>';
       return;
     }
+    var mounts = [];
     container.innerHTML = threads.map(function (thread) {
       var attempts = (thread.attempts || []).map(function (attempt) {
         var verdicts = (attempt.verdicts || []).map(function (verdict) {
@@ -281,7 +583,18 @@
           + esc(attempt.number) + '</div><div class="verdicts">' + verdicts
           + "</div></div>";
       }).join("");
-      var metrics = metricsSection("Thread metrics", thread.metrics || {});
+      var threadMetrics = thread.metrics || {};
+      var scope = "thread-" + thread.thread_id;
+      var band = keyStatsBand(scope, threadMetrics, THREAD_KEY_STATS);
+      mounts = mounts.concat(band.mounts);
+      var detail = Object.keys(threadMetrics).filter(function (name) {
+        return !(name in THREAD_KEY_STATS);
+      }).sort();
+      var metrics = band.html;
+      if (detail.length) {
+        metrics += expanderHTML(scope, detail,
+          metricGrid(detail, threadMetrics));
+      }
       return '<section class="panel thread">'
         + '<div class="panel-h"><span>' + esc(thread.thread_id) + "</span>"
         + statusBadge(thread.status) + "</div>"
@@ -291,6 +604,10 @@
         + esc(fmtTs(thread.ts_end)) + "</span></div>"
         + attempts + metrics + "</div></section>";
     }).join("");
+    wireExpanders(container);
+    mounts.forEach(function (mount) {
+      mountChart(mount.id, mount.option);
+    });
   }
 
   function renderArtifacts(payload) {
@@ -485,7 +802,6 @@
   /* Routing and refresh ----------------------------------------------- */
   function renderCurrent() {
     if (mode === "list" && state.payload) {
-      renderAggregate(state.payload);
       renderList(state.payload);
     } else if (mode === "detail" && state.payload) {
       renderDetail(state.payload);

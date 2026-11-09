@@ -176,6 +176,18 @@ rules below) is the authoritative styling (R30, R60).
 | `.status-interrupted` | Interrupted run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.status-success` | Success run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.status-unreadable` | Unreadable run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-detail-body` | Lazy drill-down body | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-expander` | Category detail expander | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-summary` | Expander summary label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat` | One key-stat slot | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-band` | Key-stat band grid | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-bars` | Attempt-count bar slot | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-basis` | Key-stat basis caption | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-big` | Big-number key stat | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-gauge` | Gauge mount slot | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-label` | Key-stat label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-mix` | Verdict-mix chart slot | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.stat-value` | Key-stat value | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.table-wrap` | Table horizontal scroll port | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.thread-body` | Thread panel body | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.thread-sub` | Thread metadata line | Component-class behaviour (status/layout skin); justified in the viz register |
