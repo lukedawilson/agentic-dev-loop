@@ -13,8 +13,6 @@
     <span class="hdr-name">agentic-dev-loop history</span></div>
   <nav class="hdr-right" aria-label="History actions">
     <a class="hdr-link" href="/runs">Runs</a>
-    <button id="refresh" class="hdr-action hdr-text" type="button"
-            data-testid="runs-refresh">Refresh</button>
     <button id="theme-toggle" class="hdr-action" type="button"
             data-testid="theme-toggle" aria-label="Switch to light theme">
       <span id="theme-icon" class="ic" aria-hidden="true">
@@ -33,19 +31,21 @@
 <main class="runs-shell" id="runs-root">
   <section id="list-view" aria-label="Run history">
     <form id="filters" class="filters" autocomplete="off">
-      <label class="field">Since
-        <input id="since" type="date" name="since"></label>
-      <label class="field">Until
-        <input id="until" type="date" name="until"></label>
-      <fieldset class="field status-field">
-        <legend>Status</legend>
-        <label><input type="checkbox" name="status" value="success"> success</label>
-        <label><input type="checkbox" name="status" value="failed"> failed</label>
-        <label><input type="checkbox" name="status" value="interrupted"> interrupted</label>
-        <label><input type="checkbox" name="status" value="running"> running</label>
-      </fieldset>
-      <button id="apply" class="hdr-action hdr-text" type="submit">Apply</button>
-      <button id="reset" class="hdr-action hdr-text" type="button">Reset</button>
+      <div class="panel-h"><span>Filters</span></div>
+      <div class="filters-row">
+        <label class="field">Since
+          <input id="since" type="date" name="since"></label>
+        <label class="field">Until
+          <input id="until" type="date" name="until"></label>
+        <fieldset class="field status-field">
+          <legend>Status</legend>
+          <label><input type="checkbox" name="status" value="success"> success</label>
+          <label><input type="checkbox" name="status" value="failed"> failed</label>
+          <label><input type="checkbox" name="status" value="interrupted"> interrupted</label>
+          <label><input type="checkbox" name="status" value="running"> running</label>
+        </fieldset>
+        <button id="reset" class="hdr-action hdr-text" type="button">Reset</button>
+      </div>
     </form>
     <div id="list-notice" class="notice" role="status" aria-live="polite"></div>
     <section class="panel aggregate" aria-label="Aggregate metrics">

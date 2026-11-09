@@ -30,8 +30,8 @@ The loop is five layers. You author the first two; the engine owns the rest.
 | **Extensions** | Optional plugins: your own actions, tools, and document loaders, loaded from outside the workspace. | You (optional) |
 
 Every run is crash-safe (interrupt and resume from the exact checkpoint),
-watchable in a live browser graph view, and gated: nothing gets committed
-until every stage passes. The fixed policies are part of the product - fail
+watchable in a live browser graph view with a browsable run history, and
+gated: nothing gets committed until every stage passes. The fixed policies are part of the product - fail
 fast on missing config or secrets, no silent fallbacks, verdicts only from
 artifacts, bounded retries, and a single clean-worktree-gated commit point.
 
@@ -96,6 +96,13 @@ Other commands:
   review, and QA metrics with provenance labels) or a deep dive for one
   12-hex run directory. `--since` / `--until` / `--status` filter the set.
   Reporting is strictly read-only.
+- The live viz also serves a **historical runs view**: click **History** in
+  the graph page header (or open `/runs`), or launch it standalone with
+  `python -m agentic_dev_loop.viz --history`, which needs no pipeline file
+  (default port 8321, falling back to a free port when busy). It lists past
+  runs with since / until / status filters, an aggregate metrics panel, and
+  a per-run detail page carrying the brief, implementation summary, review
+  findings, and QA report.
 - `agentic-dev-loop containers` inspects the engine's sandbox containers and
   networks from the host; `containers --reap` removes registry-owned orphans
   whose owner process is dead. A SIGTERM to a running pipeline still closes

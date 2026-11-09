@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-09
+
+### Changed
+
+- The historical runs page now applies filters automatically as you change them; the Apply and Refresh buttons are gone.
+- Runs-page polish: sections sit in their own spaced panels, and dict-valued loop metrics (per-step durations, verdict distributions, etc.) render as readable lists instead of [object Object].
+
 ## [0.14.0] - 2026-11-09
 
 ### Changed

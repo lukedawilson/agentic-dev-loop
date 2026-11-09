@@ -13,6 +13,17 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  function formatMetricValue(value) {
+    if (value !== null && typeof value === "object"
+        && !Array.isArray(value)) {
+      var entries = Object.keys(value).sort().map(function (key) {
+        return esc(key) + ": " + esc(value[key]);
+      });
+      return entries.length ? entries.join(", ") : "--";
+    }
+    return esc(value);
+  }
+
   function setText(id, value) {
     var node = el(id);
     if (node) { node.textContent = value === null || value === undefined ? "" : value; }
@@ -116,7 +127,7 @@
     html += '<div class="metric-head"><span class="metric-name">'
       + esc(name || (metric && metric.name)) + "</span>"
       + provenanceBadge(metric && metric.provenance) + "</div>";
-    html += '<div class="metric-value">' + esc(value) + "</div>";
+    html += '<div class="metric-value">' + formatMetricValue(value) + "</div>";
     html += '<div class="metric-basis">' + esc(metric && metric.basis) + "</div>";
     if (!available && metric && metric.availability) {
       html += '<div class="metric-reason">' + esc(metric.availability) + "</div>";
@@ -498,10 +509,19 @@
   function init() {
     var form = el("filters");
     if (form) {
+      // Filters auto-apply: Enter in a date field must not reload the page.
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        loadList();
       });
+    }
+    var autoApply = function () { loadList(); };
+    var field = el("since");
+    if (field) { field.addEventListener("change", autoApply); }
+    field = el("until");
+    if (field) { field.addEventListener("change", autoApply); }
+    var boxes = document.querySelectorAll('input[name="status"]');
+    for (var i = 0; i < boxes.length; i++) {
+      boxes[i].addEventListener("change", autoApply);
     }
     var reset = el("reset");
     if (reset) {
@@ -512,10 +532,6 @@
         for (var i = 0; i < boxes.length; i++) { boxes[i].checked = false; }
         loadList();
       });
-    }
-    var refresh = el("refresh");
-    if (refresh) {
-      refresh.addEventListener("click", function () { load(); });
     }
     var themeButton = el("theme-toggle");
     if (themeButton) {
