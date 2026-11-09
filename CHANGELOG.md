@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-09
+
+### Changed
+
+- The live viz now includes a historical runs view: browse past runs with since/until/status filters, an aggregate metrics panel, and per-run detail with brief, implementation summary, review findings, and QA artifacts, charted by a vendored ECharts bundle.
+- The per-run trigger script now commits the engine pin bump after a doctor-repair upgrade, so the next run's tooling integrity check passes without manual git work.
+
 ## [0.13.0] - 2026-11-08
 
 ### Changed
