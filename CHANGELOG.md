@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.4] - 2026-11-09
+
+### Changed
+
+- The historical runs page now leads each category with 2-3 charted key stats (gauges, bars, big numbers) and hides the full metric set behind a collapsed details expander; per-thread metrics on the run detail page follow the same pattern, and nested dict metrics render readable entries instead of [object Object].
+
 ## [0.14.3] - 2026-11-09
 
 ### Changed

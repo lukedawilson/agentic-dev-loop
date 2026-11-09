@@ -1,6 +1,6 @@
 # 063: Runs page stats reorganisation - key stats, charts, drill-down
 
-Status: spec approved (brainstorming 2026-11-09), ready for implementation plan.
+> **Status: COMPLETED**
 
 ## Problem
 
