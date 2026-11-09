@@ -37,6 +37,14 @@ if ! agentic-dev-loop doctor --fast; then
     echo "error: doctor --fast still fails after upgrading the engine" >&2
     exit 1
   fi
+  # The upgrade rewrites the project pin; commit the bump (only when dirty) so
+  # the tooling integrity check passes on the next run instead of failing on
+  # an uncommitted pin. Skipped when git is unavailable or the pin is clean.
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+     && [[ -n "$(git status --porcelain -- agentic-dev-loop/.engine-version)" ]]; then
+    git add agentic-dev-loop/.engine-version
+    git commit -m "Upgrade engine"
+  fi
 fi
 
 # Document loader selection - exactly one of:

@@ -86,6 +86,28 @@ def _stub_env(tmp_path, *, doctor_fail_count=0, upgrade_fail=False):
     return bin_dir
 
 
+def _make_git_stub(bin_dir: Path, tmp_path: Path, dirty: bool) -> None:
+    """A git stub that reports the pin dirty only when the marker file exists
+    and records every invocation for assertions."""
+    marker = tmp_path / "pin.dirty"
+    log = tmp_path / "git.calls"
+    body = f'''echo "$*" >> "{str(log)}"
+if [[ "$1" == rev-parse ]]; then
+  echo true
+  exit 0
+fi
+if [[ "$1" == status ]]; then
+  if [[ -f "{str(marker)}" ]]; then
+    echo " M agentic-dev-loop/.engine-version"
+  fi
+  exit 0
+fi
+exit 0'''
+    _make_stub(bin_dir, "git", body)
+    if dirty:
+        marker.touch()
+
+
 def test_trigger_doctor_pass_skips_upgrade(tmp_path):
     """A clean doctor gate never touches upgrade; the run proceeds directly."""
     bin_dir = _stub_env(tmp_path)
@@ -109,6 +131,31 @@ def test_trigger_upgrades_once_on_doctor_failure(tmp_path):
     # Doctor runs before the upgrade and once more after it, so two calls.
     assert counter.read_text().count("\n") == 2
     assert "cli-ran:" in result.stdout
+
+
+def test_trigger_upgrade_commits_dirty_pin(tmp_path):
+    """A successful upgrade commits the rewritten pin when it is dirty."""
+    bin_dir = _stub_env(tmp_path, doctor_fail_count=1)
+    _make_git_stub(bin_dir, tmp_path, dirty=True)
+
+    result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
+
+    assert result.returncode == 0, result.stderr
+    calls = (tmp_path / "git.calls").read_text()
+    assert "add agentic-dev-loop/.engine-version" in calls
+    assert "commit -m Upgrade engine" in calls
+
+
+def test_trigger_upgrade_skips_commit_when_pin_clean(tmp_path):
+    """A successful upgrade with a clean pin does not commit."""
+    bin_dir = _stub_env(tmp_path, doctor_fail_count=1)
+    _make_git_stub(bin_dir, tmp_path, dirty=False)
+
+    result = _run_script("--plan", "plan.md", env=_env_with(bin_dir))
+
+    assert result.returncode == 0, result.stderr
+    calls = (tmp_path / "git.calls").read_text()
+    assert "commit" not in calls
 
 
 def test_trigger_upgrade_failure_fails_hard(tmp_path):
