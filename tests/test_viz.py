@@ -311,6 +311,46 @@ class TestVizBus:
             events.append(q.get_nowait())
         assert [e["text"] for e in events] == [3, 4]
 
+    def test_console_replay_retains_each_node_separately(self):
+        bus = VizBus()
+        bus.publish({"type": "run_started"})
+        for i in range(600):
+            bus.publish({"type": "console", "node": "dev", "text": i})
+        for i in range(600):
+            bus.publish({"type": "console", "node": "qa", "text": i})
+        bus.publish({"type": "node_started", "node": "qa"})
+        q = bus.subscribe()
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        assert [e["type"] for e in events] == \
+            ["run_started"] + ["console"] * 1000 + ["node_started"]
+        dev_texts = [e["text"] for e in events
+                     if e["type"] == "console" and e["node"] == "dev"]
+        qa_texts = [e["text"] for e in events
+                    if e["type"] == "console" and e["node"] == "qa"]
+        assert dev_texts == list(range(100, 600))
+        assert qa_texts == list(range(100, 600))
+
+    def test_console_replay_merges_nodes_in_publish_order(self):
+        bus = VizBus()
+        published = [
+            {"type": "console", "node": "dev", "text": "a0"},
+            {"type": "node_started", "node": "dev"},
+            {"type": "console", "node": "qa", "text": "b0"},
+            {"type": "console", "node": "dev", "text": "a1"},
+            {"type": "console", "node": "qa", "text": "b1"},
+            {"type": "node_finished", "node": "dev"},
+            {"type": "console", "node": "dev", "text": "a2"},
+        ]
+        for event in published:
+            bus.publish(event)
+        q = bus.subscribe()
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        assert events == published
+
     def test_heartbeat_live_only_not_replayed(self):
         bus = VizBus()
         bus.publish({"type": "heartbeat", "node": "dev", "elapsed_seconds": 1})

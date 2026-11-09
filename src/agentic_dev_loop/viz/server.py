@@ -168,13 +168,20 @@ class VizBus:
     (lifecycle) and console events merged in publish order, so a browser tab
     opened mid-run catches up without console volume evicting lifecycle
     events. Heartbeats are delivered live but never replayed.
+
+    Console retention is per node: ``console_maxlen`` bounds the most recent
+    console lines retained for each publishing node (and for one bucket
+    holding unattributed, node-less output), not the run as a whole, so every
+    step's log replays on connect instead of only the current step's.
+    Lifecycle retention remains a single global ``maxlen`` backlog.
     """
 
     def __init__(self, maxlen: int = 500, console_maxlen: int = 500) -> None:
         self._subscribers: set[queue.Queue] = set()
         self._lock = threading.Lock()
         self._backlog: deque = deque(maxlen=maxlen)
-        self._console_backlog: deque = deque(maxlen=console_maxlen)
+        self._console_maxlen = console_maxlen
+        self._console_backlogs: dict[str | None, deque] = {}
         self._seq = 0
 
     def publish(self, event: dict) -> None:
@@ -183,7 +190,12 @@ class VizBus:
             seq = self._seq
             etype = event.get("type")
             if etype == "console":
-                self._console_backlog.append((seq, event))
+                node = event.get("node")
+                bucket = self._console_backlogs.get(node)
+                if bucket is None:
+                    bucket = deque(maxlen=self._console_maxlen)
+                    self._console_backlogs[node] = bucket
+                bucket.append((seq, event))
             elif etype != "heartbeat":
                 self._backlog.append((seq, event))
             subscribers = list(self._subscribers)
@@ -193,9 +205,10 @@ class VizBus:
     def subscribe(self) -> queue.Queue:
         sub: queue.Queue = queue.Queue()
         with self._lock:
-            merged = sorted(
-                list(self._backlog) + list(self._console_backlog),
-                key=lambda item: item[0])
+            retained = list(self._backlog)
+            for bucket in self._console_backlogs.values():
+                retained.extend(bucket)
+            merged = sorted(retained, key=lambda item: item[0])
             for _seq, event in merged:
                 sub.put(event)
             self._subscribers.add(sub)
