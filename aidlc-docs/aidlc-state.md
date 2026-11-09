@@ -301,6 +301,10 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   module directly; historical backfill of the existing runs; unit-9
   hand-written skin and tokens.
 - Hard dependency on unit-12 (metrics module); ordering: unit-12 first.
+- Code Generation staging (2026-11-09): charting spike artifacts staged
+  at spikes/unit-13-charting/ (vendor bundles sanitized to ASCII, probe
+  results, PROVENANCE.md with upstream + sanitized SHA256); dev-loop run
+  pending, user-driven.
 - FD outcome (2026-11-09): FD-Q1 same server, separate page (/runs +
   /runs/<id> routes, History link on live page, --history launcher mode);
   FD-Q2 no polling (refresh on tab switch + manual button, per-request

@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>unit-13 chart spike - ECharts</title>
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<header class="hdr">
+  <span class="hdr-brand" id="hdr-title">unit-13 chart spike - ECharts</span>
+  <button id="theme-toggle" class="hdr-action" type="button"
+          aria-label="Switch to light theme">Theme</button>
+</header>
+<main class="shell">
+  <section class="panel" aria-label="Verdict sequence strips">
+    <div class="panel-h">Verdict sequence strips (thread tdd-3f2a)</div>
+    <div id="chart-strips" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Step duration bars">
+    <div class="panel-h">Step duration bars (thread tdd-3f2a, ts deltas)</div>
+    <div id="chart-durations" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="TDD red-green timeline">
+    <div class="panel-h">TDD red-green timeline (run-wide verdict sequence)</div>
+    <div id="chart-timeline" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Verdict distribution">
+    <div class="panel-h">Verdict distribution (whole run)</div>
+    <div id="chart-distribution" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Aggregate trend">
+    <div class="panel-h">Aggregate trend across runs (attempts + pass rate)</div>
+    <div id="chart-trend" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Degradation">
+    <div class="panel-h">Degradation: thread verify-9c1d has metrics: {} (HC-7)</div>
+    <div id="chart-degraded" class="chart-slot"></div>
+  </section>
+</main>
+<script src="fixtures.js"></script>
+<script id="vendor-echarts"></script>
+<script>
+(function () {
+  "use strict";
+  var F = window.ADL_FIXTURES;
+  var variant = "full";
+  var withAria = false;
+  try {
+    var q = new URLSearchParams(location.search);
+    variant = q.get("variant") || "full";
+    withAria = q.get("aria") === "1";
+  } catch (err) {}
+  window.ADL_ARIA = withAria;
+  var vendorFile = "vendor/echarts/echarts.min.js";
+  if (variant === "simple") { vendorFile = "vendor/echarts/echarts.simple.min.js"; }
+  else if (variant === "common") { vendorFile = "vendor/echarts/echarts.common.min.js"; }
+  var s = document.getElementById("vendor-echarts");
+  s.src = vendorFile;
+  s.onload = boot;
+  document.getElementById("hdr-title").textContent =
+    "unit-13 chart spike - ECharts 6.1.0 (" + variant + " bundle)";
+
+  var renderCount = 0;
+  var instances = {};
+  var errors = [];
+  var lib = "echarts-" + variant;
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  function verdictColor(vd) {
+    if (vd === "pass") { return css("--cds-support-success"); }
+    if (vd === "fail") { return css("--cds-support-warning"); }
+    if (vd === "env") { return css("--cds-support-error"); }
+    return css("--adl-support-unverifiable");
+  }
+
+  var ECH_FONT = { fontFamily: "'IBM Plex Sans', system-ui, sans-serif", fontSize: 12 };
+
+  function allVerdicts() {
+    var out = [];
+    F.detail.threads.forEach(function (th) {
+      th.attempts.forEach(function (a) {
+        a.verdicts.forEach(function (vd) {
+          out.push({
+            thread: th.thread_id, attempt: a.number,
+            step: vd.step, verdict: vd.verdict,
+            provenance: vd.provenance, ts: vd.ts
+          });
+        });
+      });
+    });
+    return out;
+  }
+
+  function initSlot(id) {
+    var el = document.getElementById(id);
+    el.innerHTML = "";
+    var inst = echarts.init(el, null, { renderer: "svg", height: 260 });
+    instances[id] = inst;
+    return inst;
+  }
+  function setSafe(id, option) {
+    var inst = instances[id];
+    try {
+      if (window.ADL_ARIA) { option.aria = { enabled: true }; }
+      inst.setOption(option);
+      return { ok: true };
+    } catch (err) {
+      errors.push({ slot: id, message: String(err && err.message || err) });
+      return { ok: false, message: String(err && err.message || err) };
+    }
+  }
+
+  /* ---- 1. verdict sequence strips ---- */
+  function renderStrips() {
+    var slot = "chart-strips";
+    var th = F.detail.threads[0];
+    var flat = [];
+    th.attempts.forEach(function (a) {
+      a.verdicts.forEach(function (vd) { flat.push({ a: a.number, vd: vd }); });
+    });
+    var labelByIndex = {};
+    flat.forEach(function (item, i) { labelByIndex[i] = item.vd.step; });
+    var series = flat.map(function (item, i) {
+      return {
+        type: "line",
+        symbol: "none",
+        lineStyle: { width: 14, color: verdictColor(item.vd.verdict) },
+        data: [
+          { value: [i, item.a], step: item.vd.step, verdict: item.vd.verdict,
+            provenance: item.vd.provenance },
+          { value: [i + 1, item.a], step: item.vd.step, verdict: item.vd.verdict,
+            provenance: item.vd.provenance }
+        ]
+      };
+    });
+    initSlot(slot);
+    var res = setSafe(slot, {
+      textStyle: ECH_FONT,
+      grid: { left: 90, right: 16, top: 8, bottom: 28 },
+      xAxis: {
+        type: "value", min: 0, max: flat.length, interval: 1,
+        axisLabel: {
+          formatter: function (val) { return labelByIndex[val] || ""; },
+          color: css("--cds-text-secondary")
+        },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      yAxis: {
+        type: "value", min: 1, max: th.attempts.length, interval: 1,
+        axisLabel: {
+          formatter: function (val) { return "Attempt " + val; },
+          color: css("--cds-text-secondary")
+        },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      tooltip: {
+        trigger: "item",
+        formatter: function (p) {
+          return p.data.step + " " + p.data.verdict
+            + " [" + p.data.provenance + "]";
+        }
+      },
+      series: series
+    });
+    var el = document.getElementById(slot);
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label",
+      "Verdict sequence strips: " + flat.map(function (f) {
+        return "attempt " + f.a + " " + f.vd.step + " " + f.vd.verdict;
+      }).join(", ") + ".");
+    return res;
+  }
+
+  /* ---- 2. step duration bars ---- */
+  function renderDurations() {
+    var slot = "chart-durations";
+    var th = F.detail.threads[0];
+    var rows = [];
+    th.attempts.forEach(function (a) {
+      var prev = null;
+      a.verdicts.forEach(function (vd) {
+        var t = Date.parse(vd.ts);
+        if (prev !== null) {
+          rows.push({
+            label: "A" + a.number + " " + vd.step,
+            duration: (t - prev) / 1000,
+            verdict: vd.verdict, provenance: vd.provenance
+          });
+        }
+        prev = t;
+      });
+    });
+    initSlot(slot);
+    var res = setSafe(slot, {
+      textStyle: ECH_FONT,
+      grid: { left: 90, right: 16, top: 8, bottom: 28 },
+      xAxis: {
+        type: "value", name: "seconds",
+        nameTextStyle: { color: css("--cds-text-secondary") },
+        axisLabel: { color: css("--cds-text-secondary") },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      yAxis: {
+        type: "category",
+        data: rows.map(function (r) { return r.label; }),
+        axisLabel: { color: css("--cds-text-secondary") },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      tooltip: {
+        trigger: "item",
+        formatter: function (p) {
+          var r = rows[p.dataIndex];
+          return r.label + ": " + r.duration.toFixed(1) + "s ["
+            + r.provenance + "]";
+        }
+      },
+      series: [{
+        type: "bar",
+        barWidth: 14,
+        itemStyle: {
+          borderWidth: 1,
+          borderColor: css("--cds-border-subtle-01")
+        },
+        data: rows.map(function (r) {
+          return {
+            value: r.duration,
+            itemStyle: { color: verdictColor(r.verdict) }
+          };
+        })
+      }]
+    });
+    var el = document.getElementById(slot);
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", "Step durations: "
+      + rows.map(function (r) {
+          return r.label + " " + r.duration.toFixed(0) + " seconds";
+        }).join(", ") + ".");
+    return res;
+  }
+
+  /* ---- 3. TDD red-green timeline with markArea ---- */
+  function renderTimeline() {
+    var slot = "chart-timeline";
+    var flat = allVerdicts();
+    var labels = flat.map(function (f) { return f.step; });
+    var red = [], green = [], line = [];
+    flat.forEach(function (f) {
+      var isRed = (f.verdict === "fail" || f.verdict === "env");
+      var isGreen = (f.verdict === "pass");
+      red.push(isRed ? 1 : 0);
+      green.push(isGreen ? 1 : 0);
+      line.push({
+        value: f.verdict === "pass" ? 1 : (f.verdict === "unverifiable" ? -1 : 0),
+        step: f.step, verdict: f.verdict, provenance: f.provenance
+      });
+    });
+    initSlot(slot);
+    var res = setSafe(slot, {
+      textStyle: ECH_FONT,
+      grid: { left: 40, right: 60, top: 8, bottom: 28 },
+      legend: { textStyle: { color: css("--cds-text-secondary") } },
+      xAxis: {
+        type: "category", data: labels,
+        axisLabel: { color: css("--cds-text-secondary"), interval: "auto" },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      yAxis: [
+        { type: "value", min: 0, max: 1.5, show: false },
+        {
+          type: "value", position: "right", min: -1.5, max: 1.5, interval: 1,
+          axisLabel: {
+            color: css("--cds-text-secondary"),
+            formatter: function (v) {
+              return v === 1 ? "pass" : (v === 0 ? "fail" : "unv");
+            }
+          },
+          splitLine: { show: false }
+        }
+      ],
+      tooltip: {
+        trigger: "axis",
+        formatter: function (params) {
+          var out = [];
+          params.forEach(function (p) {
+            if (p.seriesName === "test verdict") {
+              out.push(p.data.step + " " + p.data.verdict
+                + " [" + p.data.provenance + "]");
+            } else {
+              out.push(p.seriesName);
+            }
+          });
+          return out.join("<br/>");
+        }
+      },
+      series: [
+        {
+          name: "failing", type: "line", yAxisIndex: 0,
+          stack: "band", data: red, symbol: "none",
+          lineStyle: { opacity: 0 },
+          itemStyle: { color: verdictColor("env") },
+          areaStyle: { color: verdictColor("env") }
+        },
+        {
+          name: "passing", type: "line", yAxisIndex: 0,
+          stack: "band", data: green, symbol: "none",
+          lineStyle: { opacity: 0 },
+          itemStyle: { color: verdictColor("pass") },
+          areaStyle: { color: verdictColor("pass") }
+        },
+        {
+          name: "test verdict", type: "line", yAxisIndex: 1,
+          data: line, step: "end",
+          lineStyle: { color: css("--cds-text-primary"), width: 2 },
+          itemStyle: { color: css("--cds-text-primary") },
+          symbolSize: 6
+        }
+      ]
+    });
+    var el = document.getElementById(slot);
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label",
+      "Red-green timeline: failing spans in red, passing spans in green, step verdicts " + labels.join(", ") + ".");
+    return res;
+  }
+
+  /* ---- 4. distribution ---- */
+  function renderDistribution() {
+    var slot = "chart-distribution";
+    var flat = allVerdicts();
+    var counts = { pass: 0, fail: 0, unverifiable: 0, env: 0 };
+    flat.forEach(function (f) {
+      if (counts[f.verdict] !== undefined) { counts[f.verdict]++; }
+      else { counts.unverifiable++; }
+    });
+    var keys = ["pass", "fail", "env", "unverifiable"];
+    initSlot(slot);
+    var res = setSafe(slot, {
+      tooltip: {
+        trigger: "item",
+        formatter: function (p) { return p.name + ": " + p.value + " verdicts"; }
+      },
+      legend: {
+        orient: "vertical", right: 8, top: "middle",
+        textStyle: { color: css("--cds-text-secondary") }
+      },
+      series: [{
+        type: "pie",
+        radius: ["45%", "70%"],
+        label: { color: css("--cds-text-secondary") },
+        data: keys.map(function (k) {
+          return {
+            name: k, value: counts[k],
+            itemStyle: { color: verdictColor(k) }
+          };
+        })
+      }]
+    });
+    var el = document.getElementById(slot);
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", "Verdict distribution: pass " + counts.pass
+      + ", fail " + counts.fail + ", env " + counts.env
+      + ", unverifiable " + counts.unverifiable + ".");
+    return res;
+  }
+
+  /* ---- 5. aggregate trend ---- */
+  function renderTrend() {
+    var slot = "chart-trend";
+    var runs = F.trend.runs;
+    var labels = runs.map(function (r) { return r.ts_start.slice(0, 10); });
+    var attempts = runs.map(function (r) { return r.attempt_count; });
+    var rates = runs.map(function (r) {
+      var sm = r.verdict_summary;
+      var n = sm.pass + sm.fail + sm.unverifiable + sm.env;
+      return n ? Math.round(100 * sm.pass / n) : null;
+    });
+    initSlot(slot);
+    var res = setSafe(slot, {
+      textStyle: ECH_FONT,
+      grid: { left: 40, right: 60, top: 8, bottom: 28 },
+      xAxis: {
+        type: "category", data: labels,
+        axisLabel: { color: css("--cds-text-secondary") },
+        splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+      },
+      yAxis: [
+        {
+          type: "value", name: "attempts",
+          nameTextStyle: { color: css("--cds-text-secondary") },
+          axisLabel: { color: css("--cds-text-secondary") },
+          splitLine: { lineStyle: { color: css("--cds-border-subtle-01") } }
+        },
+        {
+          type: "value", name: "pass rate %", min: 0, max: 100,
+          nameTextStyle: { color: css("--cds-text-secondary") },
+          axisLabel: { color: css("--cds-text-secondary") },
+          splitLine: { show: false }
+        }
+      ],
+      tooltip: {
+        trigger: "axis",
+        formatter: function (params) {
+          var r = runs[params[0].dataIndex];
+          return params.map(function (p) {
+            if (p.seriesIndex === 0) { return "attempts: " + p.value; }
+            return "pass rate: " + p.value + "% (" + r.status + ")";
+          }).join("<br/>");
+        }
+      },
+      legend: { textStyle: { color: css("--cds-text-secondary") } },
+      series: [
+        {
+          name: "attempts", type: "line", yAxisIndex: 0,
+          data: attempts, smooth: 0.2,
+          lineStyle: { color: css("--cds-interactive"), width: 3 },
+          itemStyle: { color: css("--cds-interactive") },
+          symbolSize: 6
+        },
+        {
+          name: "pass rate %", type: "line", yAxisIndex: 1,
+          data: rates, smooth: 0.2,
+          lineStyle: { color: verdictColor("pass"), width: 3 },
+          itemStyle: { color: verdictColor("pass") },
+          symbolSize: 6
+        }
+      ]
+    });
+    var el = document.getElementById(slot);
+    el.setAttribute("role", "img");
+    el.setAttribute("aria-label", "Aggregate trend across " + runs.length
+      + " runs: attempts " + attempts.join(", ")
+      + "; pass rates " + rates.map(function (r) { return r + "%"; }).join(", ") + ".");
+    return res;
+  }
+
+  /* ---- 6. degradation (HC-7) ---- */
+  function renderDegraded() {
+    var slot = document.getElementById("chart-degraded");
+    slot.innerHTML = "";
+    var th = F.detail.threads[1];
+    if (!th.metrics || Object.keys(th.metrics).length === 0) {
+      var msg = document.createElement("p");
+      msg.className = "graph-msg";
+      msg.textContent = "Metrics unavailable for thread " + th.thread_id
+        + " - chart omitted, verdicts below stay readable.";
+      slot.appendChild(msg);
+      slot.setAttribute("role", "img");
+      slot.setAttribute("aria-label",
+        "Metrics unavailable for thread " + th.thread_id + ".");
+      var box = document.createElement("div");
+      th.attempts.forEach(function (a) {
+        a.verdicts.forEach(function (vd) {
+          var b = document.createElement("span");
+          b.className = "badge";
+          if (vd.verdict === "pass") { b.className += " badge-pass"; }
+          else if (vd.verdict === "fail") { b.className += " badge-fail"; }
+          else if (vd.verdict === "env") { b.className += " badge-env"; }
+          else { b.className += " badge-unverifiable"; }
+          b.textContent = vd.step + ": " + vd.verdict;
+          box.appendChild(b);
+        });
+      });
+      slot.appendChild(box);
+      return { ok: true };
+    }
+    slot.textContent = "metrics present (fixture wrong)";
+    return { ok: true };
+  }
+
+  function renderAll() {
+    var results = {
+      strips: renderStrips(),
+      durations: renderDurations(),
+      timeline: renderTimeline(),
+      distribution: renderDistribution(),
+      trend: renderTrend(),
+      degraded: renderDegraded()
+    };
+    renderCount++;
+    return results;
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    var btn = document.getElementById("theme-toggle");
+    btn.setAttribute("aria-label",
+      theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
+  }
+  var theme = "dark";
+  try {
+    var stored = localStorage.getItem("adl-theme");
+    if (stored === "dark" || stored === "light") { theme = stored; }
+  } catch (err) { /* session-only */ }
+  applyTheme(theme);
+
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    theme = theme === "dark" ? "light" : "dark";
+    applyTheme(theme);
+    try { localStorage.setItem("adl-theme", theme); } catch (err) {}
+    errors.length = 0;
+    renderAll();
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { renderAll(); }
+  });
+
+  window.addEventListener("resize", function () {
+    Object.keys(instances).forEach(function (k) {
+      var inst = instances[k];
+      if (inst && typeof inst.resize === "function") { inst.resize(); }
+    });
+  });
+
+  function boot() {
+    window.__adl = {
+      lib: lib,
+      variant: variant,
+      get renderCount() { return renderCount; },
+      get theme() { return theme; },
+      errors: errors,
+      report: function () {
+        return {
+          lib: lib, variant: variant, ariaEnabled: withAria,
+          renderCount: renderCount, theme: theme,
+          errors: errors.slice(),
+          echartsVersion: echarts.version,
+          tokens: {
+            success: css("--cds-support-success"),
+            warning: css("--cds-support-warning"),
+            error: css("--cds-support-error"),
+            unverifiable: css("--adl-support-unverifiable"),
+            background: css("--cds-background"),
+            layer01: css("--cds-layer-01")
+          },
+          slots: {
+            strips: slotInfo("chart-strips"),
+            durations: slotInfo("chart-durations"),
+            timeline: slotInfo("chart-timeline"),
+            distribution: slotInfo("chart-distribution"),
+            trend: slotInfo("chart-trend"),
+            degraded: slotInfo("chart-degraded")
+          }
+        };
+      }
+    };
+    renderAll();
+  }
+  function slotInfo(id) {
+    var el = document.getElementById(id);
+    return {
+      svg: el ? el.querySelectorAll("svg").length : -1,
+      textNodes: el ? el.querySelectorAll("svg text").length : -1,
+      role: el ? el.getAttribute("role") : null
+    };
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html><html><body>
+<div id="c" style="width:640px;height:220px"></div>
+<script src="vendor/echarts/echarts.common.min.js"></script>
+<script>
+var c = echarts.init(document.getElementById("c"), null, { renderer: "svg" });
+c.setOption({
+  grid: { left: 90, right: 16, top: 8, bottom: 28 },
+  xAxis: { type: "value", min: 0, max: 6 },
+  yAxis: { type: "value", min: 1, max: 3, interval: 1 },
+  series: [
+    { type: "line", symbol: "none", lineStyle: { width: 14, color: "#42BE65" }, data: [[0,1],[1,1]] },
+    { type: "line", symbol: "none", lineStyle: { width: 14, color: "#FF6B72" }, data: [[2,2],[3,2]] },
+    { type: "line", symbol: "none", lineStyle: { width: 14, color: "#F1C21B" }, data: [[4,3],[5,3]] }
+  ]
+});
+</script>
+</body></html>

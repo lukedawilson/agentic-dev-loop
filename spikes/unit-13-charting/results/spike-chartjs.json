@@ -1,0 +1,148 @@
+{
+  "page": "spike-chartjs.html",
+  "variant": null,
+  "url": "file:///private/var/folders/9_/y5nzr0ts3f75mxtnw3vpgy880000gn/T/opencode/unit-13-charting-spike/spike-chartjs.html",
+  "echartsVersion": null,
+  "renderCount": {
+    "afterLoad": 1,
+    "afterThemeFlip": 2,
+    "afterVisibility": 4
+  },
+  "theme": {
+    "initial": "dark",
+    "afterFlip": "light"
+  },
+  "themeFlipRerendered": true,
+  "report1": {
+    "lib": "chart.js",
+    "renderCount": 1,
+    "theme": "dark",
+    "tokens": {
+      "success": "#42BE65",
+      "warning": "#F1C21B",
+      "error": "#FF6B72",
+      "unverifiable": "#BE95FF",
+      "background": "#0F1214",
+      "layer01": "#171B1F"
+    },
+    "slots": {
+      "strips": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "durations": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "timeline": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "distribution": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "trend": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "degraded": {
+        "nodes": 4,
+        "role": "img"
+      }
+    },
+    "instances": 5
+  },
+  "report2": {
+    "lib": "chart.js",
+    "renderCount": 2,
+    "theme": "light",
+    "tokens": {
+      "success": "#198038",
+      "warning": "#8E6A00",
+      "error": "#DA1E28",
+      "unverifiable": "#8A3FFC",
+      "background": "#F2F4F5",
+      "layer01": "#FFFFFF"
+    },
+    "slots": {
+      "strips": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "durations": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "timeline": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "distribution": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "trend": {
+        "nodes": 1,
+        "role": "img"
+      },
+      "degraded": {
+        "nodes": 4,
+        "role": "img"
+      }
+    },
+    "instances": 5
+  },
+  "renderProof": {
+    "strips": {
+      "canvas": 1,
+      "svg": 0,
+      "pixelVariety": 113,
+      "texts": 0
+    },
+    "durations": {
+      "canvas": 1,
+      "svg": 0,
+      "pixelVariety": 82,
+      "texts": 0
+    },
+    "timeline": {
+      "canvas": 1,
+      "svg": 0,
+      "pixelVariety": 252,
+      "texts": 0
+    },
+    "distribution": {
+      "canvas": 1,
+      "svg": 0,
+      "pixelVariety": 423,
+      "texts": 0
+    },
+    "trend": {
+      "canvas": 1,
+      "svg": 0,
+      "pixelVariety": 244,
+      "texts": 0
+    },
+    "degraded": {
+      "canvas": 0,
+      "svg": 0,
+      "pixelVariety": 0,
+      "texts": 0
+    }
+  },
+  "axNodeCount": 59,
+  "axSummary": [
+    {
+      "role": "button",
+      "name": "Switch to light theme"
+    }
+  ],
+  "consoleErrors": [],
+  "exceptions": [],
+  "files": {
+    "dark": "spike-chartjs-dark.png",
+    "light": "spike-chartjs-light.png",
+    "ax": "spike-chartjs-ax.json"
+  }
+}

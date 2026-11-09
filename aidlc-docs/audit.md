@@ -1139,3 +1139,11 @@ Let's do some brainstorming and then feed into the unit intent"
 **Context**: CONSTRUCTION - unit-13 Functional Design stage complete.
 
 ---
+
+## Unit-13 commit and continue directive
+**Timestamp**: 2026-11-09T14:05:00Z
+**User Input**: "Commit and push everything, then continue"
+**AI Response**: Committed a1b78e7 (unit-13 FD + charting-selection doc). Continued to Code Generation staging: copied the charting spike artifacts from the opencode temp dir into spikes/unit-13-charting/ (approved destination per the selection doc Phase 4 gate), sanitized the vendored echarts.common.min.js + echarts.simple.min.js (933 non-ASCII aria-locale bytes each replaced with '?', node --check re-verified; upstream SHA256 61f13280...013d5 verified pre-sanitization, sanitized SHA256 c86479a3... recorded in spikes/unit-13-charting/PROVENANCE.md), excluded chrome profiles and err.txt. Staged and committed below.
+**Context**: CONSTRUCTION - unit-13 Code Generation stage; vendor artifact now in-repo so the dev-loop run (network-off sandbox) can inline it.
+
+---

@@ -1,0 +1,1970 @@
+[
+  {
+    "nodeId": "11",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "RootWebArea"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 144
+    },
+    "name": {
+      "type": "computedString",
+      "value": "unit-13 chart spike - Chart.js",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label",
+          "superseded": true
+        },
+        {
+          "type": "relatedElement",
+          "value": {
+            "type": "computedString",
+            "value": "unit-13 chart spike - Chart.js"
+          },
+          "nativeSource": "title"
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "focusable",
+        "value": {
+          "type": "booleanOrUndefined",
+          "value": true
+        }
+      },
+      {
+        "name": "focused",
+        "value": {
+          "type": "booleanOrUndefined",
+          "value": true
+        }
+      },
+      {
+        "name": "url",
+        "value": {
+          "type": "string",
+          "value": "file:///private/var/folders/9_/y5nzr0ts3f75mxtnw3vpgy880000gn/T/opencode/unit-13-charting-spike/spike-chartjs.html"
+        }
+      }
+    ],
+    "childIds": [
+      "12"
+    ],
+    "backendDOMNodeId": 11,
+    "frameId": "941BEF72427CDC16B0D0C24D7C663F32"
+  },
+  {
+    "nodeId": "12",
+    "ignored": true,
+    "ignoredReasons": [
+      {
+        "name": "uninteresting",
+        "value": {
+          "type": "boolean",
+          "value": true
+        }
+      }
+    ],
+    "role": {
+      "type": "role",
+      "value": "none"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 0
+    },
+    "parentId": "11",
+    "childIds": [
+      "17"
+    ],
+    "backendDOMNodeId": 12
+  },
+  {
+    "nodeId": "17",
+    "ignored": true,
+    "ignoredReasons": [
+      {
+        "name": "uninteresting",
+        "value": {
+          "type": "boolean",
+          "value": true
+        }
+      }
+    ],
+    "role": {
+      "type": "role",
+      "value": "none"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 0
+    },
+    "parentId": "12",
+    "childIds": [
+      "18",
+      "21"
+    ],
+    "backendDOMNodeId": 17
+  },
+  {
+    "nodeId": "18",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "banner"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 94
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "17",
+    "childIds": [
+      "19",
+      "20"
+    ],
+    "backendDOMNodeId": 18
+  },
+  {
+    "nodeId": "21",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "main"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 118
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "17",
+    "childIds": [
+      "22",
+      "25",
+      "28",
+      "31",
+      "34",
+      "37"
+    ],
+    "backendDOMNodeId": 21
+  },
+  {
+    "nodeId": "19",
+    "ignored": true,
+    "ignoredReasons": [
+      {
+        "name": "uninteresting",
+        "value": {
+          "type": "boolean",
+          "value": true
+        }
+      }
+    ],
+    "role": {
+      "type": "role",
+      "value": "none"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 0
+    },
+    "parentId": "18",
+    "childIds": [
+      "3"
+    ],
+    "backendDOMNodeId": 19
+  },
+  {
+    "nodeId": "3",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "unit-13 chart spike - Chart.js 4.6.1 (vendored, plain script)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "unit-13 chart spike - Chart.js 4.6.1 (vendored, plain script)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "19",
+    "childIds": [
+      "-1000000025"
+    ],
+    "backendDOMNodeId": 3
+  },
+  {
+    "nodeId": "20",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "button"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 9
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Switch to light theme",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Switch to light theme"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Switch to light theme"
+          }
+        },
+        {
+          "type": "relatedElement",
+          "superseded": true,
+          "nativeSource": "label"
+        },
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Theme"
+          },
+          "superseded": true
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [
+      {
+        "name": "invalid",
+        "value": {
+          "type": "token",
+          "value": "false"
+        }
+      },
+      {
+        "name": "focusable",
+        "value": {
+          "type": "booleanOrUndefined",
+          "value": true
+        }
+      }
+    ],
+    "parentId": "18",
+    "childIds": [
+      "2"
+    ],
+    "backendDOMNodeId": 20
+  },
+  {
+    "nodeId": "22",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict sequence strips",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict sequence strips"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Verdict sequence strips"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "23",
+      "24"
+    ],
+    "backendDOMNodeId": 22
+  },
+  {
+    "nodeId": "25",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Step duration bars",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Step duration bars"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Step duration bars"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "26",
+      "27"
+    ],
+    "backendDOMNodeId": 25
+  },
+  {
+    "nodeId": "28",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "TDD red-green timeline",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "TDD red-green timeline"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "TDD red-green timeline"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "29",
+      "30"
+    ],
+    "backendDOMNodeId": 28
+  },
+  {
+    "nodeId": "31",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict distribution",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict distribution"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Verdict distribution"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "32",
+      "33"
+    ],
+    "backendDOMNodeId": 31
+  },
+  {
+    "nodeId": "34",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Aggregate trend",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Aggregate trend"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Aggregate trend"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "35",
+      "36"
+    ],
+    "backendDOMNodeId": 34
+  },
+  {
+    "nodeId": "37",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "region"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 143
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Degradation",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Degradation"
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Degradation"
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "21",
+    "childIds": [
+      "38",
+      "39"
+    ],
+    "backendDOMNodeId": 37
+  },
+  {
+    "nodeId": "-1000000025",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "unit-13 chart spike - Chart.js 4.6.1 (vendored, plain script)"
+    },
+    "properties": [],
+    "parentId": "3",
+    "childIds": []
+  },
+  {
+    "nodeId": "2",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Theme",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Theme"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "20",
+    "childIds": [
+      "-1000000026"
+    ],
+    "backendDOMNodeId": 2
+  },
+  {
+    "nodeId": "23",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "22",
+    "childIds": [
+      "5"
+    ],
+    "backendDOMNodeId": 23
+  },
+  {
+    "nodeId": "24",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict sequence strips: attempt 1 brief pass, attempt 1 deps pass, attempt 1 dev pass, attempt 1 test fail, attempt 2 dev pass, attempt 2 test pass, attempt 2 review fail, attempt 3 dev pass, attempt 3 test pass, attempt 3 review pass, attempt 3 qa pass.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict sequence strips: attempt 1 brief pass, attempt 1 deps pass, attempt 1 dev pass, attempt 1 test fail, attempt 2 dev pass, attempt 2 test pass, attempt 2 review fail, attempt 3 dev pass, attempt 3 test pass, attempt 3 review pass, attempt 3 qa pass."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Verdict sequence strips: attempt 1 brief pass, attempt 1 deps pass, attempt 1 dev pass, attempt 1 test fail, attempt 2 dev pass, attempt 2 test pass, attempt 2 review fail, attempt 3 dev pass, attempt 3 test pass, attempt 3 review pass, attempt 3 qa pass."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "22",
+    "childIds": [
+      "43"
+    ],
+    "backendDOMNodeId": 24
+  },
+  {
+    "nodeId": "26",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "25",
+    "childIds": [
+      "6"
+    ],
+    "backendDOMNodeId": 26
+  },
+  {
+    "nodeId": "27",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Step durations: A1 deps 52 seconds, A1 dev 69 seconds, A1 test 149 seconds, A2 test 94 seconds, A2 review 57 seconds, A3 test 39 seconds, A3 review 18 seconds, A3 qa 6 seconds.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Step durations: A1 deps 52 seconds, A1 dev 69 seconds, A1 test 149 seconds, A2 test 94 seconds, A2 review 57 seconds, A3 test 39 seconds, A3 review 18 seconds, A3 qa 6 seconds."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Step durations: A1 deps 52 seconds, A1 dev 69 seconds, A1 test 149 seconds, A2 test 94 seconds, A2 review 57 seconds, A3 test 39 seconds, A3 review 18 seconds, A3 qa 6 seconds."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "25",
+    "childIds": [
+      "44"
+    ],
+    "backendDOMNodeId": 27
+  },
+  {
+    "nodeId": "29",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "28",
+    "childIds": [
+      "7"
+    ],
+    "backendDOMNodeId": 29
+  },
+  {
+    "nodeId": "30",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Red-green timeline: failing spans in red, passing spans in green, step verdicts brief, deps, dev, test, dev, test, review, dev, test, review, qa, brief, deps, dev.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Red-green timeline: failing spans in red, passing spans in green, step verdicts brief, deps, dev, test, dev, test, review, dev, test, review, qa, brief, deps, dev."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Red-green timeline: failing spans in red, passing spans in green, step verdicts brief, deps, dev, test, dev, test, review, dev, test, review, qa, brief, deps, dev."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "28",
+    "childIds": [
+      "45"
+    ],
+    "backendDOMNodeId": 30
+  },
+  {
+    "nodeId": "32",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "31",
+    "childIds": [
+      "8"
+    ],
+    "backendDOMNodeId": 32
+  },
+  {
+    "nodeId": "33",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict distribution: pass 10, fail 2, env 1, unverifiable 1.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict distribution: pass 10, fail 2, env 1, unverifiable 1."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Verdict distribution: pass 10, fail 2, env 1, unverifiable 1."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "31",
+    "childIds": [
+      "46"
+    ],
+    "backendDOMNodeId": 33
+  },
+  {
+    "nodeId": "35",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "34",
+    "childIds": [
+      "9"
+    ],
+    "backendDOMNodeId": 35
+  },
+  {
+    "nodeId": "36",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Aggregate trend across 6 runs: attempts 4, 2, 5, 1, 3, 2; pass rates 75%, 89%, 56%, 100%, 59%, 94%.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Aggregate trend across 6 runs: attempts 4, 2, 5, 1, 3, 2; pass rates 75%, 89%, 56%, 100%, 59%, 94%."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Aggregate trend across 6 runs: attempts 4, 2, 5, 1, 3, 2; pass rates 75%, 89%, 56%, 100%, 59%, 94%."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "34",
+    "childIds": [
+      "47"
+    ],
+    "backendDOMNodeId": 36
+  },
+  {
+    "nodeId": "38",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "37",
+    "childIds": [
+      "10"
+    ],
+    "backendDOMNodeId": 38
+  },
+  {
+    "nodeId": "39",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "image"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 99
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Metrics unavailable for thread verify-9c1d.",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "value": {
+            "type": "computedString",
+            "value": "Metrics unavailable for thread verify-9c1d."
+          },
+          "attribute": "aria-label",
+          "attributeValue": {
+            "type": "string",
+            "value": "Metrics unavailable for thread verify-9c1d."
+          }
+        },
+        {
+          "type": "attribute",
+          "attribute": "title",
+          "superseded": true
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "37",
+    "childIds": [
+      "48",
+      "52"
+    ],
+    "backendDOMNodeId": 39
+  },
+  {
+    "nodeId": "-1000000026",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Theme"
+    },
+    "properties": [],
+    "parentId": "2",
+    "childIds": []
+  },
+  {
+    "nodeId": "5",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict sequence strips (thread tdd-3f2a)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict sequence strips (thread tdd-3f2a)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "23",
+    "childIds": [
+      "-1000000027"
+    ],
+    "backendDOMNodeId": 5
+  },
+  {
+    "nodeId": "43",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "Canvas"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 10
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "24",
+    "childIds": [],
+    "backendDOMNodeId": 43
+  },
+  {
+    "nodeId": "6",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Step duration bars (thread tdd-3f2a, ts deltas)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Step duration bars (thread tdd-3f2a, ts deltas)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "26",
+    "childIds": [
+      "-1000000028"
+    ],
+    "backendDOMNodeId": 6
+  },
+  {
+    "nodeId": "44",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "Canvas"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 10
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "27",
+    "childIds": [],
+    "backendDOMNodeId": 44
+  },
+  {
+    "nodeId": "7",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "TDD red-green timeline (run-wide verdict sequence)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "TDD red-green timeline (run-wide verdict sequence)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "29",
+    "childIds": [
+      "-1000000029"
+    ],
+    "backendDOMNodeId": 7
+  },
+  {
+    "nodeId": "45",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "Canvas"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 10
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "30",
+    "childIds": [],
+    "backendDOMNodeId": 45
+  },
+  {
+    "nodeId": "8",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict distribution (whole run)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Verdict distribution (whole run)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "32",
+    "childIds": [
+      "-1000000030"
+    ],
+    "backendDOMNodeId": 8
+  },
+  {
+    "nodeId": "46",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "Canvas"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 10
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "33",
+    "childIds": [],
+    "backendDOMNodeId": 46
+  },
+  {
+    "nodeId": "9",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Aggregate trend across runs (attempts + pass rate)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Aggregate trend across runs (attempts + pass rate)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "35",
+    "childIds": [
+      "-1000000031"
+    ],
+    "backendDOMNodeId": 9
+  },
+  {
+    "nodeId": "47",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "Canvas"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 10
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        },
+        {
+          "type": "attribute",
+          "attribute": "title"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "36",
+    "childIds": [],
+    "backendDOMNodeId": 47
+  },
+  {
+    "nodeId": "10",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Degradation: thread verify-9c1d has metrics: {} (HC-7)",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Degradation: thread verify-9c1d has metrics: {} (HC-7)"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "38",
+    "childIds": [
+      "-1000000032"
+    ],
+    "backendDOMNodeId": 10
+  },
+  {
+    "nodeId": "48",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "paragraph"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 133
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "39",
+    "childIds": [
+      "53"
+    ],
+    "backendDOMNodeId": 48
+  },
+  {
+    "nodeId": "52",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "39",
+    "childIds": [
+      "49",
+      "50",
+      "51"
+    ],
+    "backendDOMNodeId": 52
+  },
+  {
+    "nodeId": "-1000000027",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict sequence strips (thread tdd-3f2a)"
+    },
+    "properties": [],
+    "parentId": "5",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000028",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Step duration bars (thread tdd-3f2a, ts deltas)"
+    },
+    "properties": [],
+    "parentId": "6",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000029",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "TDD red-green timeline (run-wide verdict sequence)"
+    },
+    "properties": [],
+    "parentId": "7",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000030",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Verdict distribution (whole run)"
+    },
+    "properties": [],
+    "parentId": "8",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000031",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Aggregate trend across runs (attempts + pass rate)"
+    },
+    "properties": [],
+    "parentId": "9",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000032",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Degradation: thread verify-9c1d has metrics: {} (HC-7)"
+    },
+    "properties": [],
+    "parentId": "10",
+    "childIds": []
+  },
+  {
+    "nodeId": "53",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Metrics unavailable for thread verify-9c1d - chart omitted, verdicts below stay readable.",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "Metrics unavailable for thread verify-9c1d - chart omitted, verdicts below stay readable."
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "48",
+    "childIds": [
+      "-1000000041"
+    ],
+    "backendDOMNodeId": 53
+  },
+  {
+    "nodeId": "49",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "52",
+    "childIds": [
+      "54"
+    ],
+    "backendDOMNodeId": 49
+  },
+  {
+    "nodeId": "50",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "52",
+    "childIds": [
+      "55"
+    ],
+    "backendDOMNodeId": 50
+  },
+  {
+    "nodeId": "51",
+    "ignored": false,
+    "role": {
+      "type": "role",
+      "value": "generic"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 88
+    },
+    "name": {
+      "type": "computedString",
+      "value": "",
+      "sources": [
+        {
+          "type": "relatedElement",
+          "attribute": "aria-labelledby"
+        },
+        {
+          "type": "attribute",
+          "attribute": "aria-label"
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "52",
+    "childIds": [
+      "56"
+    ],
+    "backendDOMNodeId": 51
+  },
+  {
+    "nodeId": "-1000000041",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "Metrics unavailable for thread verify-9c1d - chart omitted, verdicts below stay readable."
+    },
+    "properties": [],
+    "parentId": "53",
+    "childIds": []
+  },
+  {
+    "nodeId": "54",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "brief: pass",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "brief: pass"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "49",
+    "childIds": [
+      "-1000000042"
+    ],
+    "backendDOMNodeId": 54
+  },
+  {
+    "nodeId": "55",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "deps: unverifiable",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "deps: unverifiable"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "50",
+    "childIds": [
+      "-1000000043"
+    ],
+    "backendDOMNodeId": 55
+  },
+  {
+    "nodeId": "56",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "StaticText"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 158
+    },
+    "name": {
+      "type": "computedString",
+      "value": "dev: env",
+      "sources": [
+        {
+          "type": "contents",
+          "value": {
+            "type": "computedString",
+            "value": "dev: env"
+          }
+        }
+      ]
+    },
+    "properties": [],
+    "parentId": "51",
+    "childIds": [
+      "-1000000044"
+    ],
+    "backendDOMNodeId": 56
+  },
+  {
+    "nodeId": "-1000000042",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "brief: pass"
+    },
+    "properties": [],
+    "parentId": "54",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000043",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "deps: unverifiable"
+    },
+    "properties": [],
+    "parentId": "55",
+    "childIds": []
+  },
+  {
+    "nodeId": "-1000000044",
+    "ignored": false,
+    "role": {
+      "type": "internalRole",
+      "value": "InlineTextBox"
+    },
+    "chromeRole": {
+      "type": "internalRole",
+      "value": 101
+    },
+    "name": {
+      "type": "computedString",
+      "value": "dev: env"
+    },
+    "properties": [],
+    "parentId": "56",
+    "childIds": []
+  }
+]

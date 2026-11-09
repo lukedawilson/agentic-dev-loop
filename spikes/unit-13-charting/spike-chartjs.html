@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>unit-13 chart spike - Chart.js</title>
+<link rel="stylesheet" href="tokens.css">
+</head>
+<body>
+<header class="hdr">
+  <span class="hdr-brand">unit-13 chart spike - Chart.js 4.6.1 (vendored, plain script)</span>
+  <button id="theme-toggle" class="hdr-action" type="button"
+          aria-label="Switch to light theme">Theme</button>
+</header>
+<main class="shell">
+  <section class="panel" aria-label="Verdict sequence strips">
+    <div class="panel-h">Verdict sequence strips (thread tdd-3f2a)</div>
+    <div id="chart-strips" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Step duration bars">
+    <div class="panel-h">Step duration bars (thread tdd-3f2a, ts deltas)</div>
+    <div id="chart-durations" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="TDD red-green timeline">
+    <div class="panel-h">TDD red-green timeline (run-wide verdict sequence)</div>
+    <div id="chart-timeline" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Verdict distribution">
+    <div class="panel-h">Verdict distribution (whole run)</div>
+    <div id="chart-distribution" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Aggregate trend">
+    <div class="panel-h">Aggregate trend across runs (attempts + pass rate)</div>
+    <div id="chart-trend" class="chart-slot"></div>
+  </section>
+  <section class="panel" aria-label="Degradation">
+    <div class="panel-h">Degradation: thread verify-9c1d has metrics: {} (HC-7)</div>
+    <div id="chart-degraded" class="chart-slot"></div>
+  </section>
+</main>
+<script src="fixtures.js"></script>
+<script src="vendor/chart.js/chart.umd.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var F = window.ADL_FIXTURES;
+  var lib = "chart.js";
+  var renderCount = 0;
+  var instances = {};
+
+  function css(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+  var VERDICT_COLOR = {
+    pass: function () { return css("--cds-support-success"); },
+    fail: function () { return css("--cds-support-warning"); },
+    env: function () { return css("--cds-support-error"); },
+    unverifiable: function () { return css("--adl-support-unverifiable"); }
+  };
+  function verdictColor(vd) {
+    var fn = VERDICT_COLOR[vd] || VERDICT_COLOR.unverifiable;
+    return fn();
+  }
+  function baseFont() {
+    return {
+      family: "'IBM Plex Sans', system-ui, sans-serif",
+      size: 12
+    };
+  }
+
+  function canvasFor(slot) {
+    var c = slot.querySelector("canvas");
+    if (!c) {
+      c = document.createElement("canvas");
+      slot.appendChild(c);
+    }
+    return c;
+  }
+
+  function allVerdicts() {
+    var out = [];
+    F.detail.threads.forEach(function (th) {
+      th.attempts.forEach(function (a) {
+        a.verdicts.forEach(function (vd) {
+          out.push({
+            thread: th.thread_id, attempt: a.number,
+            step: vd.step, verdict: vd.verdict,
+            provenance: vd.provenance, ts: vd.ts
+          });
+        });
+      });
+    });
+    return out;
+  }
+
+  /* ---- 1. verdict sequence strips: floating horizontal bars ---- */
+  function stripsData() {
+    var th = F.detail.threads[0];
+    var flat = [];
+    th.attempts.forEach(function (a) {
+      a.verdicts.forEach(function (vd) { flat.push({ a: a.number, vd: vd }); });
+    });
+    return {
+      th: th, flat: flat,
+      attempts: th.attempts.map(function (a) { return a.number; })
+    };
+  }
+
+  function renderStrips() {
+    var slot = document.getElementById("chart-strips");
+    var d = stripsData();
+    var bars = d.flat.map(function (item, i) {
+      return {
+        x: [i, i + 1], y: item.a,
+        label: item.vd.step + " " + item.vd.verdict
+          + " [" + item.vd.provenance + "]",
+        color: verdictColor(item.vd.verdict)
+      };
+    });
+    var labelByIndex = {};
+    d.flat.forEach(function (item, i) { labelByIndex[i] = item.vd.step; });
+    if (instances.strips) { instances.strips.destroy(); }
+    instances.strips = new Chart(canvasFor(slot), {
+      type: "bar",
+      data: {
+        datasets: [{
+          label: "verdict", data: bars,
+          backgroundColor: bars.map(function (b) { return b.color; }),
+          borderWidth: 1, barThickness: 14
+        }]
+      },
+      options: {
+        indexAxis: "y",
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: "linear", min: 0, max: d.flat.length,
+            ticks: {
+              stepSize: 1, color: css("--cds-text-secondary"),
+              font: baseFont(),
+              callback: function (val) { return labelByIndex[val] || ""; }
+            },
+            grid: { color: css("--cds-border-subtle-01") }
+          },
+          y: {
+            type: "linear", min: 0.5, max: d.attempts.length + 0.5,
+            ticks: {
+              stepSize: 1, color: css("--cds-text-secondary"),
+              font: baseFont(),
+              callback: function (val) { return "Attempt " + val; }
+            },
+            grid: { color: css("--cds-border-subtle-01") }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) { return ctx.raw.label; }
+            }
+          }
+        }
+      }
+    });
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label",
+      "Verdict sequence strips: " + d.flat.map(function (f) {
+        return "attempt " + f.a + " " + f.vd.step + " " + f.vd.verdict;
+      }).join(", ") + ".");
+  }
+
+  /* ---- 2. step duration bars (ts deltas) ---- */
+  function durationsData() {
+    var th = F.detail.threads[0];
+    var rows = [];
+    th.attempts.forEach(function (a) {
+      var prev = null;
+      a.verdicts.forEach(function (vd) {
+        var t = Date.parse(vd.ts);
+        var end = null;
+        if (prev !== null) {
+          var delta = (t - prev) / 1000;
+          rows.push({
+            label: "A" + a.number + " " + vd.step,
+            duration: delta,
+            verdict: vd.verdict, provenance: vd.provenance
+          });
+        }
+        prev = t;
+      });
+    });
+    return rows;
+  }
+
+  function renderDurations() {
+    var slot = document.getElementById("chart-durations");
+    var rows = durationsData();
+    if (instances.durations) { instances.durations.destroy(); }
+    instances.durations = new Chart(canvasFor(slot), {
+      type: "bar",
+      data: {
+        labels: rows.map(function (r) { return r.label; }),
+        datasets: [{
+          label: "seconds",
+          data: rows.map(function (r) { return r.duration; }),
+          backgroundColor: rows.map(function (r) { return verdictColor(r.verdict); }),
+          borderWidth: 1
+        }]
+      },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: { color: css("--cds-text-secondary"), font: baseFont() },
+            grid: { color: css("--cds-border-subtle-01") },
+            title: { display: true, text: "seconds", color: css("--cds-text-secondary") }
+          },
+          y: {
+            ticks: { color: css("--cds-text-secondary"), font: baseFont() },
+            grid: { color: css("--cds-border-subtle-01") }
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var r = rows[ctx.dataIndex];
+                return r.duration.toFixed(1) + "s [" + r.provenance + "]";
+              }
+            }
+          }
+        }
+      }
+    });
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label", "Step durations: "
+      + rows.map(function (r) {
+          return r.label + " " + r.duration.toFixed(0) + " seconds";
+        }).join(", ") + ".");
+  }
+
+  /* ---- 3. TDD red-green timeline ---- */
+  function renderTimeline() {
+    var slot = document.getElementById("chart-timeline");
+    var flat = allVerdicts();
+    var red = [], green = [], line = [], labels = [];
+    flat.forEach(function (f, i) {
+      labels[i] = f.step;
+      var isRed = (f.verdict === "fail" || f.verdict === "env");
+      var isGreen = (f.verdict === "pass");
+      red.push(isRed ? 1 : 0);
+      green.push(isGreen ? 1 : 0);
+      line.push(f.verdict === "pass" ? 1 : (f.verdict === "unverifiable" ? -1 : 0));
+    });
+    if (instances.timeline) { instances.timeline.destroy(); }
+    instances.timeline = new Chart(canvasFor(slot), {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "failing", data: red, fill: true, stacked: true,
+            backgroundColor: VERDICT_COLOR.env(), borderWidth: 0,
+            pointRadius: 0, yAxisID: "y"
+          },
+          {
+            label: "passing", data: green, fill: true, stacked: true,
+            backgroundColor: VERDICT_COLOR.pass(), borderWidth: 0,
+            pointRadius: 0, yAxisID: "y"
+          },
+          {
+            label: "test verdict", data: line, yAxisID: "y1",
+            stepped: true, borderColor: css("--cds-text-primary"),
+            borderWidth: 2, pointRadius: 3,
+            pointBackgroundColor: css("--cds-text-primary")
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: {
+              color: css("--cds-text-secondary"), font: baseFont(),
+              maxTicksLimit: 12, callback: function (val, idx) {
+                return labels[idx] || "";
+              }
+            },
+            grid: { color: css("--cds-border-subtle-01") }
+          },
+          y: {
+            stacked: true, min: 0, max: 1.5, display: false
+          },
+          y1: {
+            position: "right", min: -1.5, max: 1.5,
+            ticks: {
+              stepSize: 1, color: css("--cds-text-secondary"),
+              font: baseFont(),
+              callback: function (v) {
+                return v === 1 ? "pass" : (v === 0 ? "fail" : "unv");
+              }
+            },
+            grid: { display: false }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: css("--cds-text-secondary"), font: baseFont() } },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var f = flat[ctx.dataIndex];
+                if (ctx.datasetIndex === 2) {
+                  return f.step + " " + f.verdict + " [" + f.provenance + "]";
+                }
+                return ctx.dataset.label;
+              }
+            }
+          }
+        }
+      }
+    });
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label", "Red-green timeline: failing spans in red, passing spans in green, step verdicts " + labels.join(", ") + ".");
+  }
+
+  /* ---- 4. distribution ---- */
+  function renderDistribution() {
+    var slot = document.getElementById("chart-distribution");
+    var flat = allVerdicts();
+    var counts = { pass: 0, fail: 0, unverifiable: 0, env: 0 };
+    flat.forEach(function (f) {
+      if (counts[f.verdict] !== undefined) { counts[f.verdict]++; }
+      else { counts.unverifiable++; }
+    });
+    var keys = ["pass", "fail", "env", "unverifiable"];
+    if (instances.distribution) { instances.distribution.destroy(); }
+    instances.distribution = new Chart(canvasFor(slot), {
+      type: "doughnut",
+      data: {
+        labels: keys,
+        datasets: [{
+          data: keys.map(function (k) { return counts[k]; }),
+          backgroundColor: keys.map(function (k) {
+            return k === "env" ? VERDICT_COLOR.env()
+              : k === "pass" ? VERDICT_COLOR.pass()
+              : k === "fail" ? VERDICT_COLOR.fail()
+              : VERDICT_COLOR.unverifiable();
+          }),
+          borderColor: css("--cds-layer-01"), borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: "right",
+            labels: { color: css("--cds-text-secondary"), font: baseFont() }
+          },
+          tooltip: {
+            callbacks: { label: function (ctx) {
+              return ctx.label + ": " + ctx.raw + " verdicts";
+            } }
+          }
+        }
+      }
+    });
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label", "Verdict distribution: pass " + counts.pass
+      + ", fail " + counts.fail + ", env " + counts.env
+      + ", unverifiable " + counts.unverifiable + ".");
+  }
+
+  /* ---- 5. aggregate trend ---- */
+  function renderTrend() {
+    var slot = document.getElementById("chart-trend");
+    var runs = F.trend.runs;
+    var labels = runs.map(function (r) { return r.ts_start.slice(0, 10); });
+    var attempts = runs.map(function (r) { return r.attempt_count; });
+    var rates = runs.map(function (r) {
+      var s = r.verdict_summary;
+      var n = s.pass + s.fail + s.unverifiable + s.env;
+      return n ? Math.round(100 * s.pass / n) : null;
+    });
+    if (instances.trend) { instances.trend.destroy(); }
+    instances.trend = new Chart(canvasFor(slot), {
+      type: "line",
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: "attempts", data: attempts, yAxisID: "y",
+            borderColor: css("--cds-interactive"),
+            backgroundColor: css("--cds-interactive"),
+            pointRadius: 3, tension: 0.2
+          },
+          {
+            label: "pass rate %", data: rates, yAxisID: "y1",
+            borderColor: VERDICT_COLOR.pass(),
+            backgroundColor: VERDICT_COLOR.pass(),
+            pointRadius: 3, tension: 0.2
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: {
+          x: {
+            ticks: { color: css("--cds-text-secondary"), font: baseFont() },
+            grid: { color: css("--cds-border-subtle-01") }
+          },
+          y: {
+            ticks: { color: css("--cds-text-secondary"), font: baseFont() },
+            grid: { color: css("--cds-border-subtle-01") },
+            title: { display: true, text: "attempts", color: css("--cds-text-secondary") }
+          },
+          y1: {
+            position: "right", min: 0, max: 100,
+            ticks: { color: css("--cds-text-secondary"), font: baseFont() },
+            grid: { display: false },
+            title: { display: true, text: "pass rate %", color: css("--cds-text-secondary") }
+          }
+        },
+        plugins: {
+          legend: { labels: { color: css("--cds-text-secondary"), font: baseFont() } },
+          tooltip: {
+            callbacks: {
+              label: function (ctx) {
+                var r = runs[ctx.dataIndex];
+                if (ctx.datasetIndex === 0) { return "attempts: " + ctx.raw; }
+                return "pass rate: " + ctx.raw + "% (" + r.status + ")";
+              }
+            }
+          }
+        }
+      }
+    });
+    slot.setAttribute("role", "img");
+    slot.setAttribute("aria-label", "Aggregate trend across " + runs.length
+      + " runs: attempts " + attempts.join(", ")
+      + "; pass rates " + rates.map(function (r) { return r + "%"; }).join(", ") + ".");
+  }
+
+  /* ---- 6. degradation (HC-7) ---- */
+  function renderDegraded() {
+    var slot = document.getElementById("chart-degraded");
+    slot.innerHTML = "";
+    var th = F.detail.threads[1];
+    if (!th.metrics || Object.keys(th.metrics).length === 0) {
+      var msg = document.createElement("p");
+      msg.className = "graph-msg";
+      msg.textContent = "Metrics unavailable for thread " + th.thread_id
+        + " - chart omitted, verdicts below stay readable.";
+      slot.appendChild(msg);
+      slot.setAttribute("role", "img");
+      slot.setAttribute("aria-label",
+        "Metrics unavailable for thread " + th.thread_id + ".");
+      // the unverifiable/env verdicts themselves still render as badges
+      var box = document.createElement("div");
+      th.attempts.forEach(function (a) {
+        a.verdicts.forEach(function (vd) {
+          var b = document.createElement("span");
+          b.className = "badge";
+          if (vd.verdict === "pass") { b.className += " badge-pass"; }
+          else if (vd.verdict === "fail") { b.className += " badge-fail"; }
+          else if (vd.verdict === "env") { b.className += " badge-env"; }
+          else { b.className += " badge-unverifiable"; }
+          b.textContent = vd.step + ": " + vd.verdict;
+          box.appendChild(b);
+        });
+      });
+      slot.appendChild(box);
+      return;
+    }
+    slot.textContent = "metrics present (fixture wrong)";
+  }
+
+  function renderAll() {
+    renderStrips();
+    renderDurations();
+    renderTimeline();
+    renderDistribution();
+    renderTrend();
+    renderDegraded();
+    renderCount++;
+  }
+
+  /* ---- theme ---- */
+  function applyTheme(theme) {
+    document.documentElement.setAttribute("data-theme", theme);
+    var btn = document.getElementById("theme-toggle");
+    btn.setAttribute("aria-label",
+      theme === "dark" ? "Switch to light theme" : "Switch to dark theme");
+  }
+  var theme = "dark";
+  try {
+    var stored = localStorage.getItem("adl-theme");
+    if (stored === "dark" || stored === "light") { theme = stored; }
+  } catch (err) { /* session-only */ }
+  applyTheme(theme);
+
+  document.getElementById("theme-toggle").addEventListener("click", function () {
+    theme = theme === "dark" ? "light" : "dark";
+    applyTheme(theme);
+    try { localStorage.setItem("adl-theme", theme); } catch (err) {}
+    renderAll();
+  });
+
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { renderAll(); }
+  });
+
+  window.__adl = {
+    lib: lib,
+    get renderCount() { return renderCount; },
+    get theme() { return theme; },
+    report: function () {
+      return {
+        lib: lib, renderCount: renderCount, theme: theme,
+        tokens: {
+          success: css("--cds-support-success"),
+          warning: css("--cds-support-warning"),
+          error: css("--cds-support-error"),
+          unverifiable: css("--adl-support-unverifiable"),
+          background: css("--cds-background"),
+          layer01: css("--cds-layer-01")
+        },
+        slots: {
+          strips: { nodes: slotNodeCount("chart-strips"), role: slotRole("chart-strips") },
+          durations: { nodes: slotNodeCount("chart-durations"), role: slotRole("chart-durations") },
+          timeline: { nodes: slotNodeCount("chart-timeline"), role: slotRole("chart-timeline") },
+          distribution: { nodes: slotNodeCount("chart-distribution"), role: slotRole("chart-distribution") },
+          trend: { nodes: slotNodeCount("chart-trend"), role: slotRole("chart-trend") },
+          degraded: { nodes: slotNodeCount("chart-degraded"), role: slotRole("chart-degraded") }
+        },
+        instances: Object.keys(instances).filter(function (k) {
+          return instances[k] && instances[k].canvas;
+        }).length
+      };
+    }
+  };
+  function slotNodeCount(id) {
+    var el = document.getElementById(id);
+    return el ? el.querySelectorAll("canvas, svg, p, span").length : -1;
+  }
+  function slotRole(id) {
+    var el = document.getElementById(id);
+    return el ? el.getAttribute("role") : null;
+  }
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
