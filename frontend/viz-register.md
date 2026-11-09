@@ -127,3 +127,57 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 `--adl-motion-productive`. Values are the exact `tokens.css` values inlined in
 `styles.css`. No Carbon runtime is loaded; the hand-written skin (tokens and
 rules below) is the authoritative styling (R30, R60).
+
+## History view classes (unit 13)
+
+| Class | Purpose | Figma mapping / justification |
+| --- | --- | --- |
+| `.aggregate-body` | Aggregate metrics body | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifact` | Artifact presence card | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifact-file` | Artifact filename | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifact-grid` | Artifact card grid | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifact-name` | Artifact label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifact-state` | Artifact presence word | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.artifacts` | Artifact panel body | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.attempt` | One attempt row | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.attempt-label` | Attempt number label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.badge-prov` | Provenance badge | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.chart` | ECharts mount slot | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.chart-grid` | Chart grid with min-width guard | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.chart-slot` | Chart card | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.chart-title` | Chart card title | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.crumb` | Detail breadcrumb | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.detail-threads` | Detail thread stack | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.empty` | Empty-state text | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.facts` | Artifact fact list | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.field` | Filter field label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.filters` | Filter control row | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.hdr-link` | Header navigation link | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.hdr-text` | Text header action | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-basis` | Metric basis caption | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-card` | One metric card | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-grid` | Metric card grid | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-head` | Metric card header | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-name` | Metric name | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-reason` | Unavailable metric reason | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-section` | Metric section | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-value` | Metric value | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.missing` | Missing artifact skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.not-found` | Unknown-run state | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.notice` | Degradation notice | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.num` | Numeric table cell | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.path` | Path table cell | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.runs-shell` | History content column | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.runs-table` | Runs list table | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.status-failed` | Failed run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.status-field` | Status filter fieldset | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.status-interrupted` | Interrupted run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.status-success` | Success run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.status-unreadable` | Unreadable run status skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.table-wrap` | Table horizontal scroll port | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.thread-body` | Thread panel body | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.thread-sub` | Thread metadata line | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.unavailable` | Unavailable metric skin | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.verdict-item` | Verdict and provenance pair | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.verdict-step` | Verdict step name | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.wide` | Full-width chart slot | Component-class behaviour (status/layout skin); justified in the viz register |

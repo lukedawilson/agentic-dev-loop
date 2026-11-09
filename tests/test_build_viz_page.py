@@ -45,6 +45,9 @@ def _scaffold(build_tool, tmp_path):
     build_tool.STYLES_CSS = assets / "styles.css"
     build_tool.PAGE_JS = assets / "page.js"
     build_tool.LAYOUT_JS = assets / "pipeline-layout.js"
+    build_tool.RUNS_HTML = assets / "runs.html"
+    build_tool.RUNS_JS = assets / "runs.js"
+    build_tool.ECHARTS_JS = assets / "echarts.common.min.js"
     build_tool.PAGE_PY = tmp_path / "page.py"
     build_tool.REFERENCE_LAYOUT = reference
 

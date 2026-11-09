@@ -18,6 +18,7 @@ import errno
 import json
 import os
 import queue
+import re
 import sys
 import threading
 import time
@@ -25,12 +26,16 @@ from collections import deque
 from collections.abc import Iterable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from agentic_dev_loop.core.config import PipelineConfig, Route, route_target
 
-from .page import PAGE
+from . import runs_view
+from .page import PAGE, RUNS_PAGE
 
 STATE_WHITELIST = ("attempt", "step_verdicts", "outcome", "failed")
+
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 @dataclass(frozen=True)
@@ -368,7 +373,9 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
                    subject: str, nodes: Iterable[str],
                    flow: Iterable[dict] | None = None,
                    edges: Iterable[dict] | None = None,
-                   provider: str | None = None) -> type[BaseHTTPRequestHandler]:
+                   provider: str | None = None,
+                   runs_page: str | None = RUNS_PAGE,
+                   history: bool = False) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
         viz_bus = bus
@@ -378,6 +385,8 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
         viz_nodes = list(nodes)
         viz_flow = list(flow or ())
         viz_edges = list(edges or ())
+        viz_runs_page = runs_page
+        viz_history = history
 
         def log_message(self, *_args) -> None:  # keep test output quiet
             pass
@@ -389,9 +398,24 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
                 return
 
         def do_GET(self) -> None:
-            if self.path == "/":
+            path = urlsplit(self.path).path
+            if path == "/runs":
+                self._runs_page()
+            elif path == "/runs/data":
+                self._runs_list()
+            elif path.startswith("/runs/") and path.endswith("/data"):
+                run_id = unquote(path[len("/runs/"):-len("/data")])
+                if not _RUN_ID_RE.match(run_id):
+                    self._json(404, {"error": f"unknown run: {run_id}"})
+                else:
+                    self._runs_detail(run_id)
+            elif path.startswith("/runs/") and path != "/runs/":
+                self._runs_page()
+            elif path == "/" and self.viz_history:
+                self._runs_page()
+            elif path == "/" and not self.viz_history:
                 self._send(200, "text/html; charset=utf-8", PAGE)
-            elif self.path == "/topology":
+            elif path == "/topology" and not self.viz_history:
                 body = json.dumps({"mermaid": self.viz_topology,
                                    "subject": self.viz_subject,
                                    "provider": self.viz_provider,
@@ -399,16 +423,71 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
                                    "flow": self.viz_flow,
                                    "edges": self.viz_edges})
                 self._send(200, "application/json", body)
-            elif self.path == "/events":
+            elif path == "/events" and not self.viz_history:
                 self._events()
             else:
                 self.send_error(404)
 
-        def _send(self, status: int, content_type: str, body: str) -> None:
+        def do_POST(self) -> None:
+            self._method_not_allowed()
+
+        def do_PUT(self) -> None:
+            self._method_not_allowed()
+
+        def do_PATCH(self) -> None:
+            self._method_not_allowed()
+
+        def do_DELETE(self) -> None:
+            self._method_not_allowed()
+
+        def do_HEAD(self) -> None:
+            self._method_not_allowed()
+
+        def do_OPTIONS(self) -> None:
+            self._method_not_allowed()
+
+        def _runs_page(self) -> None:
+            if self.viz_runs_page is None:
+                self.send_error(404)
+                return
+            self._send(200, "text/html; charset=utf-8", self.viz_runs_page)
+
+        def _runs_list(self) -> None:
+            query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)
+            since = (query.get("since") or [None])[0]
+            until = (query.get("until") or [None])[0]
+            status = query.get("status") or []
+            filters, error = runs_view.parse_filters(since, until, status)
+            if error is not None:
+                self._json(400, {"error": error})
+                return
+            self._json(200, runs_view.list_payload(
+                filters["since"], filters["until"], filters["statuses"]))
+
+        def _runs_detail(self, run_id: str) -> None:
+            payload = runs_view.detail_payload(run_id)
+            if payload is None:
+                self._json(404, {"error": f"unknown run: {run_id}"})
+                return
+            self._json(200, payload)
+
+        def _json(self, status: int, payload: dict) -> None:
+            self._send(status, "application/json",
+                       json.dumps(payload, ensure_ascii=True))
+
+        def _method_not_allowed(self) -> None:
+            self._send(405, "application/json",
+                       json.dumps({"error": "method not allowed"}),
+                       {"Allow": "GET"})
+
+        def _send(self, status: int, content_type: str, body: str,
+                  headers: dict | None = None) -> None:
             data = body.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(data)))
+            for name, value in (headers or {}).items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(data)
 
@@ -445,6 +524,22 @@ class _ReuseSafeServer(ThreadingHTTPServer):
     allow_reuse_address = sys.platform != "win32"
 
 
+def _bind_server(handler: type[BaseHTTPRequestHandler],
+                 port: int) -> tuple[_ReuseSafeServer, threading.Thread]:
+    try:
+        httpd = _ReuseSafeServer(("127.0.0.1", port), handler)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE and port != 0:
+            httpd = _ReuseSafeServer(("127.0.0.1", 0), handler)
+        else:
+            raise OSError(
+                f"Could not bind the viz server to 127.0.0.1:{port} - the "
+                f"--viz-port may already be in use. ({exc})") from exc
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd, thread
+
+
 def serve_viz(bus: VizBus, topology_mermaid: str, subject: str,
               port: int, nodes: Iterable[str] = (),
               flow: Iterable[dict] | None = None,
@@ -460,15 +555,11 @@ def serve_viz(bus: VizBus, topology_mermaid: str, subject: str,
     still fails loud, naming ``--viz-port``."""
     handler = _handler_class(bus, topology_mermaid, subject, nodes,
                              flow, edges, provider)
-    try:
-        httpd = _ReuseSafeServer(("127.0.0.1", port), handler)
-    except OSError as exc:
-        if exc.errno == errno.EADDRINUSE and port != 0:
-            httpd = _ReuseSafeServer(("127.0.0.1", 0), handler)
-        else:
-            raise OSError(
-                f"Could not bind the viz server to 127.0.0.1:{port} - the "
-                f"--viz-port may already be in use. ({exc})") from exc
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    return httpd, thread
+    return _bind_server(handler, port)
+
+
+def serve_history(port: int) -> tuple[_ReuseSafeServer, threading.Thread]:
+    """Serve the historical runs view with no pipeline topology (BR-17)."""
+    handler = _handler_class(VizBus(), "", "", [], runs_page=RUNS_PAGE,
+                             history=True)
+    return _bind_server(handler, port)

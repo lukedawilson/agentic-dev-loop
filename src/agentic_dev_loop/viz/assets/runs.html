@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agentic-dev-loop run history</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<a class="skip" href="#runs-main">Skip to run history</a>
+<header class="hdr">
+  <div class="hdr-brand"><span class="mark" aria-hidden="true"></span>
+    <span class="hdr-name">agentic-dev-loop history</span></div>
+  <nav class="hdr-right" aria-label="History actions">
+    <a class="hdr-link" href="/runs">Runs</a>
+    <button id="refresh" class="hdr-action hdr-text" type="button"
+            data-testid="runs-refresh">Refresh</button>
+    <button id="theme-toggle" class="hdr-action" type="button"
+            data-testid="theme-toggle" aria-label="Switch to light theme">
+      <span id="theme-icon" class="ic" aria-hidden="true">
+        <svg class="ic-sun" viewBox="0 0 16 16" width="16" height="16" fill="none">
+          <circle cx="8" cy="8" r="3.33" fill="currentColor"/>
+          <path stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                d="M8 .67v2M8 13.33v2M.67 8h2M13.33 8h2M2.81 2.81l.95.95M12.24 12.24l.95.95M13.19 2.81l-.95.95M3.76 12.24l-.95.95"/>
+        </svg>
+        <svg class="ic-moon" viewBox="0 0 16 16" width="16" height="16">
+          <path d="M14 8.53A6 6 0 1 1 7.47 2 4.67 4.67 0 0 0 14 8.53Z" fill="currentColor"/>
+        </svg>
+      </span>
+    </button>
+  </nav>
+</header>
+<main class="runs-shell" id="runs-root">
+  <section id="list-view" aria-label="Run history">
+    <form id="filters" class="filters" autocomplete="off">
+      <label class="field">Since
+        <input id="since" type="date" name="since"></label>
+      <label class="field">Until
+        <input id="until" type="date" name="until"></label>
+      <fieldset class="field status-field">
+        <legend>Status</legend>
+        <label><input type="checkbox" name="status" value="success"> success</label>
+        <label><input type="checkbox" name="status" value="failed"> failed</label>
+        <label><input type="checkbox" name="status" value="interrupted"> interrupted</label>
+        <label><input type="checkbox" name="status" value="running"> running</label>
+      </fieldset>
+      <button id="apply" class="hdr-action hdr-text" type="submit">Apply</button>
+      <button id="reset" class="hdr-action hdr-text" type="button">Reset</button>
+    </form>
+    <div id="list-notice" class="notice" role="status" aria-live="polite"></div>
+    <section class="panel aggregate" aria-label="Aggregate metrics">
+      <div class="panel-h"><span>Aggregate metrics</span>
+        <span class="legend mono">[mechanical] / [parsed] / [claimed]</span></div>
+      <div id="aggregate" class="aggregate-body"></div>
+    </section>
+    <section class="panel" aria-label="Runs">
+      <div class="panel-h"><span>Runs</span>
+        <span id="run-count" class="legend mono"></span></div>
+      <div class="table-wrap">
+        <table class="runs-table">
+          <thead><tr>
+            <th>Status</th><th>Subject</th><th>Thread</th><th>Started</th>
+            <th>Attempts</th><th>Verdicts</th><th>Run dir</th>
+          </tr></thead>
+          <tbody id="runs-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+  <section id="detail-view" hidden aria-label="Run detail">
+    <p class="crumb"><a href="/runs">All runs</a> / <span id="detail-id"></span></p>
+    <div id="detail-notice" class="notice" role="status" aria-live="polite"></div>
+    <section class="panel" aria-label="Charts">
+      <div class="panel-h"><span>Charts</span>
+        <span class="legend mono">SVG renderer</span></div>
+      <div class="chart-grid">
+        <div class="chart-slot"><div class="chart-title">Attempts by thread</div>
+          <div id="chart-attempts" class="chart"></div></div>
+        <div class="chart-slot"><div class="chart-title">Verdicts by kind</div>
+          <div id="chart-verdicts" class="chart"></div></div>
+        <div class="chart-slot wide"><div class="chart-title">Verdict sequence</div>
+          <div id="chart-sequence" class="chart"></div></div>
+      </div>
+    </section>
+    <div id="detail-threads" class="detail-threads"></div>
+    <section class="panel" aria-label="Artifacts">
+      <div class="panel-h"><span>Artifacts</span></div>
+      <div id="detail-artifacts" class="artifacts"></div>
+    </section>
+  </section>
+  <section id="not-found" class="not-found" hidden>
+    <h1>Run not found</h1>
+    <p>The requested run directory does not exist or is not readable.</p>
+    <p><a href="/runs">Back to all runs</a></p>
+  </section>
+</main>
+<script src="echarts.common.min.js"></script>
+<script src="runs.js"></script>
+</body>
+</html>
