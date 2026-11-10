@@ -38,8 +38,6 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.graph-msg` | Graph placeholder message | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.graph-wrap` | Centred graph container | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr` | Page header bar | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.hdr-action` | Header icon action | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.hdr-brand` | Header brand lockup | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr-right` | Header right cluster | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.ic` | Icon glyph box | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.ic-moon` | Moon theme glyph (inline SVG) | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -155,7 +153,6 @@ rules below) is the authoritative styling (R30, R60).
 | `.filters` | Filters panel | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.filters-row` | Filter controls row inside the panel | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.hdr-link` | Header navigation link | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.hdr-text` | Text header action | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-basis` | Metric basis caption | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-card` | One metric card | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-grid` | Metric card grid | Component-class behaviour (status/layout skin); justified in the viz register |

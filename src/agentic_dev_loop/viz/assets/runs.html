@@ -1,19 +1,24 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" class="cds-theme-zone-g100">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agentic-dev-loop run history</title>
+<link rel="stylesheet" href="vendor/themes.css">
 <link rel="stylesheet" href="styles.css">
+<script type="module" src="/vendor/ui-shell.min.js"></script>
+<script type="module" src="/vendor/checkbox.min.js"></script>
+<script type="module" src="/vendor/button.min.js"></script>
+<script type="module" src="/vendor/data-table.min.js"></script>
+<script type="module" src="/vendor/tile.min.js"></script>
 </head>
 <body>
 <a class="skip" href="#runs-main">Skip to run history</a>
-<header class="hdr">
-  <div class="hdr-brand"><span class="mark" aria-hidden="true"></span>
-    <span class="hdr-name">agentic-dev-loop history</span></div>
+<cds-header class="hdr" aria-label="agentic-dev-loop history">
+  <cds-header-name><span class="mark" aria-hidden="true"></span>agentic-dev-loop history</cds-header-name>
   <nav class="hdr-right" aria-label="History actions">
     <!--runs-back-->
-    <button id="theme-toggle" class="hdr-action" type="button"
+    <cds-header-global-action id="theme-toggle"
             data-testid="theme-toggle" aria-label="Switch to light theme">
       <span id="theme-icon" class="ic" aria-hidden="true">
         <svg class="ic-sun" viewBox="0 0 16 16" width="16" height="16" fill="none">
@@ -25,9 +30,9 @@
           <path d="M14 8.53A6 6 0 1 1 7.47 2 4.67 4.67 0 0 0 14 8.53Z" fill="currentColor"/>
         </svg>
       </span>
-    </button>
+    </cds-header-global-action>
   </nav>
-</header>
+</cds-header>
 <main class="runs-shell" id="runs-root">
   <section id="list-view" aria-label="Run history">
     <form id="filters" class="filters" autocomplete="off">
@@ -44,7 +49,7 @@
           <label><input type="checkbox" name="status" value="interrupted"> interrupted</label>
           <label><input type="checkbox" name="status" value="running"> running</label>
         </fieldset>
-        <button id="reset" class="hdr-action hdr-text" type="button">Reset</button>
+        <cds-button id="reset" kind="tertiary" size="sm">Reset</cds-button>
       </div>
     </form>
     <div id="list-notice" class="notice" role="status" aria-live="polite"></div>

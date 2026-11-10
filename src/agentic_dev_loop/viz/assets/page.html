@@ -1,22 +1,27 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" class="cds-theme-zone-g100">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>agentic-dev-loop viz</title>
+<link rel="stylesheet" href="vendor/themes.css">
 <link rel="stylesheet" href="styles.css">
+<script type="module" src="/vendor/ui-shell.min.js"></script>
+<script type="module" src="/vendor/notification.min.js"></script>
+<script type="module" src="/vendor/tile.min.js"></script>
+<script type="module" src="/vendor/tag.min.js"></script>
+<script type="module" src="/vendor/accordion.min.js"></script>
 <script src="pipeline-layout.js"></script>
 </head>
 <body>
 <a class="skip" href="#stages">Skip to stages</a>
-<header class="hdr">
-  <div class="hdr-brand"><span class="mark" aria-hidden="true"></span>
-    <span class="hdr-name">agentic-dev-loop viz</span></div>
+<cds-header class="hdr" aria-label="agentic-dev-loop viz">
+  <cds-header-name><span class="mark" aria-hidden="true"></span>agentic-dev-loop viz</cds-header-name>
   <div class="hdr-right">
     <a class="hdr-link" href="/history">History</a>
     <span id="stream" class="stream" role="status"><span class="led" aria-hidden="true"></span>
       <span id="stream-label">STREAM LIVE</span></span>
-    <button id="theme-toggle" class="hdr-action" type="button"
+    <cds-header-global-action id="theme-toggle"
             data-testid="theme-toggle" aria-label="Switch to light theme">
       <span id="theme-icon" class="ic" aria-hidden="true">
         <svg class="ic-sun" viewBox="0 0 16 16" width="16" height="16" fill="none">
@@ -28,9 +33,9 @@
           <path d="M14 8.53A6 6 0 1 1 7.47 2 4.67 4.67 0 0 0 14 8.53Z" fill="currentColor"/>
         </svg>
       </span>
-    </button>
+    </cds-header-global-action>
   </div>
-</header>
+</cds-header>
 <div id="stream-banner" role="status" aria-live="polite" data-testid="stream-banner"></div>
 <main class="shell">
   <section class="tiles" aria-label="Run summary">

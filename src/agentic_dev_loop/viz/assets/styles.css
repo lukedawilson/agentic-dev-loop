@@ -76,6 +76,22 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
+
+/* Carbon WC: hide un-upgraded elements (FOUC guard; Carbon documents the
+   :not(:defined) pattern). */
+cds-header, cds-header-name, cds-header-global-action,
+cds-inline-notification, cds-actionable-notification,
+cds-tile, cds-tag, cds-accordion, cds-accordion-item,
+cds-checkbox, cds-button, cds-table { visibility: hidden; }
+cds-header:defined, cds-header-name:defined,
+cds-header-global-action:defined,
+cds-inline-notification:defined, cds-actionable-notification:defined,
+cds-tile:defined, cds-tag:defined,
+cds-accordion:defined, cds-accordion-item:defined,
+cds-checkbox:defined, cds-button:defined, cds-table:defined {
+  visibility: visible;
+}
+
 html, body { height: 100%; }
 body {
   margin: 0; background: var(--cds-background); color: var(--cds-text-primary);
@@ -95,11 +111,11 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
 /* Header */
 .hdr {
   flex: 0 0 48px; display: flex; align-items: center; gap: 16px;
-  padding: 0 16px; background: var(--cds-layer-01);
+  position: relative; padding: 0 16px; background: var(--cds-layer-01);
   border-bottom: 1px solid var(--cds-border-subtle-01);
 }
-.hdr-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
-.mark { width: 10px; height: 10px; background: var(--cds-interactive); display: block; }
+cds-header-name::part(link) { padding-inline: 0; }
+.mark { width: 10px; height: 10px; background: var(--cds-interactive); display: inline-block; margin-right: 10px; vertical-align: -1px; }
 .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .stream { display: inline-flex; align-items: center; gap: 6px; font-size: 11px;
   letter-spacing: .08em; text-transform: uppercase; color: var(--cds-text-secondary); }
@@ -107,12 +123,6 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
 .stream .led { background: var(--cds-interactive); }
 .stream.reconnecting { color: var(--cds-support-warning); }
 .stream.reconnecting .led { background: var(--cds-support-warning); }
-.hdr-action {
-  min-width: 44px; min-height: 44px; display: inline-flex; align-items: center;
-  justify-content: center; background: transparent; color: var(--cds-icon-primary);
-  border: 1px solid transparent; cursor: pointer;
-}
-.hdr-action:hover { background: var(--cds-layer-hover-01); }
 .ic { width: 16px; height: 16px; display: block; position: relative; }
 .ic-sun, .ic-moon { position: absolute; top: 0; left: 0; display: block; }
 /* dark theme shows the sun (click to switch to light); light shows the moon */
@@ -314,7 +324,6 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
   padding: 0 8px; border: 1px solid transparent;
 }
 .hdr-link:hover { background: var(--cds-layer-hover-01); }
-.hdr-text { font-size: 12px; padding: 0 10px; white-space: nowrap; }
 .runs-shell {
   flex: 1 1 auto; min-height: 0; width: 100%; max-width: 1600px;
   margin: 0 auto; padding: 12px 24px 16px; overflow-y: auto;
