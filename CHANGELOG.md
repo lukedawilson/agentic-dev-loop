@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-11-10
+
+### Changed
+
+- The live viz now replays every step's console log when a tab connects or refreshes: console retention is per node (the most recent 500 lines per step, plus one bucket for unattributed output) instead of a single run-wide window, so earlier stage sections no longer show "No output".
+
 ## [0.15.0] - 2026-11-09
 
 ### Changed

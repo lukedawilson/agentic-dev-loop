@@ -1,6 +1,6 @@
 # Plan 063: Viz replays every step's console log on connect, not just the current one
 
-> **Status: COMPLETED** (2026-11-09)
+> **Status: COMPLETED**
 
 ## Problem
 
