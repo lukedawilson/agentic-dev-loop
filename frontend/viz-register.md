@@ -62,10 +62,6 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.omitted` | Console cap counter | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.on` | Active rail segment | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.outcome` | Run outcome notification | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.outcome-failure` | Failure outcome skin | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.outcome-sub` | Outcome subtitle | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.outcome-success` | Success outcome skin | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.outcome-title` | Outcome title | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.panel` | Bordered panel | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.panel-h` | Panel header | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.panel-log` | Event log panel | Component-class behaviour (status/layout skin); justified in the viz register |

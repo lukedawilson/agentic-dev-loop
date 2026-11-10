@@ -849,11 +849,10 @@
         var banner = el("run-banner");
         if (banner) {
           banner.innerHTML = "";
-          var title = document.createElement("div");
-          title.className = "outcome-title";
+          var title = document.createElement("span");
+          title.setAttribute("slot", "title");
           title.textContent = ev.success ? "SUCCESS" : "FAILURE";
-          var sub = document.createElement("div");
-          sub.className = "outcome-sub";
+          var sub = document.createElement("span");
           sub.textContent = "Run finished - " + (el("subject")
             ? el("subject").textContent : "") + " - attempt "
             + (attempt === null ? "?" : attempt) + "/"
@@ -862,8 +861,7 @@
               ? mmss(ev.elapsed_seconds) : "-");
           banner.appendChild(title);
           banner.appendChild(sub);
-          banner.className = "outcome "
-            + (ev.success ? "outcome-success" : "outcome-failure");
+          banner.setAttribute("kind", ev.success ? "success" : "error");
           banner.style.display = "block";
         }
         break;

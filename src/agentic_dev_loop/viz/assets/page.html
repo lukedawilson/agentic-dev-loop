@@ -52,7 +52,8 @@
       <div id="total" class="big"></div></cds-tile>
   </section>
   <div id="verdicts" class="verdicts" aria-label="Step verdicts"></div>
-  <div id="run-banner" class="outcome" role="status" aria-live="polite" data-testid="run-banner"></div>
+  <cds-inline-notification id="run-banner" class="outcome" kind="info" hide-close-button
+    low-contrast data-testid="run-banner"></cds-inline-notification>
   <section id="pipeline-panel" class="panel" aria-label="Pipeline">
     <div class="panel-h"><span>Pipeline</span>
       <span class="legend mono">solid = on_pass / dashed = on_fail</span></div>
