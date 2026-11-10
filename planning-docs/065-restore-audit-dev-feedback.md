@@ -1,6 +1,6 @@
 # 065 - Restore audit failure feedback to dev
 
-> **Status: PROPOSED**
+> **Status: APPROVED**
 
 ## Scope
 
