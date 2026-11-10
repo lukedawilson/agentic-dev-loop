@@ -152,6 +152,17 @@ def test_gauge_needle_contrasts_with_value(stats):
     assert value == "#EEF1F3"  # text primary
 
 
+def test_gauge_needle_renders_below_value(stats):
+    # ECharts draws the gauge pointer after (on top of) the title/detail
+    # when showAbove defaults to true, so the needle paints over the centre
+    # value. showAbove: false lifts the detail to a higher z2 so the value
+    # stays readable above the needle.
+    series = stats["gauge"]["series"]
+    assert len(series) == 1
+    assert series[0]["pointer"]["show"] is True
+    assert series[0]["pointer"]["showAbove"] is False
+
+
 def test_unavailable_gauge_has_no_option(stats):
     assert stats["gaugeUnavailable"] is None
 
