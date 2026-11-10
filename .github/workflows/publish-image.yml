@@ -7,6 +7,7 @@ on:
     paths:
       - "Dockerfile"
       - "Dockerfile.dotnet"
+      - "Dockerfile.dotnet-browser"
 
 permissions:
   contents: read
@@ -39,13 +40,21 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           tags: ghcr.io/lukedawilson/agentic-dev-loop/dev-dotnet:10.0
+      - name: Build and push (dev-dotnet-browser)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.dotnet-browser
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ghcr.io/lukedawilson/agentic-dev-loop/dev-dotnet-browser:10.0
       - name: Report digests for pinning
         run: |
           echo "Published platforms:"
           docker buildx imagetools inspect ghcr.io/lukedawilson/agentic-dev-loop/dev:latest --format '{{range .Manifest.Manifests}}  - {{.Platform.OS}}/{{.Platform.Architecture}}{{println}}{{end}}'
           echo ""
           echo "Pinned digests:"
-          for IMAGE in dev:latest dev-dotnet:10.0; do
+          for IMAGE in dev:latest dev-dotnet:10.0 dev-dotnet-browser:10.0; do
             DIGEST=$(docker buildx imagetools inspect ghcr.io/lukedawilson/agentic-dev-loop/${IMAGE} --format '{{.Manifest.Digest}}')
             echo "ghcr.io/lukedawilson/agentic-dev-loop/${IMAGE%%:*}@${DIGEST}"
           done

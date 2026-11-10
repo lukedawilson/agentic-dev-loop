@@ -1,0 +1,32 @@
+# Browser-ready sandbox image for dotnet construction loops.
+#
+# dev-dotnet plus the chromium headless-shell runtime: the font stack
+# (fontconfig / fontconfig-config / fonts-liberation, which Skia needs or
+# it aborts on font enumeration - plan 023) and the system shared libraries
+# the chrome-headless-shell binary links against (glib, nss, the X11 client
+# set, gbm, xkbcommon, asound, atspi, and friends). `playwright-core
+# install` fetches only the browser binary, and these libraries cannot be
+# installed at runtime (the sandbox and its provision container run as the
+# host uid without root), so they live here, in the image.
+#
+# Debian trixie package names use the t64 variants where they exist
+# (libglib2.0-0t64, libasound2t64, ...); libxcomposite1 has no t64 variant.
+# A launch that dies with "error while loading shared libraries:
+# libglib-2.0.so.0" means this image is missing part of the set.
+#
+# Published multi-arch by publish-image.yml as dev-dotnet-browser:10.0
+# whenever this file (or Dockerfile.dotnet) changes on main; the digest is
+# reported for pinning in the consumer's isolation.image.
+
+FROM ghcr.io/lukedawilson/agentic-dev-loop/dev-dotnet:10.0
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        fontconfig fontconfig-config fonts-liberation \
+        libasound2t64 libatk-bridge2.0-0t64 libatk1.0-0t64 libatspi2.0-0t64 \
+        libcairo2 libcups2t64 libdbus-1-3 libdrm2 libgbm1 libglib2.0-0t64 \
+        libnspr4 libnss3 libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 \
+        libxdamage1 libxext6 libxfixes3 libxkbcommon0 libxrandr2 \
+    && fc-cache -f \
+    && rm -rf /var/lib/apt/lists/*
+
+CMD ["sleep", "infinity"]

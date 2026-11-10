@@ -7,11 +7,13 @@
 #   - jq:   run-conformance.sh verdict processing
 #   - unzip: qa/bundle-and-run.sh export inspection
 #   - lsof:  qa/boot-builder.sh stale-listener reaping
-#   - fontconfig / fontconfig-config / fonts-liberation: render_check
-#     chromium-headless needs /etc/fonts/fonts.conf + Arial-metric fallbacks
-#     (skia aborts on font enumeration without them; see planning-docs plan 023)
 #   - dotnet SDK 10.0.402 (pin = the version empirically verified against
 #     this base image)
+#
+# Browser-tier support (the font stack plus the chromium headless-shell
+# system libraries) lives in Dockerfile.dotnet-browser, published as
+# dev-dotnet-browser, so this base stays lean for loops that never launch
+# a browser.
 #
 # Network is per-stage in the engine; this image itself makes no network
 # assumptions at runtime.
@@ -21,8 +23,6 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git nodejs npm coreutils ca-certificates curl \
         libicu76 libstdc++6 jq unzip lsof \
-        fontconfig fontconfig-config fonts-liberation \
-    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://dot.net/v1/dotnet-install.sh \

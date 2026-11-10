@@ -1,8 +1,8 @@
 # Running a browser inside the sandbox
 
 Getting a browser running inside the engine sandbox is a first-class config
-surface: declare one value and supply the browser binary and its system
-libraries inside the workspace. This page is the full recipe - what the
+surface: declare one value, select the browser-ready image, and supply the
+browser binary inside the workspace. This page is the full recipe - what the
 engine provides, what the consumer supplies, why `--no-sandbox` is the wrong
 answer, and how to prove the sandbox actually engaged.
 
@@ -26,9 +26,19 @@ answer, and how to prove the sandbox actually engaged.
   validates that path at container-create time. An unknown `bundled:<name>`
   fails at load, naming every known bundled profile.
 
-- **Fonts.** The dev-dotnet image ships fontconfig and fonts
-  (`fontconfig-config`, `fonts-liberation`) so Chromium's font enumeration
-  does not abort.
+- **The browser-ready image.** The engine publishes `dev-dotnet-browser`
+  (`Dockerfile.dotnet-browser`): the dev-dotnet stack plus the chromium
+  headless-shell runtime - the font stack (fontconfig, fontconfig-config,
+  fonts-liberation, so Skia's font enumeration does not abort) and the
+  system shared libraries the binary links against (glib, nss, the X11
+  client set, gbm, xkbcommon, asound, atspi, and friends). Published
+  multi-arch (amd64 + arm64) by `publish-image.yml` alongside the base
+  images, with the digest reported for pinning:
+
+  ```yaml
+  isolation:
+    image: ghcr.io/lukedawilson/agentic-dev-loop/dev-dotnet-browser@sha256:...
+  ```
 
 The engine does **not** vendor Chromium (size); the consumer brings the
 binary.
@@ -40,8 +50,24 @@ the sandbox's single workspace mount makes them visible:
 
 - **Install the browser into the workspace.** Use Playwright's
   `playwright-core install chromium` (or an equivalent bare-binary download)
-  so the binary and its syslibs land under the workspace rather than the
-  host. The consumer repos already do this for their render steps.
+  so the binary lands under the workspace rather than the host. The consumer
+  repos already do this for their render steps, normally in the browser
+  step's setup hook so agent turns never fetch packages.
+
+The binary alone is not enough: the chromium headless shell links against a
+set of system shared libraries (glib, nss, the X11 client set, gbm,
+xkbcommon, asound, atspi, and friends). `playwright-core install` fetches
+only the binary - it does not bring those libraries, and they cannot be
+installed at runtime: the sandbox runs as the host uid with `--cap-drop
+ALL`, and the one-shot provision container runs the same way, so `apt` has
+no root and the syslibs have nowhere to go. They therefore live in the
+engine's `dev-dotnet-browser` image (the `playwright install-deps chromium`
+package set for Debian trixie: t64 variants where they exist, e.g.
+`libglib2.0-0t64`, `libasound2t64`, with `libxcomposite1` the unt64
+exception); a consumer on a different base builds the same apt set into its
+own image. A launch that dies with
+`error while loading shared libraries: libglib-2.0.so.0` means the pinned
+image is missing this set.
 - **Network on the browser step only.** A step that launches Chromium to
   fetch live assets declares `network: true`; the sandbox stays network-off
   everywhere else by default.
@@ -50,9 +76,9 @@ the sandbox's single workspace mount makes them visible:
   in Node). Do not pass `--no-sandbox`: it disables the namespace + seccomp
   boundary and turns the renderer into an unsandboxed process. With the
   sandbox enabled, renderers run seccomp-filtered inside the container.
-- **Bare-binary runs.** If you launch the binary directly instead of through
-  Playwright, point `LD_LIBRARY_PATH` at the directory holding the installed
-  system libraries (Playwright manages this for you when it launches).
+- **Bare-binary runs.** The image carries the libraries at system paths, so
+  launching the binary directly needs no `LD_LIBRARY_PATH` juggling
+  (Playwright also manages this for you when it launches the binary).
 
 A minimal Playwright launch:
 
