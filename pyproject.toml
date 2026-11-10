@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic-dev-loop"
-version = "0.15.6"
+version = "0.15.7"
 description = "Turn an LLM into a gated, sandboxed, resumable construction loop over your codebase."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -94,6 +94,10 @@ agentic_dev_loop = ["py.typed"]
 "agentic_dev_loop.engine" = ["*.md"]
 "agentic_dev_loop.engine.seccomp" = ["*.json"]
 "agentic_dev_loop.engine.onboarding" = ["recipes/*.yaml", "templates/*"]
+# The viz page loads Carbon web-component modules from /vendor/* at runtime;
+# server.py serves them from this directory on disk (see
+# tests/test_viz_wheel_contents.py).
+"agentic_dev_loop.viz" = ["vendor/*"]
 
 [tool.pytest.ini_options]
 markers = [
