@@ -15,7 +15,7 @@ from __future__ import annotations
 from importlib.resources import files
 
 BRIEF_PROMPT_RESOURCE = "brief_prompt.md"
-BRIEF_PROMPT_VERSION = "1"
+BRIEF_PROMPT_VERSION = "2"
 
 
 def load_template() -> str:
@@ -36,9 +36,9 @@ def _output_block(sections: list[str]) -> str:
         "compressed content for that section (write `None` when a section has "
         "nothing):\n\n"
         f"{headings}\n\n"
-        f"The section headings must appear exactly as written above: {names}. "
-        "Do not shorten or rename them, and do not merge a section with "
-        "another section."
+        "The section headings must appear at the start of their own lines, as "
+        f"written above: {names}. Do not shorten or rename them, and do not "
+        "merge a section with another section."
     )
 
 

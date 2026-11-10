@@ -29,3 +29,11 @@ class TestRenderBriefPrompt:
         assert "`## Scope`" in prompt
         assert "`## Risks`" in prompt
         assert "Do not shorten or rename them" in prompt
+
+    def test_relaxed_contract_is_stated(self):
+        prompt = render_brief_prompt(SECTIONS)
+        assert "at the start of its own line" in prompt
+        assert "must be reproduced character-exact" in prompt
+        assert "never transliterate it" in prompt
+        assert "must appear at the start of their own lines" in prompt
+        assert "the only text on its line" not in prompt

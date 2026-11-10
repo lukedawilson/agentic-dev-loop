@@ -142,6 +142,46 @@ class TestMissingAnchors:
                                ["offline; never fetch"], SECTIONS) == []
 
 
+    def test_inline_anchor_content_line_passes(self):
+        text = _brief_ok().replace(
+            "**Error handling**\nNever fall back silently.\n\n",
+            "**Error handling**: Never fall back silently.\n\n")
+        assert missing_anchors(text, ["error handling", "mock policy"],
+                               ["offline; never fetch"], SECTIONS) == []
+
+    def test_em_dash_heading_transliterated_line_passes(self):
+        anchors = extract_anchors(
+            "## Default development mode \u2014 ask before coding\n")
+        assert anchors == ["default development mode - ask before coding"]
+        text = _brief_ok().replace(
+            "**Error handling**\nNever fall back silently.\n\n",
+            "**Default development mode - ask before coding**\n"
+            "Ask before writing code.\n\n")
+        assert missing_anchors(text, anchors, ["offline; never fetch"],
+                               SECTIONS) == []
+
+    def test_curly_quote_heading_folded(self):
+        anchors = extract_anchors("## User\u2019s rules\n")
+        assert anchors == ["user's rules"]
+        text = _brief_ok().replace(
+            "**Error handling**\nNever fall back silently.\n\n",
+            "**User's rules**\nApply them.\n\n")
+        assert missing_anchors(text, anchors, ["offline; never fetch"],
+                               SECTIONS) == []
+
+    def test_env_fact_em_dash_tolerated(self):
+        text = _brief_ok().replace("offline; never fetch",
+                                   "offline - never fetch")
+        assert missing_anchors(text, ["error handling", "mock policy"],
+                               ["offline \u2014 never fetch"], SECTIONS) == []
+
+    def test_env_fact_case_still_matters(self):
+        text = _brief_ok().replace("offline; never fetch",
+                                   "the build is efficient")
+        assert "CI" in missing_anchors(
+            text, ["error handling", "mock policy"], ["CI"], SECTIONS)
+
+
 class TestCoverageNoteWording:
     """The retry note must state the line rule unambiguously (043): a
     correction that the model can misread as "the item starts its own line"
@@ -154,11 +194,12 @@ class TestCoverageNoteWording:
             runtime, runtime.cfg.steps[0], {"plan.md": "THE PLAN"},
             coverage_note=note)
         assert "## Coverage retry" in message
-        assert ("the item alone on the line, no trailing colon and no "
-                "content") in message
+        assert ("Regenerate the digest so every listed item starts its own "
+                "line; compressed content may follow on that line or the next "
+                "line.") in message
         assert "- general_principles\n  Simplest thing that works" in message
-        assert "does not satisfy coverage" in message
-        assert "the item must be the only text on its line" in message
+        assert "the item alone on the line" not in message
+        assert "the only text on its line" not in message
         assert note in message
 
     def test_note_keeps_missing_items_verbatim(self, runtime):

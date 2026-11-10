@@ -56,8 +56,12 @@ def text_with_single_decision(draw):
 
 @st.composite
 def text_with_conflicting_decisions(draw):
-    first = draw(verdict_line.filter(lambda v: "PASS" in v.split(":", 1)[1]))
-    second = draw(verdict_line.filter(lambda v: "FAIL" in v.split(":", 1)[1]))
+    first = draw(verdict_line.filter(
+        lambda v: "PASS" in v.split(":", 1)[1]
+        and "FAIL" not in v.split(":", 1)[1]))
+    second = draw(verdict_line.filter(
+        lambda v: "FAIL" in v.split(":", 1)[1]
+        and "PASS" not in v.split(":", 1)[1]))
     return f"{first}\n{second}"
 
 
