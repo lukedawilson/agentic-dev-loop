@@ -40,16 +40,16 @@
     role="status" aria-live="polite" data-testid="stream-banner"></cds-inline-notification>
 <main class="shell">
   <section class="tiles" aria-label="Run summary">
-    <div class="tile"><div class="lbl">Run</div>
-      <div id="subject" class="big">agentic-dev-loop pipeline</div></div>
-    <div class="tile"><div class="lbl">Attempt</div>
-      <div id="attempt" class="big">?/?</div><div id="meter" class="meter"></div></div>
-    <div class="tile"><div class="lbl">Thread ID</div>
-      <div id="thread" class="big"><code id="thread-id" tabindex="0" role="button" title="click to copy">--</code></div></div>
-    <div class="tile"><div class="lbl">Provider</div>
-      <div id="provider" class="big">--</div></div>
-    <div class="tile"><div class="lbl">Total</div>
-      <div id="total" class="big"></div></div>
+    <cds-tile class="tile"><div class="lbl">Run</div>
+      <div id="subject" class="big">agentic-dev-loop pipeline</div></cds-tile>
+    <cds-tile class="tile"><div class="lbl">Attempt</div>
+      <div id="attempt" class="big">?/?</div><div id="meter" class="meter"></div></cds-tile>
+    <cds-tile class="tile"><div class="lbl">Thread ID</div>
+      <div id="thread" class="big"><code id="thread-id" tabindex="0" role="button" title="click to copy">--</code></div></cds-tile>
+    <cds-tile class="tile"><div class="lbl">Provider</div>
+      <div id="provider" class="big">--</div></cds-tile>
+    <cds-tile class="tile"><div class="lbl">Total</div>
+      <div id="total" class="big"></div></cds-tile>
   </section>
   <div id="verdicts" class="verdicts" aria-label="Step verdicts"></div>
   <div id="run-banner" class="outcome" role="status" aria-live="polite" data-testid="run-banner"></div>
