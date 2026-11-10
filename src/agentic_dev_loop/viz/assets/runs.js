@@ -522,7 +522,7 @@
       return;
     }
     body.innerHTML = rows.map(function (record) {
-      var href = "/runs/" + encodeURIComponent(record.thread_id);
+      var href = "/history/" + encodeURIComponent(record.thread_id);
       return "<tr>"
         + "<td>" + statusBadge(record.status) + "</td>"
         + '<td><a href="' + href + '">' + esc(record.subject || "(no subject)")
@@ -543,7 +543,7 @@
     try {
       history.replaceState(null, "", query ? "?" + query : location.pathname);
     } catch (err) { /* history API optional */ }
-    fetch("/runs/data" + (query ? "?" + query : ""))
+    fetch("/history/data" + (query ? "?" + query : ""))
       .then(function (response) {
         return response.json().then(function (payload) {
           return { ok: response.ok, payload: payload };
@@ -561,7 +561,7 @@
 
   /* Detail ------------------------------------------------------------ */
   function detailId() {
-    var match = location.pathname.match(/^\/runs\/([^/]+)\/?$/);
+    var match = location.pathname.match(/^\/history\/([^/]+)\/?$/);
     if (!match) { return null; }
     var value = decodeURIComponent(match[1]);
     return value === "data" ? null : value;
@@ -792,7 +792,7 @@
   }
 
   function loadDetail(runId) {
-    fetch("/runs/" + encodeURIComponent(runId) + "/data")
+    fetch("/history/" + encodeURIComponent(runId) + "/data")
       .then(function (response) {
         if (response.status === 404) { notFound(); return null; }
         return response.json();

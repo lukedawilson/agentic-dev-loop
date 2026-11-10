@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-11-10
+
+### Changed
+
+- - The run history view moved from /runs to /history; the live viz's History link and all history page links use the new path.
+- In the history view, metric drill-downs are now link-styled and gauge needles sit under the centre value in a muted colour so values stay readable.
+- The live viz's history page now links back to the current run.
+
 ## [0.15.1] - 2026-11-10
 
 ### Changed

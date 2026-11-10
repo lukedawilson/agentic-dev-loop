@@ -422,17 +422,17 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
 
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
-            if path == "/runs":
+            if path == "/history":
                 self._runs_page()
-            elif path == "/runs/data":
+            elif path == "/history/data":
                 self._runs_list()
-            elif path.startswith("/runs/") and path.endswith("/data"):
-                run_id = unquote(path[len("/runs/"):-len("/data")])
+            elif path.startswith("/history/") and path.endswith("/data"):
+                run_id = unquote(path[len("/history/"):-len("/data")])
                 if not _RUN_ID_RE.match(run_id):
                     self._json(404, {"error": f"unknown run: {run_id}"})
                 else:
                     self._runs_detail(run_id)
-            elif path.startswith("/runs/") and path != "/runs/":
+            elif path.startswith("/history/") and path != "/history/":
                 self._runs_page()
             elif path == "/" and self.viz_history:
                 self._runs_page()

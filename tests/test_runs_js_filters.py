@@ -76,7 +76,7 @@ const sandbox = {
     },
     documentElement: { setAttribute: () => {} }
   },
-  location: { pathname: "/runs", search: "" },
+  location: { pathname: "/history", search: "" },
   history: { replaceState: (state, title, url) => { replaceCalls.push(url); } },
   fetch: (url) => { fetchCalls.push(url); return new Promise(() => {}); },
   URLSearchParams
@@ -149,7 +149,7 @@ def test_date_change_reloads(boot_runs_js):
 def test_reset_clears_and_reloads(boot_runs_js):
     assert boot_runs_js["fetchesAfterReset"] == 3
     assert boot_runs_js["sinceValueAfterReset"] == ""
-    assert boot_runs_js["urlAfterReset"] == "/runs/data"
+    assert boot_runs_js["urlAfterReset"] == "/history/data"
 
 
 def test_auto_apply_bindings(boot_runs_js):

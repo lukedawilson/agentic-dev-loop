@@ -1,6 +1,6 @@
 """Unit 13 - the read-only historical runs view.
 
-Covers the view-model serialization, the /runs HTTP routes, the history
+Covers the view-model serialization, the /history HTTP routes, the history
 launcher mode, and the generated-page drift guard. Data comes from the same
 real unit-12 fixture databases the reporting suite uses; the server is
 exercised over a real socket on port 0.
@@ -143,42 +143,43 @@ class TestViewPayloads:
 
 class TestRoutes:
     def test_runs_pages_and_data(self, runs_env, pipeline_server):
-        status, headers, body = _request(pipeline_server, "/runs")
+        status, headers, body = _request(pipeline_server, "/history")
         assert status == 200
         assert headers["Content-Type"].startswith("text/html")
         page = body.decode("utf-8")
         assert 'href="/"' in page
         assert "Current run" in page
         assert "<!--runs-back-->" not in page
+        assert _request(pipeline_server, "/runs")[0] == 404
 
-        status, payload = _json(pipeline_server, "/runs/data")
+        status, payload = _json(pipeline_server, "/history/data")
         assert status == 200
         assert payload["records"]
 
         status, _headers, body = _request(
-            pipeline_server, "/runs/abcdef123456")
+            pipeline_server, "/history/abcdef123456")
         assert status == 200
         assert "Current run" in body.decode("utf-8")
 
         status, detail = _json(
-            pipeline_server, "/runs/abcdef123456/data")
+            pipeline_server, "/history/abcdef123456/data")
         assert status == 200
         assert detail["run_id"] == "abcdef123456"
 
     def test_unknown_run_is_404_json(self, runs_env, pipeline_server):
-        status, payload = _json(pipeline_server, "/runs/nope/data")
+        status, payload = _json(pipeline_server, "/history/nope/data")
         assert status == 404
         assert "error" in payload
 
     def test_invalid_filters_are_400_json(self, runs_env, pipeline_server):
         status, payload = _json(
-            pipeline_server, "/runs/data?since=not-a-date")
+            pipeline_server, "/history/data?since=not-a-date")
         assert status == 400
         assert "error" in payload
 
     def test_non_get_is_405_with_allow(self, runs_env, pipeline_server):
         status, headers, body = _request(
-            pipeline_server, "/runs/data", method="POST")
+            pipeline_server, "/history/data", method="POST")
         assert status == 405
         assert headers["Allow"] == "GET"
         assert json.loads(body.decode("utf-8"))["error"]
@@ -191,11 +192,11 @@ class TestRoutes:
         status, _headers, body = _request(pipeline_server, "/")
         assert status == 200
         assert body.decode("utf-8") == PAGE
-        assert 'href="/runs"' in PAGE
+        assert 'href="/history"' in PAGE
 
     def test_history_mode_serves_runs_without_topology(
             self, runs_env, history_server):
-        for path in ("/", "/runs"):
+        for path in ("/", "/history"):
             status, headers, body = _request(history_server, path)
             assert status == 200
             assert body.decode("utf-8") == RUNS_PAGE
@@ -203,7 +204,8 @@ class TestRoutes:
             assert "<!--runs-back-->" in body.decode("utf-8")
         assert _request(history_server, "/topology")[0] == 404
         assert _request(history_server, "/events")[0] == 404
-        status, payload = _json(history_server, "/runs/data")
+        assert _request(history_server, "/runs")[0] == 404
+        status, payload = _json(history_server, "/history/data")
         assert status == 200
         assert payload["records"]
 
@@ -229,9 +231,9 @@ class TestBuildPipeline:
         assert "Show more..." in RUNS_PAGE
         assert "Show less" in RUNS_PAGE
         assert "metric-summary-less" in RUNS_PAGE
-        # The nav once carried a "Runs" link, but on the runs page it is a
+        # The nav once carried a "Runs" link, but on the history page it is a
         # pointless self-link; the "All runs" breadcrumb covers back-to-list.
-        assert '<a class="hdr-link" href="/runs">Runs</a>' not in RUNS_PAGE
+        assert '<a class="hdr-link" href="/history">Runs</a>' not in RUNS_PAGE
 
     def test_vendored_echarts_is_pinned_and_ascii(self):
         vendor = (ROOT / "src" / "agentic_dev_loop" / "viz" / "assets"
