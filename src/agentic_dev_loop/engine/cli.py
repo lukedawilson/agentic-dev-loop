@@ -28,9 +28,11 @@ _TOP_HELP = """\
 usage: agentic-dev-loop [PIPELINE] [--resume THREAD_ID] [--max-attempts N]
                         [--no-viz] [--viz-port PORT] [--dry-run] [--version]
 
-Run an OpenHands agent pipeline defined in YAML. PIPELINE defaults to
-agentic-dev-loop/pipeline.yaml; run `agentic-dev-loop <PIPELINE> --help`
-for loader-contributed options (e.g. --plan, --aidlc-unit).
+Run an OpenHands agent pipeline defined in YAML. With no arguments this
+help is shown. With options but no PIPELINE, the default
+agentic-dev-loop/pipeline.yaml is used when present (a missing default is
+a loud error). Run `agentic-dev-loop <PIPELINE> --help` for
+loader-contributed options (e.g. --plan, --aidlc-unit).
 
 commands:
   containers       Inspect engine sandbox containers and networks.
@@ -105,8 +107,9 @@ def _core_parser() -> argparse.ArgumentParser:
                     "extensions appear once PIPELINE is known - see "
                     "`agentic-dev-loop PIPELINE --help`.")
     parser.add_argument("pipeline", type=Path, nargs="?", default=None,
-                        help="path to the pipeline YAML (default: "
-                             "agentic-dev-loop/pipeline.yaml)")
+                        help="path to the pipeline YAML (with options but "
+                             "no PIPELINE, agentic-dev-loop/pipeline.yaml "
+                             "is used when present)")
     parser.add_argument("--resume", metavar="THREAD_ID", default=None,
                         help="resume a checkpointed run by thread id")
     parser.add_argument("--max-attempts", type=int, default=None,

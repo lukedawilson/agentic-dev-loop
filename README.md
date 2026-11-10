@@ -84,9 +84,10 @@ agentic-dev-loop agentic-dev-loop/pipeline.yaml            # run it
 | `--env <file>` | Load secrets from a host env file outside the workspace. Optional: the process environment is the default, a named-but-missing file is a loud error, and values already set in the environment win. |
 | `--no-viz` / `--viz-port <port>` | Suppress the live graph view / set a preferred port (default 8321; falls back to a free port when busy). |
 
-`PIPELINE` is optional and defaults to `agentic-dev-loop/pipeline.yaml`
-(relative to the current directory). Run flags without a positional use that
-default; a missing default fails loudly instead of falling back.
+`PIPELINE` is optional: with no arguments at all, `agentic-dev-loop` prints
+the help. Flags without a positional use `agentic-dev-loop/pipeline.yaml`
+(relative to the current directory); a missing default fails loudly instead
+of falling back.
 
 Exit code is `0` on pipeline success, `1` otherwise.
 
