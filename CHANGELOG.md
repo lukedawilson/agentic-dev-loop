@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pinned `browser-use==0.11.13` and `pillow>=13.0.0` so a fresh pip resolve lands on a CVE-free pillow: 12.3.0 carried 39 CVEs (fixed in 13.0.0), and browser-use 0.12.0+ hard-pins pillow==12.x, which deadlocked the restore step's pip-audit gate.
 - The brief coverage gate now matches required headings and anchors as line prefixes instead of whole lines: compressed content may follow an anchor on its line, and glyph variants (em dashes, curly quotes) fold to ASCII before matching. Non-ASCII characters inside required items are still reproduced character-exact, never transliterated (plan 060).
 
+## [0.15.3] - 2026-11-10
+
+### Changed
+
+- The brief coverage gate now matches required headings and anchors as line prefixes instead of whole lines: compressed content may follow an anchor on its line, and glyph variants (em dashes, curly quotes) fold to ASCII before matching. Non-ASCII characters inside required items are still reproduced character-exact, never transliterated.
+
 ## [0.15.2] - 2026-11-10
 
 ### Changed

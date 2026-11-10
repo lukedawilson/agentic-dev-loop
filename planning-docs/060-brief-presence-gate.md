@@ -1,6 +1,6 @@
 # 060 - Brief presence gate
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Scope
 
