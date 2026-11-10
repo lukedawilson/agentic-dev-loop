@@ -38,11 +38,11 @@ machine**. Concretely:
 
 ## 3. Stack
 
-- **Carbon Web Components** (`@carbon/web-components`, v2 line), loaded from a CDN with an **exact, pinned version**, the same way Mermaid is loaded today. The server stays stdlib-only (TS-4). Only load the components listed in §5.
-- **Fonts:** IBM Plex Sans and IBM Plex Mono, from Carbon's font loading or Google Fonts. Fall back to system fonts if offline.
-- **Themes:** start from Carbon `g100` (dark) and `g10` (light), then apply the overrides in `tokens.css`. Select the theme with `data-theme` on `<html>`.
+- **Carbon Web Components** (`@carbon/web-components`, v2 line), vendored into the repo at an **exact, pinned version** (`v2.65.0`) with a SHA-256 manifest (`tools/vendor_carbon_wc.py`), served same-origin from `/vendor/`. The server stays stdlib-only (TS-4) and the page makes no runtime network requests. Only load the components listed in §5. (Amended by plan 064: originally CDN-loaded with a graceful-degradation fallback; the fallback was rescinded - Carbon is now a hard vendored dependency.)
+- **Fonts:** the IBM Plex stack, resolved locally with system-font fallback. No webfont loading (keeps the page self-contained and avoids a rendering shift; amended by plan 064).
+- **Themes:** start from Carbon `g100` (dark) and `white` (light) theme zones via the vendored `themes.css` (inlined before the skin), then apply the overrides in the skin. Select the theme with `data-theme` and the matching `cds-theme-zone-g100` / `cds-theme-zone-white` class on `<html>`. (Amended by plan 064.)
 - **Mermaid is removed.** The pipeline is drawn by §7's layout. This also removes the "Graph unavailable (mermaid CDN unreachable)" failure mode. Keep an equivalent fallback for when `/topology` fails ("Graph unavailable - the event log below is still live").
-- **Graceful degradation:** if the Carbon CDN is unreachable, the page must still work using plain HTML styled with the same tokens. The prototype is exactly that baseline, so the Carbon elements are an enhancement, not a dependency.
+- **No degradation mode:** Carbon is vendored and SHA-pinned, so there is no CDN-failure mode to degrade from. The hand-written fallback skin was deleted when the port landed (plan 064).
 
 ## 4. Theme
 
@@ -219,5 +219,5 @@ Check each of these against the current `PAGE` script:
 3. The `short` topology (6 stages, 2 back-edges) renders as one centred row at natural size at 1100px.
 4. Resizing the window re-flows the rows live, with no reload.
 5. Every behaviour in §10 passes the existing viz contract tests, updated for the new DOM ids where they change. Keep the old ids where cheap: `#subject`, `#attempt`, `#thread-id`, `#total`, `#verdicts`, `#stages`, `stage-<node>`, `#run-log`, `#stream-banner`, `#run-banner`.
-6. With the Carbon CDN blocked, the page still renders and updates using the token-styled fallback.
+6. The page loads and updates with every Carbon module served from the vendored `/vendor/` tree (no external network requests); `tools/vendor_carbon_wc.py --check` passes against the on-disk tree. (Amended by plan 064: the CDN-blocked fallback check is obsolete - there is no CDN.)
 7. `/topology` includes `flow` and `edges`, and `mermaid` is unchanged.

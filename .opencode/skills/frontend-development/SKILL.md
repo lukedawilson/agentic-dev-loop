@@ -5,12 +5,18 @@ description: Binding rules for ANY change under frontend/ - Carbon web component
 
 # Frontend Development Rules
 
-> **Viz scope note (unit 9).** The live-viz page is its own product surface:
-> its assets live at `src/agentic_dev_loop/viz/assets/` and its class register
-> is `frontend/viz-register.md`, not this file. Lint it with
+> **Viz scope note (unit 9, amended by plan 064).** The live-viz page is its
+> own product surface: its assets live at `src/agentic_dev_loop/viz/assets/`
+> and its class register is `frontend/viz-register.md`, not this file. Lint it
+> with
 > `node frontend/scripts/lint-figma-primitives.mjs --assets src/agentic_dev_loop/viz/assets --register frontend/viz-register.md`.
-> The rules below still apply to `frontend/`; the viz baseline is plain HTML
-> because the Carbon CDN is an enhancement, never a dependency.
+> The rules below still apply to `frontend/`. The viz baseline is vendored
+> Carbon Web Components (`src/agentic_dev_loop/viz/vendor/`, SHA-pinned via
+> `tools/vendor_carbon_wc.py`, served from `/vendor/`); Carbon is a hard
+> dependency, there is no fallback skin. Custom CSS in the viz is limited to
+> the bespoke surfaces Carbon does not ship (pipeline graph, ANSI console,
+> event log, attempt meter, charts, metric/artifact cards) and to Carbon host
+> and `::part` overrides, all registered in `frontend/viz-register.md`.
 
 
 - ALWAYS make your designs responsive and mobile-friendly

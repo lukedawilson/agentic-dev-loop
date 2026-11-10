@@ -1,6 +1,6 @@
 # Plan 064: Port the viz to vendored Carbon Web Components
 
-> **Status: APPROVED**
+> **Status: COMPLETED**
 
 ## Problem
 
@@ -23,7 +23,8 @@ behavioural change, per the analysis in
 
 1. **Fallback rescinded** (user directive, 2026-11-10): Carbon becomes a hard
    dependency. The plain-HTML fallback skin is deleted as swaps land, not
-   kept. `viz-redesign-spec.md` R30/AC6 and the `frontend-development` skill's
+   kept. `viz-redesign-spec.md` section 3 (graceful degradation) and
+   acceptance check 6, and the `frontend-development` skill's
    viz scope note ("the Carbon CDN is an enhancement, never a dependency")
    are amended in this change (task 5.4).
 2. **Vendored, not CDN** (user directive, 2026-11-10): the Carbon chunk graph
@@ -60,8 +61,9 @@ behavioural change, per the analysis in
 - `tests/test_vendor_carbon_wc.py` (new), `tests/test_viz.py` (harness +
   swapped-component rewrites), `tests/test_unit13_runs_viz.py` (markup
   substring updates), `tests/test_viz_serve.py`-level route tests.
-- `planning-docs/design/viz-redesign-spec.md`: amend R30/AC6 to the vendored
-  hard-dependency posture.
+- `planning-docs/design/viz-redesign-spec.md`: amend section 3 (graceful
+  degradation) and acceptance check 6 to the vendored hard-dependency
+  posture.
 - `.opencode/skills/frontend-development/SKILL.md`: rewrite the viz scope
   note (vendored Carbon is now the viz baseline).
 - `frontend/viz-register.md`: class sync (removals of swapped-skin classes,
@@ -225,8 +227,10 @@ update the Node-shim tests to attribute assertions, sync
 `frontend/viz-register.md`, drift rebuild, suite green.
 
 - 2.1: Header: `cds-header`, `cds-header-name`, `cds-header-global-action`.
-- 2.2: Stream banner: `cds-actionable-notification kind="warning"` with
+- 2.2: Stream banner: `cds-inline-notification kind="warning"` with
   `hide-close-button` (per 0.1), `recover()` visibility logic unchanged.
+  (Inline, not actionable: the banner carries no action, so actionable's
+  footer slot would be dead weight.)
 - 2.3: Summary tiles: `cds-tile` x5 with host resets restoring the strip
   metrics.
 - 2.4: Verdict badges: `cds-tag` per the 0.1 go/no-go (fail = warning-colour
@@ -261,9 +265,9 @@ update the Node-shim tests to attribute assertions, sync
 - 5.1: Manual parity pass: 4 run scenarios x 2 themes x the standard
   breakpoints, against the current pages as oracle; keyboard navigation,
   focus order, reduced motion.
-- 5.2: Amend `planning-docs/design/viz-redesign-spec.md` R30/AC6 to the
-  vendored hard-dependency posture (no fallback skin; Carbon vendored and
-  SHA-pinned).
+- 5.2: Amend `planning-docs/design/viz-redesign-spec.md` section 3 (graceful
+  degradation) and acceptance check 6 to the vendored hard-dependency posture
+  (no fallback skin; Carbon vendored and SHA-pinned).
 - 5.3: Rewrite the `frontend-development` skill's viz scope note: the viz is
   vendored-Carbon-native; the register stays the class ledger for the
   custom surfaces.
@@ -300,5 +304,6 @@ through block 5).
    accordion chevron/metrics, focus rings) across 4 scenarios x 2 themes.
 4. Behavioural invariants hold: no auto accordion mutation, watchdog banner
    semantics, theme toggle, copy gating, per-node console replay.
-5. R30/AC6 and the skill scope note amended; register synced; CHANGELOG
+5. Spec section 3 + acceptance check 6 and the skill scope note amended;
+   register synced; CHANGELOG
    entry; no fallback-era CSS left behind.
