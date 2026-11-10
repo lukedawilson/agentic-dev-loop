@@ -141,6 +141,17 @@ def test_gauge_option_derives_from_rate_metric(stats):
     assert "%" in series["detail"]["formatter"]
 
 
+def test_gauge_needle_contrasts_with_value(stats):
+    # The needle and the centre value must never share a colour: when they
+    # do, the value is unreadable where the needle sweeps under it.
+    series = stats["gauge"]["series"][0]
+    needle = series["pointer"]["itemStyle"]["color"]
+    value = series["detail"]["color"]
+    assert needle != value
+    assert needle == "#8A949C"  # muted helper grey
+    assert value == "#EEF1F3"  # text primary
+
+
 def test_unavailable_gauge_has_no_option(stats):
     assert stats["gaugeUnavailable"] is None
 

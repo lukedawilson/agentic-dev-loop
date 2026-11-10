@@ -231,7 +231,7 @@
       axisTick: { show: false },
       axisLabel: { show: false },
       splitLine: { show: false },
-      pointer: { show: true, itemStyle: { color: c.text } },
+      pointer: { show: true, itemStyle: { color: c.muted } },
       progress: { show: true, width: 10, itemStyle: { color: c.ok } },
       detail: {
         valueAnimation: false,
