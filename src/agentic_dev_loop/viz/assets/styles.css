@@ -364,11 +364,7 @@ cds-accordion-item::part(content) { padding: 0; }
   margin-top: 2px; }
 .badge-prov { font-size: 10px; text-transform: lowercase; }
 .table-wrap { overflow-x: auto; }
-.runs-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.runs-table th, .runs-table td { text-align: left; padding: 7px 10px;
-  border-bottom: 1px solid var(--cds-border-subtle-01); vertical-align: top; }
-.runs-table th { font-size: 10px; text-transform: uppercase;
-  letter-spacing: .08em; color: var(--cds-text-helper); }
+.runs-table { width: 100%; font-size: 12px; }
 .runs-table a { color: var(--cds-link-primary); text-decoration: none; }
 .runs-table a:hover { text-decoration: underline; }
 .runs-table .num { text-align: right; }

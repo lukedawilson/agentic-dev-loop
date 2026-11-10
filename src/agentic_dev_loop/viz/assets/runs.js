@@ -526,8 +526,10 @@
     if (since) { params.set("since", since); }
     if (until) { params.set("until", until); }
     var statuses = [];
-    var boxes = document.querySelectorAll('input[name="status"]:checked');
-    for (var i = 0; i < boxes.length; i++) { statuses.push(boxes[i].value); }
+    var boxes = document.querySelectorAll("cds-checkbox");
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked) { statuses.push(boxes[i].getAttribute("value")); }
+    }
     if (statuses.length) { params.set("status", statuses.join(",")); }
     return params;
   }
@@ -538,9 +540,9 @@
     if (el("since")) { el("since").value = since; }
     if (el("until")) { el("until").value = until; }
     var selected = (params.get("status") || "").split(",");
-    var boxes = document.querySelectorAll('input[name="status"]');
+    var boxes = document.querySelectorAll("cds-checkbox");
     for (var i = 0; i < boxes.length; i++) {
-      boxes[i].checked = selected.indexOf(boxes[i].value) !== -1;
+      boxes[i].checked = selected.indexOf(boxes[i].getAttribute("value")) !== -1;
     }
   }
 
@@ -560,23 +562,23 @@
     var rows = payload.records || [];
     setText("run-count", rows.length + " record" + (rows.length === 1 ? "" : "s"));
     if (!rows.length) {
-      body.innerHTML = '<tr><td colspan="7" class="empty">'
-        + "No runs match these filters.</td></tr>";
+      body.innerHTML = '<cds-table-row><cds-table-cell class="empty">'
+        + "No runs match these filters.</cds-table-cell></cds-table-row>";
       renderAggregate(payload);
       return;
     }
     body.innerHTML = rows.map(function (record) {
       var href = "/history/" + encodeURIComponent(record.thread_id);
-      return "<tr>"
-        + "<td>" + statusBadge(record.status) + "</td>"
-        + '<td><a href="' + href + '">' + esc(record.subject || "(no subject)")
-        + "</a></td>"
-        + '<td class="mono">' + esc(record.thread_id) + "</td>"
-        + '<td class="mono">' + esc(fmtTs(record.ts_start)) + "</td>"
-        + '<td class="mono num">' + esc(record.attempt_count) + "</td>"
-        + "<td>" + verdictSummary(record.verdict_summary) + "</td>"
-        + '<td class="mono path">' + esc(record.run_dir) + "</td>"
-        + "</tr>";
+      return "<cds-table-row>"
+        + "<cds-table-cell>" + statusBadge(record.status) + "</cds-table-cell>"
+        + '<cds-table-cell><a href="' + href + '">' + esc(record.subject || "(no subject)")
+        + "</a></cds-table-cell>"
+        + '<cds-table-cell class="mono">' + esc(record.thread_id) + "</cds-table-cell>"
+        + '<cds-table-cell class="mono">' + esc(fmtTs(record.ts_start)) + "</cds-table-cell>"
+        + '<cds-table-cell class="mono num">' + esc(record.attempt_count) + "</cds-table-cell>"
+        + "<cds-table-cell>" + verdictSummary(record.verdict_summary) + "</cds-table-cell>"
+        + '<cds-table-cell class="mono path">' + esc(record.run_dir) + "</cds-table-cell>"
+        + "</cds-table-row>";
     }).join("");
     renderAggregate(payload);
   }
@@ -891,16 +893,16 @@
     if (field) { field.addEventListener("change", autoApply); }
     field = el("until");
     if (field) { field.addEventListener("change", autoApply); }
-    var boxes = document.querySelectorAll('input[name="status"]');
+    var boxes = document.querySelectorAll("cds-checkbox");
     for (var i = 0; i < boxes.length; i++) {
-      boxes[i].addEventListener("change", autoApply);
+      boxes[i].addEventListener("cds-checkbox-changed", autoApply);
     }
     var reset = el("reset");
     if (reset) {
       reset.addEventListener("click", function () {
         if (el("since")) { el("since").value = ""; }
         if (el("until")) { el("until").value = ""; }
-        var boxes = document.querySelectorAll('input[name="status"]');
+        var boxes = document.querySelectorAll("cds-checkbox");
         for (var i = 0; i < boxes.length; i++) { boxes[i].checked = false; }
         loadList();
       });

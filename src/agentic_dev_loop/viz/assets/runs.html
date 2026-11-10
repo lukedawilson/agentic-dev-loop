@@ -44,10 +44,10 @@
           <input id="until" type="date" name="until"></label>
         <fieldset class="field status-field">
           <legend>Status</legend>
-          <label><input type="checkbox" name="status" value="success"> success</label>
-          <label><input type="checkbox" name="status" value="failed"> failed</label>
-          <label><input type="checkbox" name="status" value="interrupted"> interrupted</label>
-          <label><input type="checkbox" name="status" value="running"> running</label>
+          <cds-checkbox name="status" value="success">success</cds-checkbox>
+          <cds-checkbox name="status" value="failed">failed</cds-checkbox>
+          <cds-checkbox name="status" value="interrupted">interrupted</cds-checkbox>
+          <cds-checkbox name="status" value="running">running</cds-checkbox>
         </fieldset>
         <cds-button id="reset" kind="tertiary" size="sm">Reset</cds-button>
       </div>
@@ -62,13 +62,20 @@
       <div class="panel-h"><span>Runs</span>
         <span id="run-count" class="legend mono"></span></div>
       <div class="table-wrap">
-        <table class="runs-table">
-          <thead><tr>
-            <th>Status</th><th>Subject</th><th>Thread</th><th>Started</th>
-            <th>Attempts</th><th>Verdicts</th><th>Run dir</th>
-          </tr></thead>
-          <tbody id="runs-body"></tbody>
-        </table>
+        <cds-table class="runs-table" size="sm">
+          <cds-table-head>
+            <cds-table-header-row>
+              <cds-table-header-cell>Status</cds-table-header-cell>
+              <cds-table-header-cell>Subject</cds-table-header-cell>
+              <cds-table-header-cell>Thread</cds-table-header-cell>
+              <cds-table-header-cell>Started</cds-table-header-cell>
+              <cds-table-header-cell>Attempts</cds-table-header-cell>
+              <cds-table-header-cell>Verdicts</cds-table-header-cell>
+              <cds-table-header-cell>Run dir</cds-table-header-cell>
+            </cds-table-header-row>
+          </cds-table-head>
+          <cds-table-body id="runs-body"></cds-table-body>
+        </cds-table>
       </div>
     </section>
   </section>
