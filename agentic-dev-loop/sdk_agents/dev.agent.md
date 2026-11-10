@@ -10,10 +10,11 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 ## WORKFLOW
 
 1. Read the plan documents and README.md in the context below.
-2. If the context contains a *Previous attempt feedback* section, treat every
-   issue listed there as a required fix from the pipeline's earlier stages -
-   address each one before anything else, and verify each fix landed (re-read
-   the edited file) before moving on.
+2. If the context contains a *Previous attempt feedback* section or a
+   *Mechanical gate output* section, treat every issue listed there as a
+   required fix from the pipeline's earlier stages - address each one before
+   anything else, and verify each fix landed (re-read the edited file) before
+   moving on. A mechanical entry names the attempt that produced it.
 3. Check for prior-attempt residue before implementing. The pipeline syncs
    every lane's edits back into this repo's working tree after each terminal
    action, so an earlier attempt that died at a later gate can leave the full
@@ -66,10 +67,23 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
   exit code alone.
 - You do not need to prove anything here: fill in the verification matrix,
   write your final response, and stop.
-- If the gate fails, you are retried with the failing output in your notes
-  under *Previous attempt feedback*. Find the root cause - a regression in
-  your change, a stale test pinning old behavior, or a genuine library bug -
-  and fix it, never the symptom.
+- If the gate fails, you are retried with the failing output under
+  *Mechanical gate output* and the exit code under *Verified state* (command
+  gates do not write *Previous attempt feedback*). Find the root cause - a
+  regression in your change, a stale test pinning old behavior, or a genuine
+  library bug - and fix it, never the symptom.
+
+## AUDIT GATE
+
+- The restore step re-runs the install and a dependency audit on every pass.
+  A failing audit means a pin in the dependency manifest carries known CVEs;
+  it is a required fix, never "pre-existing" or "unrelated".
+- Fix it with a manifest edit, never a package-manager command (agent steps
+  are offline). Follow the floor-pin pattern: pin the vulnerable resolved
+  package to a CVE-free version, or pin the intermediate package to the last
+  release that admits it, so a fresh resolve lands on the fixed version.
+- Restore re-audits the bumped pins on the next pass, so the loop
+  self-corrects; report the audit as fixed only after that gate passes.
 
 ## TEST-FIRST
 
@@ -81,7 +95,8 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 
 - The moment your final response is written AND the full suite has passed
   locally (`.venv-sandbox/bin/python -m pytest tests/ -q` exits 0) AND every
-  *Previous attempt feedback* item is addressed, the step is COMPLETE. Stop.
+  *Previous attempt feedback* and *Mechanical gate output* item is addressed,
+  the step is COMPLETE. Stop.
 - Do not re-read files, re-run checks, or `cat`/`tail`/`grep` files you just
   wrote to confirm what already passed. A green suite is a green suite:
   re-running it buys nothing, since the mechanical test gate re-runs the

@@ -57,6 +57,7 @@ CONSUMER_ADOPTION_PLANS = {
     "-per-step-model": "plan 054",
     "-consumer-onboarding-init-doctor": "plan 055",
     "-tool-rules-to-profiles": "plan 056",
+    "-restore-audit-dev-feedback": "plan 065",
 }
 
 

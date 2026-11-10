@@ -98,6 +98,12 @@ steps:
     finalize_nudge_turns: 10   # 035: one advisory "produce your final response now" turn at max_iterations - 10
     produces: implementation-summary.md   # hygiene-tracked, no verdict
     mounts: [{path: ".", mode: rw}]        # strict-by-default (Q4): declared, not implied
+    # The audit escalation dev must read (065): a restore/pip-audit failure is
+    # a required manifest edit, not a pre-existing issue to report past.
+    custom_prompt: >-
+      A restore or dependency-audit failure is a required fix, never
+      pre-existing or unrelated: edit the manifest with the floor-pin
+      pattern (AUDIT GATE).
     # No setup hook: the deps step (pre-dev) builds .venv-sandbox once per
     # run; goto dev retries re-enter clean, nothing re-installs at step entry.
     # Banned-command deny-list: custom entries append after the engine
@@ -117,8 +123,10 @@ steps:
   - name: restore
     # network-on restore step (open bootstrap) + audit escalation: pip-audit
     # fails the step on a known-CVE pin. Under `open` that failure routes to
-    # `dev` like any restore failure - dev can bump the pin, and the bumped
-    # pin is audited again on the next pass, so the loop self-corrects.
+    # `dev` like any restore failure; the dev step's custom_prompt and the
+    # AUDIT GATE section of sdk_agents/dev.agent.md bind it as a required
+    # manifest edit, and the bumped pin is audited again on the next pass, so
+    # the loop self-corrects.
     # pip is upgraded first (bootstrap hygiene): the dev image's ensurepip
     # bundles a stale wheel, and pip is not a pyproject pin dev can bump, so
     # the audit would otherwise deadlock on pip's own CVEs. Cheap no-op once

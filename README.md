@@ -515,10 +515,11 @@ Conventions that make a good agent file:
 - **dev enumerates its impossible set and stops at it.** List the commands
   the sandbox cannot run (offline package fetches, browser downloads), one
   attempt per command - keeps the productive loop and kills doomed retries.
-- **Failure output returns as *Previous attempt feedback*.** Steps route
-  `on_fail: { goto: dev, retry: true }`, so gate failure output lands in the
-  dev agent's next context; the dev prompt makes every listed issue a
-  required fix.
+- **Failure output is a required fix in dev's next context.** Agent verdict
+  steps land their failing output under *Previous attempt feedback*; command
+  gates (test, restore) land it under *Mechanical gate output*, with the exit
+  code under *Verified state*. Steps route `on_fail: { goto: dev, retry: true }`,
+  and the dev prompt makes every listed failure a required fix.
 - **No git mutations, ever.** The `commit` step is the single commit point.
 
 ### The pipeline file

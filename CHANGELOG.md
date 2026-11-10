@@ -11,6 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Pinned `browser-use==0.11.13` and `pillow>=13.0.0` so a fresh pip resolve lands on a CVE-free pillow: 12.3.0 carried 39 CVEs (fixed in 13.0.0), and browser-use 0.12.0+ hard-pins pillow==12.x, which deadlocked the restore step's pip-audit gate.
 - The brief coverage gate now matches required headings and anchors as line prefixes instead of whole lines: compressed content may follow an anchor on its line, and glyph variants (em dashes, curly quotes) fold to ASCII before matching. Non-ASCII characters inside required items are still reproduced character-exact, never transliterated (plan 060).
+- A failing command gate (test, restore) now reaches dev as a required fix: mechanical gate output is rendered with that binding, the dev contract names both feedback channels, and a new AUDIT GATE section makes a dependency-audit failure a required manifest edit (plan 065).
+
+## [0.15.4] - 2026-11-10
+
+### Changed
+
+- A failing command gate (test, restore) now reaches dev as a required fix: the mechanical gate output heading binds each failure as a required fix, the dev contract names both feedback channels, and a new AUDIT GATE section makes a dependency-audit failure a required manifest edit.
+
+### Consumer adoption
+
+Plan 065-restore-audit-dev-feedback requires consumer repos to refresh the dev agent prompt (human commit; see planning-docs/065):
+
+- Update agentic-dev-loop/sdk_agents/dev.agent.md from the engine template at src/agentic_dev_loop/engine/onboarding/templates/dev.agent.md (or copy the engine repo copy of agentic-dev-loop/sdk_agents/dev.agent.md): the old copy claims failing command-gate output arrives under Previous attempt feedback, and it lacks the AUDIT GATE section that binds a dependency-audit failure to a manifest edit via the floor-pin pattern.
+- Optionally add the audit-escalation custom_prompt to the dev step in agentic-dev-loop/pipeline.yaml (copy from the engine repo dev step): a restore or dependency-audit failure is a required manifest edit, never pre-existing or unrelated.
 
 ## [0.15.3] - 2026-11-10
 
