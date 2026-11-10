@@ -30,11 +30,15 @@ def _scaffold(build_tool, tmp_path):
     assets = tmp_path / "assets"
     assets.mkdir()
     (assets / "page.html").write_text(
+        '<link rel="stylesheet" href="vendor/themes.css">'
         '<link rel="stylesheet" href="styles.css">'
         '<script src="pipeline-layout.js"></script>'
         '<script src="page.js"></script>')
     (assets / "styles.css").write_text("body { color: red; }")
     (assets / "page.js").write_text("// page")
+    themes = tmp_path / "vendor"
+    themes.mkdir()
+    (themes / "themes.css").write_text(".cds-theme-zone-g100 { --cds-x: 1; }")
     # Stale emitted copy: the reference has moved on.
     (assets / "pipeline-layout.js").write_text("var OLD = 1;\n")
     reference = tmp_path / "reference-layout.js"
@@ -48,6 +52,7 @@ def _scaffold(build_tool, tmp_path):
     build_tool.RUNS_HTML = assets / "runs.html"
     build_tool.RUNS_JS = assets / "runs.js"
     build_tool.ECHARTS_JS = assets / "echarts.min.js"
+    build_tool.THEMES_CSS = themes / "themes.css"
     build_tool.PAGE_PY = tmp_path / "page.py"
     build_tool.REFERENCE_LAYOUT = reference
 
@@ -69,3 +74,15 @@ def test_reference_is_what_gets_embedded(build_tool, tmp_path):
     assert "var NEW = 2;" in page, "page.py embedded the stale layout copy"
     assert (tmp_path / "assets" / "pipeline-layout.js").read_text() == (
         "var NEW = 2;\n")
+
+
+def test_theme_sheet_inlines_before_skin(build_tool, tmp_path):
+    # Cascade order is the theme contract (plan 064, finding F10): the Carbon
+    # theme sheet fills the 250-token fallback gap, and the skin's overrides
+    # must come after it to win the cascade.
+    _scaffold(build_tool, tmp_path)
+    assert build_tool.main([]) == 0
+    page = (tmp_path / "page.py").read_text()
+    theme_at = page.index("cds-theme-zone-g100")
+    skin_at = page.index("body { color: red; }")
+    assert theme_at < skin_at, "theme sheet must inline before the skin"

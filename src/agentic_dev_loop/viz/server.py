@@ -37,6 +37,18 @@ STATE_WHITELIST = ("attempt", "step_verdicts", "outcome", "failed")
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# Vendored Carbon Web Components (plan 064): flat, closed chunk graph pinned
+# by manifest.json, served read-only so the pages' module scripts resolve.
+_VENDOR_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                           "vendor")
+_VENDOR_NAME_RE = re.compile(r"[A-Za-z0-9._-]+\.(?:js|css)\Z")
+
+
+def _vendor_files() -> dict:
+    with open(os.path.join(_VENDOR_DIR, "manifest.json"),
+              encoding="ascii") as fh:
+        return json.load(fh)["files"]
+
 # The runs page navbar carries a placeholder comment. The pipeline server
 # replaces it with a link back to the live run at "/"; the standalone history
 # server leaves the comment in place, so no navbar button appears there.
@@ -422,7 +434,9 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
 
         def do_GET(self) -> None:
             path = urlsplit(self.path).path
-            if path == "/history":
+            if path.startswith("/vendor/"):
+                self._vendor_file(path[len("/vendor/"):])
+            elif path == "/history":
                 self._runs_page()
             elif path == "/history/data":
                 self._runs_list()
@@ -504,6 +518,27 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
         def _json(self, status: int, payload: dict) -> None:
             self._send(status, "application/json",
                        json.dumps(payload, ensure_ascii=True))
+
+        def _vendor_file(self, name: str) -> None:
+            # Only manifest-pinned flat file names are served; anything else
+            # (traversal, subdirectories, manifest.json itself) is a 404.
+            if not _VENDOR_NAME_RE.match(name) or "/" in name:
+                self.send_error(404)
+                return
+            try:
+                files = _vendor_files()
+            except OSError:
+                self.send_error(404)
+                return
+            if name not in files:
+                self.send_error(404)
+                return
+            with open(os.path.join(_VENDOR_DIR, name),
+                      encoding="ascii") as fh:
+                body = fh.read()
+            mime = ("text/javascript" if name.endswith(".js")
+                    else "text/css")
+            self._send(200, f"{mime}; charset=utf-8", body)
 
         def _method_not_allowed(self) -> None:
             self._send(405, "application/json",

@@ -35,10 +35,12 @@ LAYOUT_JS = ASSETS / "pipeline-layout.js"
 RUNS_HTML = ASSETS / "runs.html"
 RUNS_JS = ASSETS / "runs.js"
 ECHARTS_JS = ASSETS / "echarts.min.js"
+THEMES_CSS = ROOT / "src" / "agentic_dev_loop" / "viz" / "vendor" / "themes.css"
 PAGE_PY = ROOT / "src" / "agentic_dev_loop" / "viz" / "page.py"
 REFERENCE_LAYOUT = ROOT / "planning-docs" / "design" / "pipeline-layout.js"
 
 STYLE_LINK = '<link rel="stylesheet" href="styles.css">'
+THEME_LINK = '<link rel="stylesheet" href="vendor/themes.css">'
 LAYOUT_SCRIPT = '<script src="pipeline-layout.js"></script>'
 PAGE_SCRIPT = '<script src="page.js"></script>'
 ECHARTS_SCRIPT = '<script src="echarts.min.js"></script>'
@@ -66,6 +68,12 @@ def _inline_style() -> str:
     return "<style>\n" + _read(STYLES_CSS) + "</style>"
 
 
+def _inline_theme() -> str:
+    # Carbon theme tokens must precede the skin: the skin's 19 --cds-*
+    # overrides win the cascade over the theme sheet's zone-scoped defaults.
+    return "<style>\n" + _read(THEMES_CSS) + "</style>"
+
+
 def render_page() -> str:
     html = _read(PAGE_HTML)
     # Embed the normative reference implementation when it exists: the
@@ -75,10 +83,11 @@ def render_page() -> str:
                      else _read(LAYOUT_JS))
     inline_layout = "<script>\n" + layout_source + "</script>"
     inline_page = "<script>\n" + _read(PAGE_JS) + "</script>"
-    for marker in (STYLE_LINK, LAYOUT_SCRIPT, PAGE_SCRIPT):
+    for marker in (THEME_LINK, STYLE_LINK, LAYOUT_SCRIPT, PAGE_SCRIPT):
         if html.count(marker) != 1:
             raise SystemExit(f"page.html must contain exactly one {marker!r}")
-    page = (html.replace(STYLE_LINK, _inline_style())
+    page = (html.replace(THEME_LINK, _inline_theme())
+                .replace(STYLE_LINK, _inline_style())
                 .replace(LAYOUT_SCRIPT, inline_layout)
                 .replace(PAGE_SCRIPT, inline_page))
     page.encode("ascii")
@@ -101,10 +110,11 @@ def render_runs_page() -> str | None:
         return None
     _verify_echarts()
     html = _read(RUNS_HTML)
-    for marker in (STYLE_LINK, ECHARTS_SCRIPT, RUNS_SCRIPT):
+    for marker in (THEME_LINK, STYLE_LINK, ECHARTS_SCRIPT, RUNS_SCRIPT):
         if html.count(marker) != 1:
             raise SystemExit(f"runs.html must contain exactly one {marker!r}")
-    page = (html.replace(STYLE_LINK, _inline_style())
+    page = (html.replace(THEME_LINK, _inline_theme())
+                .replace(STYLE_LINK, _inline_style())
                 .replace(ECHARTS_SCRIPT, "<script>\n" + _read(ECHARTS_JS)
                          + "</script>")
                 .replace(RUNS_SCRIPT, "<script>\n" + _read(RUNS_JS)
