@@ -130,11 +130,7 @@ cds-header-name::part(link) { padding-inline: 0; }
 :root[data-theme="dark"] .ic-moon { display: none; }
 
 /* Banners */
-#stream-banner {
-  display: none; padding: 8px 16px; background: var(--adl-tint-warn);
-  color: var(--cds-text-primary);
-  border-bottom: 1px solid var(--cds-support-warning); font-size: 12px;
-}
+#stream-banner { display: none; max-inline-size: none; }
 .outcome { display: none; padding: 10px 14px; border: 1px solid; font-size: 12px; }
 .outcome-success { background: var(--adl-tint-ok); border-color: var(--cds-support-success); }
 .outcome-failure { background: var(--adl-tint-err); border-color: var(--cds-support-error); }

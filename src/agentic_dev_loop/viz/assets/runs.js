@@ -55,6 +55,8 @@
   function applyTheme(theme) {
     if (document.documentElement.setAttribute) {
       document.documentElement.setAttribute("data-theme", theme);
+      document.documentElement.setAttribute("class",
+        theme === "dark" ? "cds-theme-zone-g100" : "cds-theme-zone-white");
     }
     var btn = el("theme-toggle");
     if (btn) {

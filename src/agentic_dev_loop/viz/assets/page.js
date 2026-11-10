@@ -67,7 +67,11 @@
   /* Theme ------------------------------------------------------------- */
   function applyTheme(theme) {
     var root = document.documentElement;
-    if (root && root.setAttribute) { root.setAttribute("data-theme", theme); }
+    if (root && root.setAttribute) {
+      root.setAttribute("data-theme", theme);
+      root.setAttribute("class",
+        theme === "dark" ? "cds-theme-zone-g100" : "cds-theme-zone-white");
+    }
     var btn = el("theme-toggle");
     if (btn) {
       btn.setAttribute("aria-label", theme === "dark"
