@@ -140,6 +140,9 @@
     loop_health: {
       verdict_distribution: "verdictMix",
       attempt_count_distribution: "attemptBars",
+      retry_target_frequency: "attemptBars",
+      audit_step_durations: "durationBars",
+      per_step_durations: "durationBars",
       thread_count: "bigNumber"
     },
     tdd: {
@@ -339,6 +342,43 @@
     return option;
   }
 
+  function durationBarsOption(metric) {
+    var value = metric && metric.value;
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return null;
+    }
+    var steps = Object.keys(value);
+    if (!steps.length) { return null; }
+    var counts = (metric && metric.detail && metric.detail.counts) || {};
+    var c = colors();
+    var option = statBaseOption();
+    option.tooltip = {
+      trigger: "item",
+      formatter: function (params) {
+        var n = counts[params.name];
+        return esc(params.name) + ": " + params.value + "s"
+          + (n !== undefined && n !== null ? " (n=" + n + ")" : "");
+      }
+    };
+    option.grid = { left: 72, right: 24, top: 8, bottom: 24 };
+    option.xAxis = {
+      type: "value",
+      axisLabel: { color: c.muted },
+      splitLine: { lineStyle: { color: c.line } }
+    };
+    option.yAxis = {
+      type: "category", data: steps,
+      axisLabel: { color: c.muted },
+      axisLine: { lineStyle: { color: c.line } }
+    };
+    option.series = [{
+      type: "bar",
+      itemStyle: { color: c.info },
+      data: steps.map(function (step) { return Number(value[step]) || 0; })
+    }];
+    return option;
+  }
+
   function bigNumberStat(name, metric) {
     var available = metricAvailable(metric);
     var html = '<div class="stat stat-big' + (available ? "" : " stat-empty")
@@ -381,11 +421,13 @@
         return bigNumberStat(name, metric);
       }
       var size = renderer === "gauge" ? "stat-gauge"
-        : renderer === "verdictMix" ? "stat-mix" : "stat-bars";
+        : (renderer === "verdictMix" || renderer === "durationBars")
+          ? "stat-mix" : "stat-bars";
       var option = null;
       if (renderer === "gauge") { option = gaugeOption(metric); }
       if (renderer === "verdictMix") { option = verdictMixOption(metric); }
       if (renderer === "attemptBars") { option = attemptBarsOption(metric); }
+      if (renderer === "durationBars") { option = durationBarsOption(metric); }
       var stat = chartStat(scope, name, size, option, metric);
       if (stat && stat.html) {
         mounts.push({ id: stat.id, option: option });
