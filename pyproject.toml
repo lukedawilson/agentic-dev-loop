@@ -36,6 +36,17 @@ dependencies = [
     "PyYAML>=6.0",
     "openhands-sdk ~=1.17.0",
     "openhands-tools ~=1.17.0",
+    # browser-use is a transitive dep (openhands-tools declares
+    # browser-use>=0.8.0, unpinned). 0.12.0+ hard-pin pillow==12.x, and
+    # pillow 12.3.0 carries 39 CVEs (fixed in 13.0.0); pin the last release
+    # with an open pillow constraint (>=11.2.1) so a fresh pip resolve lands
+    # on pillow 13.0.0 and the restore step's pip-audit stays green.
+    "browser-use==0.11.13",
+    # pillow is a transitive dep (browser-use, reportlab). 12.3.0 carries 39
+    # CVEs (fixed in 13.0.0); pin a floor so the restore step's pip-audit
+    # stays green, and so a future browser-use pin back to ==12.x fails the
+    # install loudly instead of silently reintroducing the CVEs.
+    "pillow>=13.0.0",
     # openhands-sdk declares agent-client-protocol>=0.8.1 with NO upper bound;
     # the 1.0.0rc pre-releases drop acp.helpers (breaks sdk 1.17.0 imports).
     # Without this cap, --pre installs resolve to the broken rc. See AGENTS.md
