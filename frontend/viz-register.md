@@ -179,6 +179,9 @@ rules below) is the authoritative styling (R30, R60).
 | `.metric-detail-body` | Lazy drill-down body | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-expander` | Category detail expander | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.metric-summary` | Expander summary label | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-summary-count` | Expander metric count | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-summary-label` | Expander action text | Component-class behaviour (status/layout skin); justified in the viz register |
+| `.metric-summary-less` | Expander expanded-state label | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stat` | One key-stat slot | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stat-band` | Key-stat band grid | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stat-bars` | Attempt-count bar slot | Component-class behaviour (status/layout skin); justified in the viz register |

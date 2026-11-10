@@ -146,7 +146,10 @@ class TestRoutes:
         status, headers, body = _request(pipeline_server, "/runs")
         assert status == 200
         assert headers["Content-Type"].startswith("text/html")
-        assert body.decode("utf-8") == RUNS_PAGE
+        page = body.decode("utf-8")
+        assert 'href="/"' in page
+        assert "Current run" in page
+        assert "<!--runs-back-->" not in page
 
         status, payload = _json(pipeline_server, "/runs/data")
         assert status == 200
@@ -155,7 +158,7 @@ class TestRoutes:
         status, _headers, body = _request(
             pipeline_server, "/runs/abcdef123456")
         assert status == 200
-        assert body.decode("utf-8") == RUNS_PAGE
+        assert "Current run" in body.decode("utf-8")
 
         status, detail = _json(
             pipeline_server, "/runs/abcdef123456/data")
@@ -196,6 +199,8 @@ class TestRoutes:
             status, headers, body = _request(history_server, path)
             assert status == 200
             assert body.decode("utf-8") == RUNS_PAGE
+            assert "Current run" not in body.decode("utf-8")
+            assert "<!--runs-back-->" in body.decode("utf-8")
         assert _request(history_server, "/topology")[0] == 404
         assert _request(history_server, "/events")[0] == 404
         status, payload = _json(history_server, "/runs/data")
@@ -214,6 +219,19 @@ class TestBuildPipeline:
         assert "id=\"runs-root\"" in RUNS_PAGE
         assert "echarts" in RUNS_PAGE.lower()
         assert RUNS_PAGE.isascii()
+
+    def test_runs_page_has_back_marker_and_expander_affordances(self):
+        # The back-to-current-run link is injected by the pipeline server in
+        # place of the marker; standalone history mode serves the marker
+        # (an inert HTML comment) so no navbar button appears there.
+        assert RUNS_PAGE.count("<!--runs-back-->") == 1
+        assert "Current run" not in RUNS_PAGE
+        assert "Show more..." in RUNS_PAGE
+        assert "Show less" in RUNS_PAGE
+        assert "metric-summary-less" in RUNS_PAGE
+        # The nav once carried a "Runs" link, but on the runs page it is a
+        # pointless self-link; the "All runs" breadcrumb covers back-to-list.
+        assert '<a class="hdr-link" href="/runs">Runs</a>' not in RUNS_PAGE
 
     def test_vendored_echarts_is_pinned_and_ascii(self):
         vendor = (ROOT / "src" / "agentic_dev_loop" / "viz" / "assets"

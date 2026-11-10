@@ -37,6 +37,12 @@ STATE_WHITELIST = ("attempt", "step_verdicts", "outcome", "failed")
 
 _RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
+# The runs page navbar carries a placeholder comment. The pipeline server
+# replaces it with a link back to the live run at "/"; the standalone history
+# server leaves the comment in place, so no navbar button appears there.
+RUNS_BACK_MARKER = "<!--runs-back-->"
+RUNS_BACK_LINK = '<a class="hdr-link" href="/">Current run</a>'
+
 
 @dataclass(frozen=True)
 class _Edge:
@@ -467,7 +473,10 @@ def _handler_class(bus: VizBus, topology_mermaid: str,
             if self.viz_runs_page is None:
                 self.send_error(404)
                 return
-            self._send(200, "text/html; charset=utf-8", self.viz_runs_page)
+            page = self.viz_runs_page
+            if not self.viz_history:
+                page = page.replace(RUNS_BACK_MARKER, RUNS_BACK_LINK)
+            self._send(200, "text/html; charset=utf-8", page)
 
         def _runs_list(self) -> None:
             query = parse_qs(urlsplit(self.path).query, keep_blank_values=True)

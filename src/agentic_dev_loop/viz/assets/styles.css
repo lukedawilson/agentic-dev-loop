@@ -439,8 +439,20 @@ button { font-family: inherit; border-radius: var(--adl-radius); }
 .metric-expander { margin-top: 8px;
   border-top: 1px solid var(--cds-border-subtle-01); }
 .metric-summary { cursor: pointer; list-style: none; padding: 6px 0;
+  display: flex; align-items: center; gap: 6px;
   font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
   color: var(--cds-text-secondary); }
+.metric-summary:focus-visible { outline: 2px solid var(--cds-focus);
+  outline-offset: 1px; }
+.metric-summary-label { flex: none; color: var(--cds-link-primary);
+  text-decoration: none; }
+.metric-summary-label:hover { text-decoration: underline; }
+.metric-summary-less { display: none; }
+.metric-expander[open] > .metric-summary
+  > .metric-summary-label:not(.metric-summary-less) { display: none; }
+.metric-expander[open] > .metric-summary > .metric-summary-less {
+  display: inline; }
+.metric-summary-count { color: var(--cds-text-helper); letter-spacing: 0; }
 .metric-detail-body { padding-top: 6px; }
 
 @media (max-width: 800px) {

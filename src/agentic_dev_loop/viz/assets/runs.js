@@ -401,8 +401,12 @@
     var id = "details-" + metricSlug(scope);
     keyStatBodies[id] = detailHtml;
     return '<details class="metric-expander" id="' + esc(id) + '">'
-      + '<summary class="metric-summary">Details (' + names.length
-      + " metrics)</summary>"
+      + '<summary class="metric-summary">'
+      + '<span class="metric-summary-label">Show more...</span>'
+      + '<span class="metric-summary-label metric-summary-less">Show less</span>'
+      + '<span class="metric-summary-count mono">(' + names.length
+      + " metrics)</span>"
+      + "</summary>"
       + '<div class="metric-detail-body"></div></details>';
   }
 

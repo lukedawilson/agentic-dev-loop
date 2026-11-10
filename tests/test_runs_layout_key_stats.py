@@ -26,6 +26,9 @@ NEW_CLASSES = [
     ".metric-expander",
     ".metric-summary",
     ".metric-detail-body",
+    ".metric-summary-label",
+    ".metric-summary-less",
+    ".metric-summary-count",
 ]
 
 
@@ -70,5 +73,26 @@ def test_expander_markup_is_details_with_summary():
     js = _read("runs.js")
     assert '<details class="metric-expander"' in js
     assert '<summary class="metric-summary">' in js
-    assert "Details (" in js
+    assert "Show more..." in js
+    assert "Show less" in js
+    assert "metric-summary-label metric-summary-less" in js
+    assert 'class="metric-chevron"' not in js
+    assert 'class="metric-summary-count' in js
     assert 'class="metric-detail-body"' in js
+
+
+def test_expander_label_swaps_when_open():
+    css = _collapse(_read("styles.css"))
+    assert ".metric-summary-less { display: none" in css
+    assert ".metric-expander[open] > .metric-summary" in css
+    assert ":not(.metric-summary-less)" in css
+
+
+def test_expander_label_is_carbon_link_styled():
+    css = _collapse(_read("styles.css"))
+    # Carbon link: link-primary color, no default underline, underline on
+    # hover, and a focus-visible outline for keyboard users.
+    assert ".metric-summary-label { flex: none; color: var(--cds-link-primary)" in css
+    assert "text-decoration: none" in css
+    assert ".metric-summary-label:hover { text-decoration: underline" in css
+    assert ".metric-summary:focus-visible { outline: 2px solid var(--cds-focus)" in css

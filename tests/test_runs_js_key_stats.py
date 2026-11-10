@@ -186,7 +186,10 @@ def test_key_stats_band_promotes_the_declared_metrics(stats):
 def test_expander_body_renders_lazily_on_first_open(stats):
     html = stats["expanderHtml"]
     assert '<details class="metric-expander"' in html
-    assert "Details (2 metrics)" in html
+    assert "Show more..." in html
+    assert "Show less" in html
+    assert "(2 metrics)" in html
+    assert "metric-chevron" not in html
     assert 'class="metric-detail-body"' in html
     assert stats["bodyBeforeOpen"] == ""
     assert "GRID" in stats["bodyAfterOpen"]
