@@ -34,8 +34,10 @@ const source = fs.readFileSync(process.argv[2], "utf8");
 
 function makeEl(id) {
   return {
-    id: id, value: "", checked: false, hidden: false, listeners: {},
-    setAttribute: function () {}, removeAttribute: function () {},
+    id: id, value: "", checked: false, hidden: false, listeners: {}, _attrs: {},
+    setAttribute: function (k, v) { this._attrs[k] = v; },
+    getAttribute: function (k) { return (k in this._attrs) ? this._attrs[k] : null; },
+    removeAttribute: function () {},
     addEventListener: function (type, fn) {
       (this.listeners[type] || (this.listeners[type] = [])).push(fn);
     },
@@ -68,10 +70,7 @@ const sandbox = {
       return els[id];
     },
     querySelectorAll: (sel) => {
-      if (sel === 'input[name="status"]') { return statusBoxes; }
-      if (sel === 'input[name="status"]:checked') {
-        return statusBoxes.filter((b) => b.checked);
-      }
+      if (sel === 'cds-checkbox') { return statusBoxes; }
       return [];
     },
     documentElement: { setAttribute: () => {} }
@@ -157,7 +156,7 @@ def test_auto_apply_bindings(boot_runs_js):
     assert boot_runs_js["sinceEvents"] == ["change"]
     assert boot_runs_js["untilEvents"] == ["change"]
     assert boot_runs_js["resetEvents"] == ["click"]
-    assert all(events == ["change"]
+    assert all(events == ["cds-checkbox-changed"]
                for events in boot_runs_js["statusEvents"])
 
 
