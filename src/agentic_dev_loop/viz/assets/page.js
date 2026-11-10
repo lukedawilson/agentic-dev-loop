@@ -106,6 +106,17 @@
     });
   })();
 
+  (function initStageToggle() {
+    var stages = el("stages");
+    if (!stages) { return; }
+    stages.addEventListener("cds-accordion-item-toggled", function (e) {
+      var item = e.target;
+      if (item && item.getAttribute && item.getAttribute("open") !== null) {
+        requestAnimationFrame(function () { tailSection(item); });
+      }
+    });
+  })();
+
   /* Run log ----------------------------------------------------------- */
   function logLine(text, cls) {
     var li = document.createElement("li");
@@ -395,29 +406,15 @@
     var existing = document.getElementById("stage-" + node);
     if (existing) { return existing; }
     var stages = el("stages");
-    var section = document.createElement("section");
-    section.className = "stage collapsed";
+    var section = document.createElement("cds-accordion-item");
+    section.className = "stage";
     section.id = "stage-" + node;
     section.setAttribute("data-testid", "stage-" + node);
 
-    var header = document.createElement("button");
+    var header = document.createElement("div");
     header.className = "stage-header";
-    header.type = "button";
-    header.setAttribute("aria-expanded", "false");
-    header.setAttribute("aria-controls", "console-" + node);
-    header.addEventListener("click", function () {
-      var willCollapse = !section.classList.contains("collapsed");
-      section.classList.toggle("collapsed");
-      header.setAttribute("aria-expanded", willCollapse ? "false" : "true");
-      renderStageHeader(node);
-      if (!willCollapse) {
-        requestAnimationFrame(function () { tailSection(section); });
-      }
-    });
+    header.setAttribute("slot", "title");
 
-    var glyph = document.createElement("span");
-    glyph.className = "stage-glyph";
-    glyph.setAttribute("aria-hidden", "true");
     var index = document.createElement("span");
     index.className = "stage-index";
     var led = document.createElement("span");
@@ -432,7 +429,6 @@
     var time = document.createElement("span");
     time.className = "stage-time";
 
-    header.appendChild(glyph);
     header.appendChild(index);
     header.appendChild(led);
     header.appendChild(name);
@@ -471,14 +467,11 @@
     var section = ensureSection(node);
     var header = section.querySelector(".stage-header");
     if (!header) { return; }
-    var glyph = header.querySelector(".stage-glyph");
     var index = header.querySelector(".stage-index");
     var name = header.querySelector(".stage-name");
     var status = header.querySelector(".stage-status");
     var verdict = header.querySelector(".stage-verdict");
     var time = header.querySelector(".stage-time");
-    var collapsed = section.classList.contains("collapsed");
-    if (glyph) { glyph.textContent = collapsed ? ">" : "v"; }
     if (index) { index.textContent = zeroPad(nodeIndex(node) + 1); }
     if (name) { name.textContent = node; }
     var word = stageWord[node] || "";
@@ -495,7 +488,6 @@
           ? mmss(liveElapsed[node]) : "";
     }
     header.className = "stage-header status-" + renderStatusOf(node);
-    header.setAttribute("aria-expanded", collapsed ? "false" : "true");
   }
 
   function setStageStatus(node, word) {
@@ -519,7 +511,7 @@
         pre.innerHTML = "";
         addPlaceholder(pre);
       }
-      section.classList.add("collapsed");
+      section.removeAttribute("open");
       renderStageHeader(n);
     });
     var log = el("run-log");
@@ -573,7 +565,7 @@
   }
 
   function tailSection(section) {
-    if (section.classList.contains("collapsed")) { return; }
+    if (section.getAttribute("open") === null) { return; }
     var sp = scrollPortOf(section);
     if (sp) { sp.scrollTop = sp.scrollHeight; }
   }
@@ -582,7 +574,7 @@
     var pre = consoleOf(section);
     var sp = scrollPortOf(section);
     if (!pre) { return; }
-    var stick = !section.classList.contains("collapsed") && nearBottom(sp);
+    var stick = section.getAttribute("open") !== null && nearBottom(sp);
     var ph = pre.querySelector(".stage-placeholder");
     if (ph) { pre.removeChild(ph); }
     if (pre.querySelectorAll(".cline").length >= MAX_CONSOLE) {

@@ -31,6 +31,7 @@ from agentic_dev_loop.viz import (MAX_LINE, PAGE, ConsoleCapture, HeartbeatThrea
                               NodeWatch, VizBus, _ReuseSafeServer, _Tee,
                               _handler_class, serve_viz, topology_graph,
                               topology_mermaid, translate)
+from agentic_dev_loop.viz.page import RUNS_PAGE
 
 MERMAID = "graph TD;\n\tdev(dev)\n\ttest(test)\n"
 SELF_PIPELINE = Path(__file__).parent.parent / "agentic-dev-loop" / "pipeline.yaml"
@@ -640,6 +641,46 @@ def read_frame(sock, leftover=b""):
     return data
 
 
+class TestVendorRoute:
+    """The vendored Carbon Web Components bundles are served as static files
+    (relative chunk imports cannot be inlined into the page)."""
+
+    def test_serves_vendored_entry_with_js_mime(self, server):
+        _bus, _httpd, _thread, port = server
+        status, body = http_get(port, "/vendor/ui-shell.min.js")
+        assert status == 200
+        on_disk = (Path(__file__).parent.parent / "src" / "agentic_dev_loop"
+                   / "viz" / "vendor"
+                   / "ui-shell.min.js").read_text(encoding="ascii")
+        assert body == on_disk
+
+    def test_serves_shared_chunk(self, server):
+        _bus, _httpd, _thread, port = server
+        manifest = json.loads(
+            (Path(__file__).parent.parent / "src" / "agentic_dev_loop" / "viz" / "vendor" / "manifest.json").read_text())
+        chunk = next(n for n in manifest["files"] if n.startswith("16-"))
+        status, body = http_get(port, "/vendor/" + chunk)
+        assert status == 200
+        assert len(body.encode()) == manifest["files"][chunk]["bytes"]
+
+    def test_unknown_vendor_file_is_404(self, server):
+        _bus, _httpd, _thread, port = server
+        status, _body = http_get(port, "/vendor/nope.min.js")
+        assert status == 404
+
+    def test_traversal_is_rejected(self, server):
+        _bus, _httpd, _thread, port = server
+        for path in ("/vendor/../server.py", "/vendor/%2e%2e/server.py",
+                     "/vendor/sub/dir.js"):
+            status, _body = http_get(port, path)
+            assert status == 404, path
+
+    def test_vendor_route_serves_nothing_outside_manifest(self, server):
+        _bus, _httpd, _thread, port = server
+        status, _body = http_get(port, "/vendor/manifest.json")
+        assert status == 404
+
+
 class TestServer:
     def test_index_serves_page(self, server):
         _bus, _httpd, _thread, port = server
@@ -823,6 +864,10 @@ El.prototype.insertBefore = function (c, ref) {
 };
 El.prototype.addEventListener = function (t, fn) { this.listeners[t] = fn; };
 El.prototype.setAttribute = function (k, v) { this._attrs[k] = String(v); };
+El.prototype.removeAttribute = function (k) { delete this._attrs[k]; };
+El.prototype.hasAttribute = function (k) {
+  return Object.prototype.hasOwnProperty.call(this._attrs, k);
+};
 El.prototype.getAttribute = function (k) {
   return Object.prototype.hasOwnProperty.call(this._attrs, k)
     ? this._attrs[k] : null;
@@ -1441,12 +1486,21 @@ class TestVizPageAssets:
     def test_no_external_script_dependencies(self):
         # The Carbon import never resolved in browsers: the jsdelivr /es/
         # chain pulls bare specifiers ("tslib", "lit") that no browser can
-        # resolve without an import map, so it threw on every page load. The
-        # page is fully styled by its own hand-written token skin, so the
-        # dead import is removed - no external scripts may come back.
+        # resolve without an import map, so it threw on every page load.
+        # Carbon is now vendored (plan 064): external scripts must never come
+        # back, and every script reference must be a same-origin /vendor/
+        # module served from the pinned, SHA-checked vendor tree.
         assert "@carbon/web-components" not in PAGE
         assert "cdn.jsdelivr" not in PAGE
-        assert '<script type="module">' not in PAGE
+        scripts = re.findall(r'<script[^>]*\ssrc="([^"]+)"', PAGE)
+        assert scripts, "expected vendored module script tags in PAGE"
+        for src in scripts:
+            assert src.startswith("/vendor/"), src
+            assert "://" not in src, src
+        runs_scripts = re.findall(r'<script[^>]*\ssrc="([^"]+)"', RUNS_PAGE)
+        for src in runs_scripts:
+            assert src.startswith("/vendor/"), src
+            assert "://" not in src, src
 
     def test_graph_is_an_accessible_image(self):
         assert 'id="graph"' in PAGE
@@ -1484,11 +1538,14 @@ class TestVizPageAssets:
         assert "overflow: auto" in rule
 
     def test_no_auto_expand_collapse(self):
-        # Stages only open/close when the user clicks them; the run no longer
-        # expands the current step or collapses stages on its own.
+        # Stages only open/close when the user toggles them through the
+        # Carbon accordion; the run never sets the open attribute itself.
+        # clearConsoles removes it to reset the view on replay.
         for fn in ("expandStage", "collapseStage", "collapseAll"):
             assert fn not in PAGE
-        assert 'classList.toggle("collapsed")' in PAGE
+        assert 'setAttribute("open"' not in PAGE
+        assert 'removeAttribute("open")' in PAGE
+        assert "cds-accordion-item-toggled" in PAGE
 
     def test_theme_glyphs_are_svg_icons(self):
         # The CSS-drawn glyphs were ambiguous: the sun was a plain circle (its

@@ -28,7 +28,6 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.badge-unverifiable` | Unverifiable verdict chip colour | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.big` | Summary hero value (mono, tabular) | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.cline` | One console line | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.collapsed` | Collapsed stage/console state | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.console-wrap` | Console scroll port | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.copied` | Transient copy-confirmation skin on the thread id | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.copy-btn` | Sticky console copy button | Component-class behaviour (status/layout skin); justified in the viz register |
@@ -77,7 +76,6 @@ written justification otherwise. Dynamic inline positioning (`style.left` /
 | `.st-unverifiable` | Unverifiable station skin | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stage` | Accordion stage row | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stage-console` | ANSI console surface | Component-class behaviour (status/layout skin); justified in the viz register |
-| `.stage-glyph` | Accordion chevron | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stage-header` | Accordion header button | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stage-index` | Stage number | Component-class behaviour (status/layout skin); justified in the viz register |
 | `.stage-name` | Stage name | Component-class behaviour (status/layout skin); justified in the viz register |
