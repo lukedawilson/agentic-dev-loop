@@ -1147,3 +1147,11 @@ Let's do some brainstorming and then feed into the unit intent"
 **Context**: CONSTRUCTION - unit-13 Code Generation stage; vendor artifact now in-repo so the dev-loop run (network-off sandbox) can inline it.
 
 ---
+
+## Copilot Anthropic smoke - 059 resolved (retrospective entry)
+**Timestamp**: 2026-11-08T13:16:00Z (session; recorded retroactively 2026-11-10)
+**User Input**: the smoke-copilot-anthropic session (branch smoke-copilot-anthropic): re-test the Anthropic pins against the post-unit-11 engine.
+**AI Response**: Root-caused the 059 collapse: the Copilot gateway splits an Anthropic model's non-streamed chat response into MULTIPLE choices (a narration-only choice with finish_reason tool_calls and an empty tool_calls list, plus one choice per real tool call); the SDK's LLM.completion read only choices[0], so every agent turn surfaced tool-less. Fixed with a Copilot-only WireAdapter.merge_choices flag merging the choices at the _transport_call boundary before the SDK reads the response, and validate_response_shape now scans all choices (commit 6fc8988, merged 108cc29, shipped in v0.12.2). Smoke pins restored to openai/claude-opus-5.5 (pro) / openai/claude-sonnet-5.5 (flash), and the full smoke passed end-to-end against the fixed engine from source: run bdbd5597cbd6, last checkpoint 2026-11-08T11:33:10Z, status success, dev/test/review all pass, the review step returned a real NEEDS CHANGES verdict with substantive findings on attempt 1 and APPROVED on attempt 2. planning-docs/059 closed (root cause, fix, re-verification recorded there).
+**Context**: this session's log entries were not recorded at the time; the entry is reconstructed from the merged commits and the run-state record (~/.agentic-dev-loop/runs/bdbd5597cbd6).
+
+---

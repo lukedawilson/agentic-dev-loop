@@ -1,6 +1,6 @@
-# 059 - Copilot Anthropic models collapse on agent review (NOT READY)
+# 059 - Copilot Anthropic models collapse on agent review (DONE)
 
-> **Status: NOT READY**
+> **Status: COMPLETED (resolved 2026-11-08)**
 
 ## The problem
 
@@ -70,23 +70,42 @@ same broken review.
   at medium covers all 23 anchors on the first attempt. dev stays on
   flash (no step effort); review stays pro at xhigh.
 
-## Open questions (this plan is NOT READY)
+## Root cause and fix (2026-11-08)
 
-1. Why do the Anthropic models at the Copilot gateway produce tool-less
-   narration turns on agent-style messages when the same models answer
-   direct tool prompts correctly? Gateway-side prompt/parameter handling,
-   model instruction-following drift, or something in the message
-   composition the probes have not isolated yet. Until this is understood,
-   the Anthropic pins must not come back.
-2. Does the gpt pair (gpt-5.6-luna pro / gpt-4.1 lite) hold up over the
-   full smoke pipeline (brief digest quality, dev implementation, review
-   verdict discipline)? The engine-path probes passed; the end-to-end
-   smoke run is the next gate.
-3. gpt-5.6-luna rides the Responses API while gpt-4.1 rides the chat
-   path: two different wire paths in one pipeline. The
-   force_string_serializer policy is chat-path-only; the Responses path
-   proved clean without it. Long-term stability of that split is
-   unverified.
+Q1 answered. The collapse was not instruction-following drift: the Copilot
+gateway splits an Anthropic model's non-streamed chat response into
+MULTIPLE choices, a narration-only choice (finish_reason tool_calls with an
+empty tool_calls list) plus one choice per real tool call. The openhands
+SDK's LLM.completion reads only choices[0], which was the narration choice,
+so every agent turn surfaced with zero tool calls and the step collapsed to
+a phantom completion. The exact 059 shape, explained at the wire.
+
+- Fix: a WireAdapter.merge_choices flag (set for Copilot only) merges the
+  split choices at the _transport_call boundary, before the SDK reads
+  choices[0]; validate_response_shape now scans every choice and only
+  fails when no choice carries tool calls (commit 6fc8988, merged
+  108cc29, shipped in v0.12.2).
+- The merge also covers the claude-opus-4.8 two-choice mis-shape, though
+  opus-4.8 has not been re-pinned or re-probed end-to-end.
+- Everything else from the earlier rounds stays: the own-artifact filter,
+  the force_string_serializer policy, the openai/ model-name prefix.
+
+## Re-verification (2026-11-08)
+
+The smoke pins were restored to the Anthropic pair (openai/claude-opus-5.5
+pro, openai/claude-sonnet-5.5 flash) on branch smoke-copilot-anthropic, and
+the full smoke ran against the fixed engine from source: run bdbd5597cbd6,
+last checkpoint 2026-11-08T11:33:10Z, status success, steps dev/test/review
+all pass. The review step, the exact step that collapsed 4/4 before,
+returned a real NEEDS CHANGES verdict with substantive findings on attempt
+1 and a real APPROVED verdict on attempt 2. The Anthropic pins stay.
+
+Q2 and Q3 are superseded: the gpt pair (gpt-5.6-luna / gpt-4.1) was an
+interim pin set and is no longer the smoke configuration; both Copilot
+smoke pins now ride the chat path, so the Responses/chat wire-split
+question no longer applies to the smoke. (gpt-5.6-luna on the Responses
+path and no-effort gpt-4.1 on the chat path remain valid, previously
+probed options for users who want them; see docs/setup.md.)
 
 ## Evidence
 

@@ -293,6 +293,18 @@ Real-token gates (user-run):
   cannot satisfy the mechanical 041 coverage gate (run 9d3f0fca20ea
   burned all three attempts at brief); dev stays on flash with no
   effort, review pro at xhigh.
+  REVERSED (third time) 2026-11-08 (user directive): with unit-11's wire
+  hardening in place the Anthropic pins were restored - openai/
+  claude-opus-5.5 (pro) and openai/claude-sonnet-5.5 (flash). The
+  gateway splits an Anthropic model's non-streamed chat response into
+  multiple choices (a narration-only choice plus one choice per tool
+  call) and the SDK read only choices[0]; the new WireAdapter
+  .merge_choices flag (Copilot-only) merges them at the _transport_call
+  boundary before the SDK reads the response (commit 6fc8988). The full
+  smoke then passed end-to-end: run bdbd5597cbd6, status success, the
+  review step returned real verdicts (NEEDS CHANGES with substantive
+  findings on attempt 1, APPROVED on attempt 2). The gpt pair was
+  interim only. Details: planning-docs/059.
 - O2: Client id override mechanism. Recommendation: the
   AGENTIC_DEV_LOOP_COPILOT_CLIENT_ID env var (host-side, never in yaml);
   alternative: a field in the llm block (but the client id is an operator

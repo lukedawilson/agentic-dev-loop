@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The brief coverage gate now matches required headings and anchors as line prefixes instead of whole lines: compressed content may follow an anchor on its line, and glyph variants (em dashes, curly quotes) fold to ASCII before matching. Non-ASCII characters inside required items are still reproduced character-exact, never transliterated (plan 060).
 - A failing command gate (test, restore) now reaches dev as a required fix: mechanical gate output is rendered with that binding, the dev contract names both feedback channels, and a new AUDIT GATE section makes a dependency-audit failure a required manifest edit (plan 065).
 
+## [0.15.6] - 2026-11-10
+
+### Changed
+
+- Fixed the theme toggle icon alignment in the run viz header.
+
 ## [0.15.5] - 2026-11-10
 
 ### Changed

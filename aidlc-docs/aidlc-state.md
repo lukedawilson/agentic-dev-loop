@@ -198,6 +198,20 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   pro model at reasoning_effort medium (no-effort gpt-4.1 fails the
   mechanical 041 coverage gate, run 9d3f0fca20ea); dev stays on flash
   with no step effort, review pro at xhigh.
+  Sixth round (2026-11-08): Anthropic pins restored. Root cause of the
+  059 collapse found: the gateway splits an Anthropic model's
+  non-streamed chat response into MULTIPLE choices (a narration-only
+  choice with finish_reason tool_calls and an empty tool_calls list,
+  plus one choice per real tool call) and the SDK read only choices[0].
+  Fix: WireAdapter.merge_choices (Copilot-only) merges the choices at
+  the _transport_call boundary before the SDK reads the response, and
+  validate_response_shape scans every choice (commit 6fc8988, merged
+  108cc29, shipped in v0.12.2). The smoke pins are openai/
+  claude-opus-5.5 (pro) and openai/claude-sonnet-5.5 (flash), and the
+  full smoke passed end-to-end against the fixed engine from source: run
+  bdbd5597cbd6 (2026-11-08T11:33:10Z), status success, dev/test/review
+  all pass, review returned a real NEEDS CHANGES verdict with findings
+  on attempt 1 and APPROVED on attempt 2. planning-docs/059 closed.
 
 ### unit-11 (output-format robustness) - INTENT RECORDED (2026-11-07)
 
@@ -231,7 +245,10 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   truncated-plus-empty-capture retry edge accepted as-is.
 - Open findings for the next dev pass: M2, M3 (required), m4, m5 (minor).
 - Outstanding acceptance: live Copilot smoke with Anthropic pins and
-  Responses-path D-5 parity (Build and Test gate).
+  Responses-path D-5 parity (Build and Test gate). The Copilot smoke with
+  Anthropic pins ran 2026-11-08 and passed end-to-end (run bdbd5597cbd6,
+  see planning-docs/059); the Responses-path D-5 parity check remains
+  outstanding (the smoke pins ride the chat path).
 - Operational note: the crashed pass-4 run was version skew (pipx-installed
   pre-unit-11 engine vs the working tree's record_verdict contract). The
   next run must execute the in-flight repo code.

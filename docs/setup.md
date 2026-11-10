@@ -398,7 +398,7 @@ agentic-dev-loop copilot-models   # the models this token's tier can use
 
 ```yaml
 llm:
-  model: openai/gpt-5.6-luna      # pro default
+  model: openai/claude-opus-5.5    # pro default
   base_url: https://api.githubcopilot.com
   api_key_secret:
     from: file
@@ -410,7 +410,7 @@ llm:
     Openai-Intent: conversation-panel
 llms:
   flash:
-    model: openai/gpt-4.1         # lite tier; no reasoning_effort
+    model: openai/claude-sonnet-5.5  # flash profile; no step effort
     base_url: https://api.githubcopilot.com
     api_key_secret:
       from: file
@@ -422,17 +422,23 @@ llms:
       Openai-Intent: conversation-panel
 ```
 
-- Working models: `gpt-5.6-luna` (pro) routes through the Responses API,
-  which the openhands SDK switches to automatically; it accepts `xhigh` and
-  returns real verdicts on review. `gpt-4.1` (lite) tool-calls cleanly on
-  the chat path with string tool content. `gpt-4.1` hard-400s on ANY
-  reasoning_effort, so lite-tier steps set none (the dev step runs the flash
-  profile with no step effort). The brief step runs the pro model at
-  `medium`: no-effort `gpt-4.1` cannot satisfy the mechanical
-  brief-coverage gate. Avoid: `gpt-4o-mini` (Copilot caps its chat context
-  at 12288 tokens), `claude-opus-4.8` (two choices on the non-streamed path
-  the engine uses; the surfaced one carries no tool calls), the claude pins
-  in general (they collapse to tool-less narration on review), and `kimi-k3`
+- Working models: `claude-opus-5.5` (pro) and `claude-sonnet-5.5` (flash),
+  smoke-verified end-to-end 2026-11-08 (run bdbd5597cbd6: brief, dev, test,
+  and review all pass, with real review verdicts). The gateway splits an
+  Anthropic model's non-streamed chat response into multiple choices and
+  the SDK once read only the narration choice, which collapsed agent steps
+  to tool-less turns (planning-docs/059); the engine now merges the choices
+  before the SDK reads them, so the claude pins work. Effort: opus-5.5
+  accepts `medium`/`xhigh` (probe-validated); sonnet-5.5 accepts no effort
+  or `medium`/`high` (probe-validated), so the dev step runs the flash
+  profile with no step effort. The brief step runs the pro model at
+  `medium`; the review step runs pro at `xhigh`. Also usable, previously
+  probe-validated: `gpt-5.6-luna` (routes through the Responses API, which
+  the SDK switches to automatically; accepts `xhigh`) and `gpt-4.1` (chat
+  path, clean tool calls, but hard-400s on ANY reasoning_effort). Avoid:
+  `gpt-4o-mini` (Copilot caps its chat context at 12288 tokens),
+  `claude-opus-4.8` (its two-choice shape is now merged engine-side but the
+  model was never re-pinned or re-probed end-to-end), and `kimi-k3`
   (the Copilot gateway silently drops the ARRAY-encoded tool results the SDK
   sends for it, leaving the agent blind).
 - The `openai/` prefix on the model names is required. litellm routes a
