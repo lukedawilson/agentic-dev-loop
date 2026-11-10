@@ -124,6 +124,10 @@ cds-header-name::part(link) { padding-inline: 0; }
 .stream.reconnecting { color: var(--cds-support-warning); }
 .stream.reconnecting .led { background: var(--cds-support-warning); }
 .ic { width: 16px; height: 16px; display: block; position: relative; }
+/* The global-action shadow button only centres content when Carbon's
+   icon-only heuristic fires (named icon slot); our icon lives in the
+   default slot, so centre it as a flex item with auto margins. */
+#theme-toggle .ic { margin: auto; }
 .ic-sun, .ic-moon { position: absolute; top: 0; left: 0; display: block; }
 /* dark theme shows the sun (click to switch to light); light shows the moon */
 :root[data-theme="light"] .ic-sun { display: none; }
