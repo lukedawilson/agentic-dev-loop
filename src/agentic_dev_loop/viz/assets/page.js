@@ -203,8 +203,9 @@
     if (!box) { return; }
     box.innerHTML = "";
     Array.from(verdictSteps).forEach(function (step) {
-      var b = document.createElement("span");
+      var b = document.createElement("cds-tag");
       var v = currentVerdicts[step];
+      b.setAttribute("size", "sm");
       b.className = "badge";
       if (v === "pass") { b.className += " badge-pass"; }
       else if (v === "fail") { b.className += " badge-fail"; }
