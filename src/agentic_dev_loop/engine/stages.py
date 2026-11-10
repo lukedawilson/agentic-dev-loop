@@ -446,7 +446,10 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
     own mechanical section (process fact, never an agent claim), and only
     engine-verified facts (command exit codes, brief coverage, commit outcome)
     appear in the verified section. Nothing in the claims section is ever
-    routed on."""
+    routed on. The mechanical heading binds every failure it carries as a
+    required fix: command gates (test, restore) never write the notes channel,
+    so without that binding a retried dev agent has no required-fix trigger
+    (plan 065)."""
     parts = [f"You are working on {subject}.\n", guide_section()]
     for name, content in docs.items():
         parts.append(f"## {name}\n\n{content}")
@@ -470,7 +473,8 @@ def build_context(runtime: Runtime, docs: dict[str, str], subject: str,
         parts.extend(claims)
     if mechanical_notes:
         parts.append("## Mechanical gate output "
-                     "(pipeline-captured process output, not agent claims)")
+                     "(pipeline-captured process output, not agent claims; "
+                     "each failure here is a required fix)")
         parts.extend(mechanical_notes)
     verified_lines = [f"- {name}: {fact}" for name, fact in (verified or {}).items()]
     parts.append(

@@ -8,6 +8,7 @@ instead of reading as a clean pass.
 
 import dataclasses
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -30,6 +31,7 @@ from agentic_dev_loop.engine.completion import (classify_completion,
                                                 count_actions)
 from agentic_dev_loop.engine.dryrun import _validate_agents
 from agentic_dev_loop.engine.graph import build_graph
+from agentic_dev_loop.engine.onboarding.templates import load_template
 from agentic_dev_loop.engine.provider_wire import (WireShapeError,
                                                    merge_choices,
                                                    validate_finish_shape,
@@ -450,7 +452,8 @@ class TestMechanicalOutputChannel:
                             verified=update["verified_state"])
         claims = "## Stage artifacts (each agent's own claims, not verified)"
         mechanical = ("## Mechanical gate output "
-                      "(pipeline-captured process output, not agent claims)")
+                      "(pipeline-captured process output, not agent claims; "
+                      "each failure here is a required fix)")
         verified = "## Verified state (mechanically checked by the pipeline)"
         assert claims in ctx and mechanical in ctx
         claims_section = ctx[ctx.index(claims):ctx.index(mechanical)]
@@ -462,6 +465,40 @@ class TestMechanicalOutputChannel:
     def test_context_without_mechanical_notes_omits_the_section(self, runtime):
         ctx = build_context(runtime, {}, "s", notes=["agent prose note"])
         assert "## Mechanical gate output" not in ctx
+
+    def test_mechanical_heading_binds_failures_as_required_fixes(self, runtime):
+        _rt, update = self._run_failing_command(runtime)
+        ctx = build_context(runtime, {}, "s",
+                            mechanical_notes=update["mechanical_notes"],
+                            verified=update["verified_state"])
+        heading = next(line for line in ctx.splitlines()
+                       if line.startswith("## Mechanical gate output"))
+        assert "required fix" in heading
+
+
+class TestDevAuditContract:
+    """Plan 065: the dev prompt binds a failing mechanical or audit gate to
+    dev, and the two copies of the contract stay in sync."""
+
+    @staticmethod
+    def _texts():
+        repo = Path(__file__).parent.parent
+        return [
+            (repo / "agentic-dev-loop" / "sdk_agents" / "dev.agent.md")
+            .read_text(encoding="utf-8"),
+            load_template("dev.agent.md"),
+        ]
+
+    def test_contract_names_both_required_fix_channels(self):
+        for text in self._texts():
+            assert "*Mechanical gate output*" in text
+            assert "*Previous attempt feedback*" in text
+            assert "failing output in your notes" not in text
+
+    def test_contract_has_an_audit_gate_section(self):
+        for text in self._texts():
+            assert "## AUDIT GATE" in text
+            assert "floor-pin" in text.lower()
 
 
 class TestVerifiedStateAge:
