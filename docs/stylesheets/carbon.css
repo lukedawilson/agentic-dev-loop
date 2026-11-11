@@ -1,0 +1,447 @@
+/* Carbon re-skin for the agentic-dev-loop docs site.
+   Tokens and component recipes mirror the engine's run visualisation
+   (src/agentic_dev_loop/viz/assets/styles.css) so the docs and the viz
+   share one visual language. Material keeps its own DOM; this file
+   re-themes it. */
+
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap");
+
+/* Tokens: dark first (the viz default), light under Material's light scheme. */
+:root {
+  color-scheme: dark;
+  --cds-background: #0F1214;
+  --cds-layer-01: #171B1F;
+  --cds-layer-02: #20262B;
+  --cds-layer-03: #2A3137;
+  --cds-layer-hover-01: #20262B;
+  --cds-border-subtle-01: #2E353B;
+  --cds-border-strong-01: #4D565E;
+  --cds-text-primary: #EEF1F3;
+  --cds-text-secondary: #A3ACB4;
+  --cds-text-helper: #8A949C;
+  --cds-icon-primary: #EEF1F3;
+  --cds-icon-secondary: #A3ACB4;
+  --cds-interactive: #08BDBA;
+  --cds-focus: #3DDBD9;
+  --cds-link-primary: #3DDBD9;
+  --cds-support-success: #42BE65;
+  --cds-support-warning: #F1C21B;
+  --cds-support-error: #FF6B72;
+  --cds-support-info: #08BDBA;
+  --adl-support-unverifiable: #BE95FF;
+  --adl-tint-run: rgba(8, 189, 186, .14);
+  --adl-tint-ok: rgba(66, 190, 101, .11);
+  --adl-tint-warn: rgba(241, 194, 27, .12);
+  --adl-tint-err: rgba(250, 77, 86, .14);
+  --adl-tint-unv: rgba(165, 110, 255, .14);
+  --adl-console: #0B0E10;
+  --adl-console-text: #D6DCE0;
+  --adl-console-muted: #8A949C;
+}
+
+[data-md-color-scheme="default"] {
+  color-scheme: light;
+  --cds-background: #F2F4F5;
+  --cds-layer-01: #FFFFFF;
+  --cds-layer-02: #F4F6F7;
+  --cds-layer-03: #E6E9EB;
+  --cds-layer-hover-01: #F4F6F7;
+  --cds-border-subtle-01: #DDE1E4;
+  --cds-border-strong-01: #8D969E;
+  --cds-text-primary: #15191C;
+  --cds-text-secondary: #4C555D;
+  --cds-text-helper: #5F6870;
+  --cds-icon-primary: #15191C;
+  --cds-icon-secondary: #4C555D;
+  --cds-interactive: #007D79;
+  --cds-focus: #007D79;
+  --cds-link-primary: #007D79;
+  --cds-support-success: #198038;
+  --cds-support-warning: #8E6A00;
+  --cds-support-error: #DA1E28;
+  --cds-support-info: #007D79;
+  --adl-support-unverifiable: #8A3FFC;
+  --adl-tint-run: rgba(0, 125, 121, .09);
+  --adl-tint-ok: rgba(25, 128, 56, .08);
+  --adl-tint-warn: rgba(241, 194, 27, .18);
+  --adl-tint-err: rgba(218, 30, 40, .08);
+  --adl-tint-unv: rgba(138, 63, 252, .08);
+  --adl-console: #121619;
+}
+
+:root {
+  --adl-font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --adl-font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --adl-radius: 0;
+  --adl-motion-productive: cubic-bezier(.2, 0, .38, .9);
+}
+
+/* Map tokens onto Material's own variables. Material defines these on
+   body[data-md-color-scheme=...] and, for the link colour, on
+   [data-md-color-scheme][data-md-color-primary], so the overrides must
+   match that specificity or they get shadowed. */
+body[data-md-color-scheme][data-md-color-primary] {
+  --md-default-bg-color: var(--cds-background);
+  --md-default-fg-color: var(--cds-text-primary);
+  --md-default-fg-color--light: var(--cds-text-secondary);
+  --md-default-fg-color--lighter: var(--cds-text-helper);
+  --md-default-fg-color--lightest: var(--cds-text-helper);
+  --md-primary-fg-color: var(--cds-interactive);
+  --md-primary-fg-color--light: var(--cds-focus);
+  --md-primary-fg-color--dark: var(--cds-interactive);
+  --md-primary-bg-color: var(--cds-background);
+  --md-primary-bg-color--light: var(--cds-text-helper);
+  --md-accent-fg-color: var(--cds-focus);
+  --md-accent-bg-color: var(--cds-background);
+  --md-accent-bg-color--light: var(--cds-text-helper);
+  --md-typeset-color: var(--cds-text-primary);
+  --md-typeset-a-color: var(--cds-link-primary);
+  --md-typeset-del-color: var(--cds-support-error);
+  --md-typeset-ins-color: var(--cds-support-success);
+  --md-typeset-kbd-color: var(--cds-text-primary);
+  --md-typeset-kbd-accent-color: var(--cds-layer-03);
+  --md-typeset-kbd-border-color: var(--cds-border-strong-01);
+  --md-typeset-mark-color: var(--adl-tint-warn);
+  --md-typeset-table-color: var(--cds-border-subtle-01);
+  --md-code-bg-color: var(--adl-console);
+  --md-code-fg-color: var(--adl-console-text);
+  --md-code-hl-color: var(--adl-console-muted);
+  --md-footer-bg-color: var(--cds-layer-02);
+  --md-footer-bg-color--dark: var(--cds-layer-01);
+  --md-footer-fg-color: var(--cds-text-secondary);
+  --md-footer-fg-color--light: var(--cds-text-helper);
+  --md-footer-fg-color--lighter: var(--cds-text-helper);
+}
+
+/* Typography */
+body {
+  font-family: var(--adl-font-sans);
+  font-size: 14px;
+}
+.md-typeset {
+  font-size: .875rem;
+}
+.md-typeset h1 {
+  font-weight: 300;
+  color: var(--cds-text-primary);
+}
+.md-typeset .adl-subtitle {
+  font-size: 1rem;
+  font-weight: 300;
+  color: var(--cds-text-secondary);
+  margin-top: -0.6rem;
+}
+.md-typeset h2, .md-typeset h3, .md-typeset h4 {
+  color: var(--cds-text-primary);
+}
+.md-typeset code, .md-typeset pre, .md-typeset kbd {
+  font-family: var(--adl-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.md-typeset {
+  line-height: 1.6;
+}
+
+/* Header: layer surface with a hard border, brand mark like the viz.
+   !important: Material's minified cascade beats a plain override here. */
+.md-header {
+  background: var(--cds-layer-01) !important;
+  color: var(--cds-text-primary);
+  box-shadow: none !important;
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.md-header__topic {
+  font-weight: 600;
+}
+.md-header__topic::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
+  align-self: center;
+  flex-shrink: 0;
+  background: var(--cds-interactive);
+}
+.md-header__button:hover {
+  background: var(--cds-layer-hover-01);
+}
+.md-tabs {
+  background: var(--cds-layer-01);
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.md-tabs__link {
+  color: var(--cds-text-secondary);
+}
+.md-tabs__link--active {
+  color: var(--cds-link-primary);
+}
+
+/* Search */
+.md-search__input {
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-strong-01);
+  border-radius: var(--adl-radius);
+  color: var(--cds-text-primary);
+}
+.md-search__input::placeholder {
+  color: var(--cds-text-helper);
+}
+.md-search__output {
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle-01);
+}
+
+/* Layout: more breathing room around the content panel. */
+.md-content__inner {
+  margin-right: 1.2rem;
+  margin-left: 1.2rem;
+}
+@media screen and (min-width: 60em) {
+  .md-content__inner {
+    margin-right: 2rem;
+    margin-left: 2rem;
+  }
+}
+
+/* Navigation: active item gets the viz stage-header treatment. */
+.md-nav__link {
+  color: var(--cds-text-secondary);
+}
+.md-nav__link:hover {
+  color: var(--cds-text-primary);
+  background: var(--cds-layer-hover-01);
+}
+.md-nav__item .md-nav__link--active {
+  color: var(--cds-link-primary);
+  border-left: 2px solid var(--cds-interactive);
+  padding-left: .4rem;
+}
+.md-nav__title {
+  color: var(--cds-text-primary);
+}
+
+/* Footer */
+.md-footer {
+  background: var(--cds-layer-02);
+  color: var(--cds-text-secondary);
+  border-top: 1px solid var(--cds-border-subtle-01);
+}
+.md-footer-meta {
+  background: var(--cds-layer-01);
+}
+
+/* Links and focus */
+.md-typeset a:hover {
+  color: var(--cds-focus);
+}
+:focus-visible {
+  outline: 2px solid var(--cds-focus);
+  outline-offset: -2px;
+}
+::selection {
+  background: var(--adl-tint-run);
+}
+
+/* Tables: the viz runs-table recipe. */
+.md-typeset table:not([class]) {
+  display: table;
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+  box-shadow: none;
+  background: var(--cds-layer-01);
+  font-size: .75rem;
+}
+.md-typeset table:not([class]) th {
+  font-size: .625rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--cds-text-helper);
+  background: var(--cds-layer-02);
+  border-bottom: 1px solid var(--cds-border-strong-01);
+}
+.md-typeset table:not([class]) td {
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.md-typeset table:not([class]) tr:last-child td {
+  border-bottom: none;
+}
+.md-typeset table:not([class]) th, .md-typeset table:not([class]) td {
+  padding: 7px 10px;
+}
+
+/* Code blocks: the viz console. */
+.md-typeset pre,
+.md-typeset .highlight,
+.md-typeset .highlighttable {
+  background: var(--adl-console);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+}
+.md-typeset pre > code {
+  color: var(--adl-console-text);
+  background: transparent;
+}
+.md-typeset code {
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+  color: var(--cds-text-primary);
+  padding: .1em .3em;
+  font-size: .85em;
+}
+.md-clipboard {
+  color: var(--adl-console-muted);
+}
+.md-clipboard:hover {
+  color: var(--adl-console-text);
+}
+
+/* Highlight token colors on the console palette. */
+.md-typeset .highlight .k, .md-typeset .highlight .kc,
+.md-typeset .highlight .kn, .md-typeset .highlight .kd {
+  color: var(--adl-support-unverifiable);
+}
+.md-typeset .highlight .s, .md-typeset .highlight .s1,
+.md-typeset .highlight .s2, .md-typeset .highlight .sb,
+.md-typeset .highlight .sc, .md-typeset .highlight .sd,
+.md-typeset .highlight .se, .md-typeset .highlight .sh,
+.md-typeset .highlight .si, .md-typeset .highlight .sx {
+  color: var(--cds-support-success);
+}
+.md-typeset .highlight .c, .md-typeset .highlight .c1,
+.md-typeset .highlight .cm, .md-typeset .highlight .cs {
+  color: var(--cds-text-helper);
+  font-style: italic;
+}
+.md-typeset .highlight .nf, .md-typeset .highlight .fm {
+  color: var(--cds-link-primary);
+}
+.md-typeset .highlight .nc, .md-typeset .highlight .nn,
+.md-typeset .highlight .mi, .md-typeset .highlight .mf,
+.md-typeset .highlight .mh, .md-typeset .highlight .mo {
+  color: var(--cds-support-info);
+}
+.md-typeset .highlight .nb, .md-typeset .highlight .bp {
+  color: var(--cds-support-warning);
+}
+.md-typeset .highlight .o, .md-typeset .highlight .p {
+  color: var(--cds-text-secondary);
+}
+.md-typeset .highlight .n {
+  color: var(--adl-console-text);
+}
+
+/* Admonitions: the viz outcome-banner recipe, tinted per type. */
+.md-typeset .admonition,
+.md-typeset details {
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+  background: var(--cds-layer-01);
+  color: var(--cds-text-primary);
+  box-shadow: none;
+  font-size: .8125rem;
+}
+.md-typeset .admonition-title,
+.md-typeset summary {
+  background: transparent;
+  border: none;
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.md-typeset :is(.note, .abstract, .info, .example, .question, .quote) {
+  background: var(--adl-tint-run);
+  border-color: var(--cds-support-info);
+}
+.md-typeset :is(.note, .abstract, .info, .example, .question, .quote)
+  > :is(.admonition-title, summary) {
+  color: var(--cds-support-info);
+}
+.md-typeset :is(.tip, .hint, .important) {
+  background: var(--adl-tint-run);
+  border-color: var(--cds-focus);
+}
+.md-typeset :is(.tip, .hint, .important) > :is(.admonition-title, summary) {
+  color: var(--cds-focus);
+}
+.md-typeset :is(.success, .check, .done) {
+  background: var(--adl-tint-ok);
+  border-color: var(--cds-support-success);
+}
+.md-typeset :is(.success, .check, .done) > :is(.admonition-title, summary) {
+  color: var(--cds-support-success);
+}
+.md-typeset :is(.warning, .attention, .caution) {
+  background: var(--adl-tint-warn);
+  border-color: var(--cds-support-warning);
+}
+.md-typeset :is(.warning, .attention, .caution) > :is(.admonition-title, summary) {
+  color: var(--cds-support-warning);
+}
+.md-typeset :is(.failure, .danger, .bug, .error) {
+  background: var(--adl-tint-err);
+  border-color: var(--cds-support-error);
+}
+.md-typeset :is(.failure, .danger, .bug, .error) > :is(.admonition-title, summary) {
+  color: var(--cds-support-error);
+}
+
+/* Blockquotes, rules, keyboard keys */
+.md-typeset blockquote {
+  border-left: 3px solid var(--cds-border-strong-01);
+  color: var(--cds-text-secondary);
+}
+.md-typeset hr {
+  border-bottom: 1px solid var(--cds-border-subtle-01);
+}
+.md-typeset kbd {
+  background: var(--cds-layer-03);
+  border: 1px solid var(--cds-border-strong-01);
+  border-bottom-width: 2px;
+  border-radius: var(--adl-radius);
+  box-shadow: none;
+  color: var(--cds-text-primary);
+  font-size: .8em;
+}
+
+/* Mermaid frames sit on a layer surface. */
+.md-typeset .mermaid {
+  background: var(--cds-layer-02);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+  padding: 8px;
+}
+
+/* Back-to-top button */
+.md-top {
+  background: var(--cds-layer-02);
+  color: var(--cds-link-primary);
+  border: 1px solid var(--cds-border-subtle-01);
+  border-radius: var(--adl-radius);
+  box-shadow: none;
+}
+
+/* Scrollbars: thin, Carbon thumb. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--cds-border-strong-01) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--cds-border-strong-01);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--cds-text-helper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

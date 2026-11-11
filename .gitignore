@@ -8,6 +8,7 @@ __pycache__/
 .tmp-exec/
 dist/
 build/
+site/
 .claude-local/
 uv.lock
 .DS_Store

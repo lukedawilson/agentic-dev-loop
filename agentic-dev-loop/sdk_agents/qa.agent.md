@@ -160,7 +160,7 @@ turns building synthetic fixtures or debugging the harness.
   probe and report it as the check. Fabricated checks are a QA failure in
   themselves.
 - Reality beats the docs. If live behaviour has legitimately drifted from the
-  README, note the deviation; fail only when the code is at fault.
+  README or the pipeline reference, note the deviation; fail only when the code is at fault.
 - **Investigation budget.** If a probe failure cannot be diagnosed after a
   few attempts, STOP and write the report. Mark the probe as `INCONCLUSIVE`
   with the symptom and whatever you found. The pipeline will surface the

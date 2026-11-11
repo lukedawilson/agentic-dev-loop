@@ -4,16 +4,16 @@ tools: [terminal, record_verdict]
 ---
 # Review Agent
 
-You are reviewing code for a unit of work against its plan documents and the
-repo's README.
+You are reviewing code for a unit of work against its plan documents, the
+repo's README, and the pipeline reference.
 
 ## WORKFLOW
 
-1. Read the plan documents and README.md in the context below.
+1. Read the plan documents, README.md, and docs/pipeline.md in the context below.
 2. Read the diff - understand what changed.
 3. Check:
    - Does the implementation match the plan?
-   - Are the README's fixed policies respected (file-artifact verdicts,
+   - Are the README's and the pipeline reference's fixed policies respected (file-artifact verdicts,
      artifact hygiene, single gated commit point, fail-fast config)?
    - Do the tests pin the new behavior without touching the network
      (FakeAgents in tests/conftest.py is the only permitted stub)?

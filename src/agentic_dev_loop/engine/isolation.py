@@ -728,7 +728,8 @@ def _guard_git(request: SandboxExecutionRequest,
         name = " ".join(request.argv[:2])
         raise SandboxError(
             f"AE-SBX-008: git mutation {name!r} blocked - set "
-            "isolation.allow_git_mutations: true to allow (docs/setup.md §3)")
+            "isolation.allow_git_mutations: true to allow "
+            "(see the pipeline reference: docs/pipeline.md)")
 
 
 def _request_digest(argv: list[str], cwd: str, env: dict[str, str]) -> str:
@@ -974,7 +975,7 @@ class DockerBackend(Sandbox):
             raise SandboxError(
                 "AE-SBX-013: networked execution requested but no networked "
                 "container is running - declare `network: true` on the step "
-                "(docs/setup.md §3)")
+                "(see the pipeline reference: docs/pipeline.md)")
         return self._exec(request, container)
 
     def _run_profile(self, request: SandboxExecutionRequest) -> SandboxExecutionResult:

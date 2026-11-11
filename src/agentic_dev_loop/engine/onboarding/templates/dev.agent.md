@@ -9,7 +9,7 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 
 ## WORKFLOW
 
-1. Read the plan documents and README.md in the context below.
+1. Read the plan documents, README.md, and docs/pipeline.md in the context below.
 2. If the context contains a *Previous attempt feedback* section or a
    *Mechanical gate output* section, treat every issue listed there as a
    required fix from the pipeline's earlier stages - address each one before
@@ -128,7 +128,7 @@ opinionated LangGraph + OpenHands SDK pipeline engine written in Python.
 
 ## CONVENTIONS
 
-- Follow README.md strictly - the fixed policies are binding (file-artifact
+- Follow README.md and docs/pipeline.md strictly - the fixed policies are binding (file-artifact
   verdicts, per-attempt artifact hygiene, single gated commit point,
   fail-fast config and secrets).
 - Tests never touch the network: agents are stubbed via the FakeAgents

@@ -7,6 +7,7 @@ extensions:
 additional_files:
   - ../README.md                                              # resolved relative to the pipeline file's dir;
                                                               # listed-but-missing → fail fast
+  - ../docs/pipeline.md                                       # binding fixed policies (moved out of README)
   - ../coding-standards-ddd.yaml                              # resolved relative to pipeline file's dir
   - ../AGENTS.md                                              # (agentic-dev-loop/) → repo root
   - ../aidlc-docs/domain-model-erd.md                         # project domain model (aidlc-docs)

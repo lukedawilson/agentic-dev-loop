@@ -1,0 +1,66 @@
+site_name: agentic-dev-loop
+site_description: Gated, sandboxed, resumable LLM construction loops
+site_url: https://lukedawilson.github.io/agentic-dev-loop/
+repo_url: https://github.com/lukedawilson/agentic-dev-loop
+repo_name: lukedawilson/agentic-dev-loop
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  font: false
+
+extra_css:
+  - stylesheets/carbon.css
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - attr_list
+
+exclude_docs: |
+  specs/
+  incidents/
+  run-time-analysis-containerised-loop.md
+  vps-dev-feasibility.md
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - CLI: cli.md
+  - pipeline.yaml: pipeline.md
+  - LLM providers: llm-providers.md
+  - Authoring a loop: authoring.md
+  - Setup and troubleshooting: setup.md
+  - Browser sandbox: browser-sandbox.md
+  - Known issues: known-issues.md
+  - Development: development.md
