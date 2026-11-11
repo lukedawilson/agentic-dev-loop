@@ -3,7 +3,7 @@
 ## Project Information
 - **Project Type**: Brownfield
 - **Start Date**: 2026-10-17T10:58:41Z
-- **Current Stage**: CONSTRUCTION - Code Generation for unit-11 (output-format robustness), user-driven via the dev loop. Review round 1 (2026-11-08, operator static review): NEEDS CHANGES - required M2 (gate output mislabeled as claims) and M3 (COMPAT-SHIMS registry for the new wire monkeypatches), minor m4/m5; M1 truncation-on-verdict-step fail-fast accepted as intended; findings at aidlc-docs/construction/unit-11/code/review-2026-11-08.md. FD APPROVED 2026-11-07; docs committed f911676 and pushed. Prior: unit-10 WONTSHIP 2026-11-06; unit-9 COMPLETE 2026-11-04. Units 1-3, 5, 9 complete; units 4 and 10 WONTSHIP; units 6-8 intent-only.
+- **Current Stage**: CONSTRUCTION - all active units closed: units 1-3, 5, 9, 11, 12, 13 COMPLETE; units 4 and 10 WONTSHIP; units 6-8 remain intent-only. Unit-11 and unit-13 closure recorded 2026-11-11 per operator directive ("Units 11 and 13 are done").
 
 ## Workspace State
 - **Existing Code**: Yes
@@ -213,7 +213,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   all pass, review returned a real NEEDS CHANGES verdict with findings
   on attempt 1 and APPROVED on attempt 2. planning-docs/059 closed.
 
-### unit-11 (output-format robustness) - INTENT RECORDED (2026-11-07)
+### unit-11 (output-format robustness) - COMPLETE (2026-11-11)
 
 - Intent document: aidlc-docs/unit-11-intent-output-format-robustness.md
 - Origin: planning-docs/059 (the Copilot Anthropic review collapse) plus a
@@ -229,13 +229,14 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   decoration in context injection, D wire-shape invariants, E
   failure-shape-keyed retry (fail fast on structural refusals).
 - Status: open questions Q1-Q5 (scope, verdict channel shape, acceptance
-  criteria, prose-artifact fate, AI-DLC stage plan) pending user answers;
-  Functional Design next.
+  criteria, prose-artifact fate, AI-DLC stage plan) - resolved through the
+  FD and the Code Generation fix pass below; unit closed 2026-11-11.
 
 ### unit-11 Code Generation - review round 1 (2026-11-08)
 
-- Implementation exists uncommitted in the working tree (last commit
-  55bfe3b). Gate evidence: full suite 1337 passed, 50 skipped; unit-11
+- Implementation was reviewed uncommitted in the working tree (last
+  commit at review time 55bfe3b; the fix pass landed as ed901a7). Gate
+  evidence: full suite 1337 passed, 50 skipped; unit-11
   example tests 26 passed; PBT 5 passed.
 - Operator static review (review.agent.md as guide): NEEDS CHANGES.
   Findings file: aidlc-docs/construction/unit-11/code/review-2026-11-08.md
@@ -258,6 +259,24 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   qa.agent.md.new. test_qa_prompt.py re-point at the staged file is part of
   the dev fix pass. Flip to active after the record_verdict engine is
   installed.
+
+### unit-11 Code Generation - fix pass and close (2026-11-11, state-file catch-up)
+
+- Fix pass committed as ed901a7 "feat: construct unit unit-11 (agent dev
+  loop)" (2026-11-08), addressing every round-1 finding: M2 mechanical
+  command/action output routed to its own mechanical-notes section in
+  stages.py instead of the claims heading; M3 the wire monkeypatches
+  registered in COMPAT-SHIMS.md with canary pins in
+  tests/test_sdk_compat.py; m4 verified_state facts tagged with the
+  attempt; m5 provider_wire.py asserts message/serialized length parity
+  before the positional zip.
+- Prompt flip committed as f03ebfc (2026-11-08): sdk_agents review/qa
+  prompts now carry the record_verdict contract.
+- Live Copilot smoke with the previously-collapsing Anthropic pins passed
+  end-to-end 2026-11-08 (run bdbd5597cbd6; see planning-docs/059).
+- Operator directive 2026-11-11: "Units 11 and 13 are done" - unit marked
+  complete; the review round-1 acceptance items (FR-11.6 live smoke, D-5
+  Responses-path parity probe) are closed by this directive.
 
 ### unit-12 (reporting CLI: run-history metrics + opencode wrapper + markdown report) - COMPLETE (2026-11-09)
 
@@ -309,7 +328,7 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   long agent steps (store records step completions, not starts); fix
   deferred to a future unit.
 
-### unit-13 (reporting viz extension) - FUNCTIONAL DESIGN APPROVED (2026-11-09)
+### unit-13 (reporting viz extension) - COMPLETE (2026-11-11)
 
 - Intent document: aidlc-docs/unit-13-intent-viz-reporting.md (split from the
   combined reporting intent by user directive)
@@ -320,8 +339,8 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
 - Hard dependency on unit-12 (metrics module); ordering: unit-12 first.
 - Code Generation staging (2026-11-09): charting spike artifacts staged
   at spikes/unit-13-charting/ (vendor bundles sanitized to ASCII, probe
-  results, PROVENANCE.md with upstream + sanitized SHA256); dev-loop run
-  pending, user-driven.
+  results, PROVENANCE.md with upstream + sanitized SHA256); the dev-loop
+  run landed 2026-11-09 (see close section below).
 - FD outcome (2026-11-09): FD-Q1 same server, separate page (/runs +
   /runs/<id> routes, History link on live page, report server mode);
   FD-Q2 no polling (refresh on tab switch + manual button, per-request
@@ -337,3 +356,15 @@ runs as an OpenAI-compatible endpoint on the existing OpenHands runtime.
   (aidlc-docs/construction/plans/unit-13-functional-design-plan.md).
 - Filters (superseding the intent's D8 mention): unit-12 v1 filters only
   (since/until/status); pipeline/workspace filters deferred by unit-12 FD-Q1.
+
+### unit-13 Code Generation and close (2026-11-11, state-file catch-up)
+
+- Code Generation landed as 01d1e42 "feat: construct unit unit-13 (agent
+  dev loop)" (2026-11-09): viz /runs endpoints and view (runs_view.py,
+  runs.html + runs.js), ECharts common bundle inlined from the sanitized
+  spike vendor, tests/test_unit13_runs_viz.py, frontend/viz-register.md.
+  Shipped in v0.14.0 and later releases.
+- State-file gap: the CG run was never recorded here at the time (this
+  section still said dev-loop run pending until the 2026-11-11 catch-up).
+- Operator directive 2026-11-11: "Units 11 and 13 are done" - unit marked
+  complete.

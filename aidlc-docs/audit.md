@@ -1155,3 +1155,15 @@ Let's do some brainstorming and then feed into the unit intent"
 **Context**: this session's log entries were not recorded at the time; the entry is reconstructed from the merged commits and the run-state record (~/.agentic-dev-loop/runs/bdbd5597cbd6).
 
 ---
+
+## Aidlc state catch-up: units 11 and 13 closed (2026-11-11)
+**Timestamp**: 2026-11-11T09:07:00Z
+**User Input** (three messages in one session):
+- "List all outstanding planning-docs and aidlc units"
+- "Units 11 and 13 are done
+Where is unit 12?"
+- "Yes, update the aidlc state docs to match reality, then commit and push"
+**AI Response**: Produced the outstanding inventory: all planning docs closed (016/028/045 superseded by 052; 057 never existed); aidlc units 6-8 intent-only; unit-12 COMPLETE (2026-11-09, commit 3c7aa12). User corrected that units 11 and 13 are done. Updated aidlc-docs/aidlc-state.md: Current Stage line rewritten (all active units closed); unit-11 marked COMPLETE with the fix-pass record (ed901a7 addressing M2/M3/m4/m5, f03ebfc prompt flip, smoke run bdbd5597cbd6) and the 2026-11-11 operator directive closing the round-1 acceptance items; unit-13 marked COMPLETE with the Code Generation record (01d1e42, shipped in v0.14.0+); stale round-1 and staging bullets corrected. Committed and pushed.
+**Context**: CONSTRUCTION - state-file catch-up; unit-11 and unit-13 closure records were missing until now.
+
+---
