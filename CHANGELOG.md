@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0rc1] - 2026-11-13
+## [1.0.0rc2] - 2026-11-13
 
 ### Changed
 
-- First release candidate of 1.0.0: only bug fixes are expected before the stable 1.0.0. `agentic-dev-loop upgrade` now passes the pre-release flag to pipx, so upgrading works when the only installable release on PyPI is a pre-release (every superseded release is yanked).
+- Release candidate of 1.0.0: only bug fixes are expected before the stable 1.0.0. `agentic-dev-loop upgrade` now passes the pre-release flag to pipx, so upgrading works when the only installable release on PyPI is a pre-release (every superseded release is yanked).
 
 ## [1.0.0b1] - 2026-11-11
 
