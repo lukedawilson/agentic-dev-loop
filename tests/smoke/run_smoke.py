@@ -224,8 +224,7 @@ def preflight_llm(text: str,
         if not path.is_file():
             hint = {
                 "copilot": "run `agentic-dev-loop copilot-login` first",
-                "claude": ("extract the Claude Code OAuth token into this "
-                           "file (see docs/llm-providers.md)"),
+                "claude": "run `agentic-dev-loop claude-login` first",
             }.get(provider or "", "create the provider's credential file")
             raise SmokePreflightError(
                 f"llm api_key_secret file not found: {path} - {hint}")

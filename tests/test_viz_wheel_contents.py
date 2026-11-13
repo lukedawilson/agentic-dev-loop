@@ -15,10 +15,13 @@ ships complete inside the wheel. vendor/ is the only runtime disk read.
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import zipfile
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 VENDOR_DIR = REPO_ROOT / "src" / "agentic_dev_loop" / "viz" / "vendor"
@@ -32,10 +35,14 @@ def test_wheel_contains_viz_vendor_files(tmp_path: Path) -> None:
     }
     assert expected, "source-tree vendor/ is empty; run tools/vendor_carbon_wc.py"
 
-    # `pip wheel` builds in an isolated env, matching the artifact release.yml
-    # publishes via `python -m build`.
+    # --no-build-isolation keeps the suite offline: an isolated build env
+    # installs the [build-system] backend from PyPI, which the sandbox denies.
+    # The backend therefore comes from the dev extra (setuptools).
+    if importlib.util.find_spec("setuptools") is None:
+        pytest.skip("setuptools (dev extra) builds the wheel without isolation")
     proc = subprocess.run(
-        [sys.executable, "-m", "pip", "wheel", ".", "--no-deps", "-w", str(tmp_path)],
+        [sys.executable, "-m", "pip", "wheel", ".", "--no-deps",
+         "--no-build-isolation", "-w", str(tmp_path)],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,

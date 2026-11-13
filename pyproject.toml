@@ -84,6 +84,11 @@ dev = [
     "pytest>=8.0",
     "pip-audit>=2.0",
     "pre-commit>=3.0",
+    # tests/test_viz_wheel_contents.py builds a wheel with
+    # --no-build-isolation so the suite never needs PyPI; the backend must be
+    # importable from this environment. Floor pinned past CVE-2025-47273
+    # (fixed in 78.1.1) so the restore step's pip-audit stays green.
+    "setuptools>=78.1.1",
 ]
 docs = [
     "mkdocs-material~=9.6",

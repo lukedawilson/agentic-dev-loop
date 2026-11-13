@@ -44,6 +44,9 @@ Exit code is `0` on pipeline success, `1` otherwise.
   whose owner process is dead. A SIGTERM to a running pipeline still closes
   the sandbox; SIGKILLed runs are reclaimed by the startup reaper on the next
   run or by `containers --reap`.
+- `agentic-dev-loop claude-login` authenticates a Claude Pro or Max
+  subscription (OAuth PKCE flow) and writes the token file the engine
+  reads.
 - `agentic-dev-loop copilot-login` authenticates a GitHub Copilot
   subscription (device flow); `copilot-models` lists the models the token's
   tier can use. See [LLM providers](llm-providers.md).

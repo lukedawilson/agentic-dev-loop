@@ -57,7 +57,7 @@ Docker engine does:
 | --- | --- |
 | Python | >= 3.12 |
 | Docker engine | Engine API >= 1.43 (Engine 24). Any compliant engine works - Docker Desktop, OrbStack, Colima, Rancher Desktop, podman docker-compat. On Windows, run under WSL2: the repo must live on the WSL filesystem, not /mnt/c. |
-| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription, and a Claude Pro or Max subscription runs on Anthropic's own endpoint after `claude login` (see [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/)). |
+| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription, and a Claude Pro or Max subscription runs on Anthropic's own endpoint after `agentic-dev-loop claude-login` (see [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/)). |
 
 ### Installation
 

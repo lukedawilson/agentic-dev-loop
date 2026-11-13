@@ -903,7 +903,7 @@ def _custom_prompt_looks_like_path(value: str) -> bool:
     """040/D2: a value counts as path-shaped when it carries a path
     separator or a file extension (a dot). A path-shaped value that names no
     existing file is a hard error, never silent text."""
-    return "/" in value or "\\" in value or Path(value).suffix != ""
+    return "/" in value or "\\" in value or Path(value.rstrip(".")).suffix != ""
 
 
 def resolve_custom_prompt(value: str, pipeline_dir: Path, step_name: str) -> str:

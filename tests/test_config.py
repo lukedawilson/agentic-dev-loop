@@ -366,6 +366,15 @@ class TestCustomPrompt:
         assert _load(tmp_path, data).steps[0].custom_prompt == \
             "verify the export tab first"
 
+    def test_prose_ending_in_period_is_literal_text(self, tmp_path):
+        """On Python 3.14 ``Path("... .").suffix`` is ``"."`` (the trailing
+        sentence period reads as an extension), so this is red only on 3.14
+        before the rstrip fix; 3.12 reports an empty suffix and passes."""
+        data = _base()
+        prose = "Stop when the suite is green (AUDIT GATE)."
+        data["steps"][0]["custom_prompt"] = prose
+        assert _load(tmp_path, data).steps[0].custom_prompt == prose
+
     def test_existing_file_path_reads_contents(self, tmp_path):
         (tmp_path / "qa-plan.md").write_text("verify the export tab\n")
         data = _base()

@@ -8,7 +8,7 @@ subscription runs on litellm's native Anthropic path.
 | --- | --- |
 | **Any OpenAI-compatible endpoint** | API key via `api_key_env` + `base_url` in the `llm:` block: OpenAI, DeepSeek, or any OpenAI-compatible API. |
 | **GitHub Copilot subscription** | `agentic-dev-loop copilot-login` once, then point the `llm:` block at `https://api.githubcopilot.com` with the file-backed token. |
-| **Claude subscription** | `claude login` once, extract the OAuth token to a file, then point the `llm:` block at `https://api.anthropic.com`. |
+| **Claude subscription** | `agentic-dev-loop claude-login` once, then point the `llm:` block at `https://api.anthropic.com` with the file-backed token. |
 
 ## OpenAI-compatible endpoints
 
@@ -105,27 +105,18 @@ Copilot specifics:
 A Claude Pro or Max subscription runs on Anthropic's own endpoint through
 litellm's native Anthropic path - no new driver, no MCP, no subprocess. The
 credential is the Claude Code OAuth token: subscription metering applies to
-it, while an API key bills at pay-as-you-go rates. Log in with Claude Code
-once, then point an `llm:` block at the endpoint:
+it, while an API key bills at pay-as-you-go rates.
+`agentic-dev-loop claude-login` runs the same OAuth flow and writes the
+token file the engine reads (mode 600):
 
 ```bash
-claude login
+agentic-dev-loop claude-login
 ```
 
-Claude Code stores its OAuth credential after login. Extract the token to
-the file the engine reads (mode 600):
-
-```bash
-mkdir -p ~/.agentic-dev-loop/auth
-security find-generic-password -s "Claude Code-credentials" -w \
-  | python3 -c 'import json,sys; print(json.dumps({"access_token": json.load(sys.stdin)["claudeAiOauth"]["accessToken"]}))' \
-  > ~/.agentic-dev-loop/auth/claude.json
-chmod 600 ~/.agentic-dev-loop/auth/claude.json
-```
-
-On macOS the credential lives in Keychain under an entry whose name starts
-with `Claude Code-credentials` (newer logins add a suffix; find the full
-name in Keychain Access and use it in the command above).
+It opens the browser for the authorize step, serves a loopback callback,
+exchanges the authorization code, and writes
+`~/.agentic-dev-loop/auth/claude.json` with the access token, the refresh
+token, and the expiry. Re-run it when the token expires.
 
 ```yaml
 llm:
@@ -163,6 +154,10 @@ Claude specifics:
   name is what routes it there.
 - The engine sends Anthropic's billing header automatically as the first
   system block of every request. Nothing to configure.
+- The OAuth client id is Claude Code's own first-party app id, overridable
+  with `AGENTIC_DEV_LOOP_CLAUDE_CLIENT_ID` if Anthropic rotates it.
+- The token endpoint can rate limit the exchange; `claude-login` reports
+  it and asks you to retry in a few minutes.
 - The token expires. When the engine's fail-fast names the credential file,
-  re-extract the token with the command above.
+  re-run `agentic-dev-loop claude-login`.
 - `model:` stays required.

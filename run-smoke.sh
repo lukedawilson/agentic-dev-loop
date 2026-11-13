@@ -16,8 +16,7 @@
 #                      (agentic-dev-loop copilot-login) and the pinned
 #                      model must be in the token's tier list.
 # claude preflight:    token file at ~/.agentic-dev-loop/auth/claude.json
-#                      (OAuth access_token extracted from the Claude Code
-#                      keychain entry; see docs/llm-providers.md).
+#                      (agentic-dev-loop claude-login).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

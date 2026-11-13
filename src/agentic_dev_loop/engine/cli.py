@@ -14,6 +14,9 @@ import threading
 from pathlib import Path
 
 from agentic_dev_loop.core.config import PipelineConfig, load_config
+from .claude_auth import TOKEN_PATH as CLAUDE_TOKEN_PATH
+from .claude_auth import ClaudeAuthError
+from .claude_auth import login as claude_login
 from .copilot_auth import (TOKEN_PATH, CopilotAuthError, list_copilot_models,
                            login, read_token)
 from .containers import containers_report
@@ -35,6 +38,7 @@ a loud error). Run `agentic-dev-loop <PIPELINE> --help` for
 loader-contributed options (e.g. --plan, --aidlc-unit).
 
 commands:
+  claude-login     Run the Claude OAuth PKCE flow and store the token.
   containers       Inspect engine sandbox containers and networks.
   copilot-login    Run the GitHub device flow and store the Copilot OAuth token.
   copilot-models   List the Copilot models available to this token's tier.
@@ -192,8 +196,31 @@ def _print_containers_report(report) -> None:
               f"run={run} pid={pid_s}")
 
 
-def _token_path(value: str | None) -> Path:
-    return Path(value).expanduser() if value else TOKEN_PATH.expanduser()
+def _token_path(value: str | None, default: Path = TOKEN_PATH) -> Path:
+    return Path(value).expanduser() if value else default.expanduser()
+
+
+def _claude_login_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="agentic-dev-loop claude-login",
+        description="Run the Claude subscription OAuth flow and store the "
+                    "token.")
+    parser.add_argument("--token-file", default=None,
+                        help="token path (default: "
+                             "~/.agentic-dev-loop/auth/claude.json)")
+    return parser
+
+
+def _run_claude_login(argv: list[str]) -> int:
+    args = _claude_login_parser().parse_args(argv)
+    path = _token_path(args.token_file, CLAUDE_TOKEN_PATH)
+    try:
+        claude_login(token_path=path)
+    except ClaudeAuthError as e:
+        print(f"claude-login: {e}", file=sys.stderr)
+        return 1
+    print(f"Claude token written to {path}")
+    return 0
 
 
 def _copilot_login_parser() -> argparse.ArgumentParser:
@@ -425,6 +452,8 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
             return 2
         print(_TOP_HELP)
         return 0
+    if argv and argv[0] == "claude-login":
+        return _run_claude_login(argv[1:])
     if argv and argv[0] == "containers":
         return _run_containers(argv[1:])
     if argv and argv[0] == "copilot-login":

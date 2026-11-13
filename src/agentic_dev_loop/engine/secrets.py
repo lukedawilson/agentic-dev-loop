@@ -77,13 +77,15 @@ class FileProvider:
         if not path.is_file():
             raise SecretResolutionError(
                 f"secret file not found: {path} - run "
-                "`agentic-dev-loop copilot-login` to create it")
+                "`agentic-dev-loop copilot-login` (Copilot) or "
+                "`agentic-dev-loop claude-login` (Claude) to create it")
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as e:
             raise SecretResolutionError(
-                f"secret file unreadable: {path}: {e} - run "
-                "`agentic-dev-loop copilot-login` to recreate it") from e
+                f"secret file unreadable: {path}: {e} - run the matching "
+                "login subcommand (`agentic-dev-loop copilot-login` or "
+                "`agentic-dev-loop claude-login`) to recreate it") from e
         if json_key is None:
             return text.strip()
         try:

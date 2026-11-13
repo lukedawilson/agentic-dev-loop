@@ -1,6 +1,6 @@
 # 066 - Claude subscription login subcommand
 
-> **Status: DRAFT**
+> **Status: COMPLETED**
 
 ## Background
 

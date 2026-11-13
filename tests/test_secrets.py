@@ -239,6 +239,10 @@ class TestFileProvider:
         with pytest.raises(SecretResolutionError, match="copilot-login"):
             FileProvider().resolve([str(tmp_path / "missing.json")])
 
+    def test_missing_claude_token_names_claude_login(self, tmp_path):
+        with pytest.raises(SecretResolutionError, match="claude-login"):
+            FileProvider().resolve([str(tmp_path / "claude.json")])
+
     def test_invalid_json_fails_loudly(self, tmp_path):
         path = self._json(tmp_path, "not json")
         with pytest.raises(SecretResolutionError, match="not valid JSON"):
