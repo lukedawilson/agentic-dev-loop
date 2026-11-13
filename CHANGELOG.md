@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [1.0.0rc1] - 2026-11-13
 
-- `agentic-dev-loop upgrade` now passes `--pip-args=--pre` to the pipx install: every superseded release is yanked on PyPI and the current release (1.0.0b1) is a pre-release, so a plain install had no satisfiable version and upgrade failed before installing anything. The README and development-docs install commands carry the same flag.
+### Changed
+
+- First release candidate of 1.0.0: only bug fixes are expected before the stable 1.0.0. `agentic-dev-loop upgrade` now passes the pre-release flag to pipx, so upgrading works when the only installable release on PyPI is a pre-release (every superseded release is yanked).
+
+## [1.0.0b1] - 2026-11-11
 
 ### Changed
 
@@ -20,12 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pinned `browser-use==0.11.13` and `pillow>=13.0.0` so a fresh pip resolve lands on a CVE-free pillow: 12.3.0 carried 39 CVEs (fixed in 13.0.0), and browser-use 0.12.0+ hard-pins pillow==12.x, which deadlocked the restore step's pip-audit gate.
 - The brief coverage gate now matches required headings and anchors as line prefixes instead of whole lines: compressed content may follow an anchor on its line, and glyph variants (em dashes, curly quotes) fold to ASCII before matching. Non-ASCII characters inside required items are still reproduced character-exact, never transliterated (plan 060).
 - A failing command gate (test, restore) now reaches dev as a required fix: mechanical gate output is rendered with that binding, the dev contract names both feedback channels, and a new AUDIT GATE section makes a dependency-audit failure a required manifest edit (plan 065).
-
-## [1.0.0b1] - 2026-11-11
-
-### Changed
-
-- Security and stability fixes.
 
 ## [0.15.7] - 2026-11-10
 
