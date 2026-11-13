@@ -137,7 +137,7 @@ PROVIDER_BLOCKS = {
     ),
     "claude": (
         "llm:\n"
-        "  model: claude-opus-5.5\n"
+        "  model: claude-opus-5-5\n"
         "  base_url: https://api.anthropic.com\n"
         "  api_key_secret:\n"
         "    from: file\n"
@@ -145,7 +145,7 @@ PROVIDER_BLOCKS = {
         "    json_key: access_token\n"
         "llms:\n"
         "  flash:\n"
-        "    model: claude-sonnet-5.5\n"
+        "    model: claude-sonnet-5-5\n"
         "    base_url: https://api.anthropic.com\n"
         "    api_key_secret:\n"
         "      from: file\n"

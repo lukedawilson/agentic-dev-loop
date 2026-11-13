@@ -9,8 +9,8 @@ profile: python
 # only proves the provider can carry the plan, not the supply-chain gates.
 # Current pins in run_smoke.py PROVIDER_BLOCKS: openhands = openai/deepseek-
 # v4-pro (default) + openai/deepseek-flash (flash); copilot = openai/claude-
-# opus-5.5 + openai/claude-sonnet-5.5; claude = claude-opus-5.5 + claude-
-# sonnet-5.5 against https://api.anthropic.com.
+# opus-5.5 + openai/claude-sonnet-5.5; claude = claude-opus-5-5 + claude-
+# sonnet-5-5 against https://api.anthropic.com.
 agents_dir: agents
 additional_files: []
 deps_policy: open

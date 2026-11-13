@@ -95,11 +95,11 @@ No changes to `pipeline.yaml`, agent prompts, or the mermaid source.
 
   | Station | Profile  | openhands                | copilot                 | claude          |
   |---------|----------|--------------------------|-------------------------|-----------------|
-  | brief   | default  | openai/deepseek-v4-pro   | openai/claude-opus-5.5  | claude-opus-5.5 |
+  | brief   | default  | openai/deepseek-v4-pro   | openai/claude-opus-5.5  | claude-opus-5-5 |
   | deps    | none     | (blank)                  | (blank)                 | (blank)         |
-  | dev     | flash    | openai/deepseek-flash    | openai/claude-sonnet-5.5| claude-sonnet-5.5 |
+  | dev     | flash    | openai/deepseek-flash    | openai/claude-sonnet-5.5| claude-sonnet-5-5 |
   | test    | none     | (blank)                  | (blank)                 | (blank)         |
-  | review  | default  | openai/deepseek-v4-pro   | openai/claude-opus-5.5  | claude-opus-5.5 |
+  | review  | default  | openai/deepseek-v4-pro   | openai/claude-opus-5.5  | claude-opus-5-5 |
 
 ## How to run
 
