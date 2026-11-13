@@ -49,10 +49,28 @@ def test_upgrade_installs_latest_and_writes_pin(tmp_path, capsys):
     code = run_upgrade([], workspace=tmp_path, env=_env_with(bin_dir))
 
     assert code == 0
-    assert pipx_log.read_text().strip() == "install --force agentic-dev-loop"
+    assert pipx_log.read_text().strip() == \
+        "install --force --pip-args=--pre agentic-dev-loop"
     pin = tmp_path / "agentic-dev-loop" / ".engine-version"
     assert pin.read_text(encoding="utf-8") == "0.10.4\n"
     assert "upgraded agentic-dev-loop to 0.10.4" in capsys.readouterr().out
+
+
+def test_upgrade_pins_pre_release_version(tmp_path):
+    # The PyPI index currently ships 1.0.0b1 as the only non-yanked release,
+    # so the pin step must accept pre-release versions (regression: upgrade
+    # failed because pipx never saw 1.0.0b1 as installable).
+    bin_dir = _stub_env(
+        tmp_path,
+        pipx_body="exit 0",
+        cli_body='echo "agentic-dev-loop 1.0.0b1"',
+    )
+
+    code = run_upgrade([], workspace=tmp_path, env=_env_with(bin_dir))
+
+    assert code == 0
+    pin = tmp_path / "agentic-dev-loop" / ".engine-version"
+    assert pin.read_text(encoding="utf-8") == "1.0.0b1\n"
 
 
 def test_upgrade_overwrites_existing_pin(tmp_path):

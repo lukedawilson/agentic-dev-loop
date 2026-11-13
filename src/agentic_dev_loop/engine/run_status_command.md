@@ -20,4 +20,4 @@ The command prints two sections: `===MERMAID===` then `===SUMMARY===`.
 
 ## Errors
 
-- If `agentic-dev-loop` is not on PATH, report that the engine is not installed (`pipx install agentic-dev-loop`) and stop.
+- If `agentic-dev-loop` is not on PATH, report that the engine is not installed (`pipx install --pip-args="--pre" agentic-dev-loop`) and stop.

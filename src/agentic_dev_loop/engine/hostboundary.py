@@ -58,7 +58,8 @@ def check_orchestrator_install(workspace: str | Path,
         raise HostBoundaryError(
             f"agentic_dev_loop resolves to {resolved}, inside the workspace "
             f"{ws} - the engine must be installed outside the workspace "
-            "(e.g. `pipx install agentic-dev-loop`); refusing to run")
+            "(e.g. `pipx install --pip-args=--pre agentic-dev-loop`); "
+            "refusing to run")
 
 
 def tooling_rel_paths(cfg: "PipelineConfig", pipeline_path: str | Path,

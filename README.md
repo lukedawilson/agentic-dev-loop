@@ -62,7 +62,7 @@ Docker engine does:
 ### Installation
 
 ```bash
-pipx install agentic-dev-loop
+pipx install --pip-args="--pre" agentic-dev-loop   # latest release is currently a pre-release
 agentic-dev-loop --version
 ```
 

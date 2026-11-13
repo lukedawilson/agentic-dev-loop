@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `agentic-dev-loop upgrade` now passes `--pip-args=--pre` to the pipx install: every superseded release is yanked on PyPI and the current release (1.0.0b1) is a pre-release, so a plain install had no satisfiable version and upgrade failed before installing anything. The README and development-docs install commands carry the same flag.
+
 ### Changed
 
 - The README is now a short introduction (pitch, key features, screenshot, supported platforms, quickstart with a minimal pipeline example) and the deep documentation moved into a MkDocs Material site under docs/: architecture, CLI, the full pipeline.yaml reference, LLM providers, loop authoring, and the development environment. The site deploys to GitHub Pages via a new docs workflow and is themed with the same Carbon token palette as the run visualisation (docs/stylesheets/carbon.css); PyPI keeps rendering the README, whose documentation links are absolute so they work on both GitHub and PyPI, and the project metadata gains a Documentation URL.

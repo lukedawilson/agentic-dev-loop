@@ -3,7 +3,7 @@
 ```bash
 git clone git@github.com:lukedawilson/agentic-dev-loop.git
 cd agentic-dev-loop
-pipx install agentic-dev-loop                 # engine venv OUTSIDE the workspace (self-check)
+pipx install --pip-args="--pre" agentic-dev-loop # engine venv OUTSIDE the workspace (self-check)
 export OPENAI_API_KEY=...                     # set your LLM key in the host env (no .env in the repo)
 python -m pytest tests/ -q                    # fast suite (in-repo .venv is for tests only)
 python -m pytest tests/ -q -m "not docker"    # skip engine-dependent tests

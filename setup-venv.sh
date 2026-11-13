@@ -131,7 +131,7 @@ setup complete:
 
 next steps:
   .venv/bin/python -m pytest tests/ -q   # run the fast suite locally
-  pipx install "agentic-dev-loop==1.0.0a9"   # install the loop engine OUTSIDE the workspace
+  pipx install --pip-args="--pre" agentic-dev-loop   # install the loop engine OUTSIDE the workspace
   export OPENAI_API_KEY=...               # the pipeline fails fast without it
   agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run
 EOF

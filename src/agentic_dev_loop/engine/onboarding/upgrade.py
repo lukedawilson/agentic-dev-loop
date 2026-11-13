@@ -43,8 +43,12 @@ def run_upgrade(argv: list[str], *, workspace: Path | None = None,
               "pipx-managed", file=sys.stderr)
         return 1
 
+    # --pre is required: the release process yanks superseded releases, and
+    # the current latest (1.0.0b1) is a pre-release, so a plain install has
+    # no satisfiable version. pipx translates --pre on both backends (pip and
+    # uv); dropping it here breaks upgrade until a stable release ships.
     result = subprocess.run(
-        [pipx, "install", "--force", "agentic-dev-loop"],
+        [pipx, "install", "--force", "--pip-args=--pre", "agentic-dev-loop"],
         capture_output=True, text=True, check=False, env=env)
     if result.returncode != 0:
         detail = (result.stderr or "unknown error").strip()
