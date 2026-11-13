@@ -1,12 +1,14 @@
 # LLM providers
 
-The engine speaks the OpenAI-compatible wire format throughout, so every
-step, profile, and gate works identically on either provider style:
+Every step, profile, and gate works identically on either provider style:
+API-key endpoints speak the OpenAI-compatible wire format, and the Claude
+subscription runs on litellm's native Anthropic path.
 
 | Provider | Setup |
 | --- | --- |
 | **Any OpenAI-compatible endpoint** | API key via `api_key_env` + `base_url` in the `llm:` block: OpenAI, DeepSeek, or any OpenAI-compatible API. |
 | **GitHub Copilot subscription** | `agentic-dev-loop copilot-login` once, then point the `llm:` block at `https://api.githubcopilot.com` with the file-backed token. |
+| **Claude subscription** | `claude login` once, extract the OAuth token to a file, then point the `llm:` block at `https://api.anthropic.com`. |
 
 ## OpenAI-compatible endpoints
 
@@ -97,3 +99,70 @@ Copilot specifics:
   re-run `agentic-dev-loop copilot-login`. The fail-fast names this fix.
 - `model:` stays required. Confirm the models with `copilot-models` before a
   run.
+
+## Claude subscription
+
+A Claude Pro or Max subscription runs on Anthropic's own endpoint through
+litellm's native Anthropic path - no new driver, no MCP, no subprocess. The
+credential is the Claude Code OAuth token: subscription metering applies to
+it, while an API key bills at pay-as-you-go rates. Log in with Claude Code
+once, then point an `llm:` block at the endpoint:
+
+```bash
+claude login
+```
+
+Claude Code stores its OAuth credential after login. Extract the token to
+the file the engine reads (mode 600):
+
+```bash
+mkdir -p ~/.agentic-dev-loop/auth
+security find-generic-password -s "Claude Code-credentials" -w \
+  | python3 -c 'import json,sys; print(json.dumps({"access_token": json.load(sys.stdin)["claudeAiOauth"]["accessToken"]}))' \
+  > ~/.agentic-dev-loop/auth/claude.json
+chmod 600 ~/.agentic-dev-loop/auth/claude.json
+```
+
+On macOS the credential lives in Keychain under an entry whose name starts
+with `Claude Code-credentials` (newer logins add a suffix; find the full
+name in Keychain Access and use it in the command above).
+
+```yaml
+llm:
+  model: claude-opus-5.5       # pro default
+  base_url: https://api.anthropic.com
+  api_key_secret:
+    from: file
+    key: ~/.agentic-dev-loop/auth/claude.json
+    json_key: access_token
+llms:
+  flash:
+    model: claude-sonnet-5.5   # flash profile; no step effort
+    base_url: https://api.anthropic.com
+    api_key_secret:
+      from: file
+      key: ~/.agentic-dev-loop/auth/claude.json
+      json_key: access_token
+```
+
+Working models and what they accept:
+
+- `claude-opus-5.5` (pro default) and `claude-sonnet-5.5` (flash) are the
+  current working set. Effort: both accept `low`/`medium`/`high`/`xhigh`/
+  `max`.
+
+Claude specifics:
+
+- No `headers:` block: litellm detects the OAuth token prefix and sends
+  Bearer auth plus the required API version and beta headers automatically.
+- The `base_url` has no `/v1` suffix: litellm appends the `/v1/messages`
+  path itself, and a `/v1` value would 404 on a doubled path.
+- Bare model names are required (`claude-opus-5.5`, not
+  `openai/claude-opus-5.5`). The `openai/` prefix is a Copilot-gateway
+  routing hint; here the native Anthropic path is the point, and a bare
+  name is what routes it there.
+- The engine sends Anthropic's billing header automatically as the first
+  system block of every request. Nothing to configure.
+- The token expires. When the engine's fail-fast names the credential file,
+  re-extract the token with the command above.
+- `model:` stays required.

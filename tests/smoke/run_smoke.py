@@ -82,6 +82,21 @@ SRC_DIR = REPO_ROOT / "src"
 #   Authorization Bearer plus chat/completions, with the bare model name
 #   in the body. The same rule covers the gpt pins here (bare gpt names
 #   would skip the Copilot gateway routing).
+# - claude = the Anthropic subscription endpoint (api.anthropic.com, no
+#   /v1 suffix: litellm appends /v1/messages itself), served by litellm's
+#   native Anthropic provider path. Model names are
+#   BARE (claude-opus-5-5 / claude-sonnet-5-5): no openai/ prefix, the
+#   prefix is Copilot-gateway-specific and bare names are the whole point
+#   of this path. The credential is the Claude Code OAuth token
+#   (sk-ant-oat01-...), file-backed; litellm auto-detects the token
+#   prefix and switches to Bearer auth plus the oauth-2025-04-20 beta
+#   with no headers block needed in config. The engine injects the
+#   billing-header system block the gateway demands (probe-validated
+#   2026-11-13: without it every request 429s) via the provider_wire.py
+#   claude-subscription adapter, keyed on this exact base_url. Pins
+#   probe-validated on a Pro subscription: opus-5-5 (pro default) and
+#   sonnet-5-5 (flash), all reasoning efforts (low/medium/high/xhigh/
+#   max) accepted.
 PROVIDER_BLOCKS = {
     "openhands": (
         "llm:\n"
@@ -119,6 +134,23 @@ PROVIDER_BLOCKS = {
         "      Copilot-Integration-Id: vscode-chat\n"
         "      Editor-Version: vscode/1.94.0\n"
         "      Openai-Intent: conversation-panel\n"
+    ),
+    "claude": (
+        "llm:\n"
+        "  model: claude-opus-5.5\n"
+        "  base_url: https://api.anthropic.com\n"
+        "  api_key_secret:\n"
+        "    from: file\n"
+        "    key: ~/.agentic-dev-loop/auth/claude.json\n"
+        "    json_key: access_token\n"
+        "llms:\n"
+        "  flash:\n"
+        "    model: claude-sonnet-5.5\n"
+        "    base_url: https://api.anthropic.com\n"
+        "    api_key_secret:\n"
+        "      from: file\n"
+        "      key: ~/.agentic-dev-loop/auth/claude.json\n"
+        "      json_key: access_token\n"
     ),
 }
 
@@ -169,7 +201,8 @@ def inject_provider_block(template: str, provider: str) -> str:
 
 
 def preflight_llm(text: str,
-                  environ: dict[str, str] | None = None) -> None:
+                  environ: dict[str, str] | None = None,
+                  provider: str | None = None) -> None:
     """Fail in seconds, before a worktree and deps build, when the pipeline
     template's llm credentials are absent. Regex-based and stdlib-only: the
     pipeline yaml is a template, not a loaded config."""
@@ -189,9 +222,13 @@ def preflight_llm(text: str,
                 "llm api_key_secret has no 'key' file path")
         path = Path(key).expanduser()
         if not path.is_file():
+            hint = {
+                "copilot": "run `agentic-dev-loop copilot-login` first",
+                "claude": ("extract the Claude Code OAuth token into this "
+                           "file (see docs/llm-providers.md)"),
+            }.get(provider or "", "create the provider's credential file")
             raise SmokePreflightError(
-                f"llm api_key_secret file not found: {path} - run "
-                "`agentic-dev-loop copilot-login` first")
+                f"llm api_key_secret file not found: {path} - {hint}")
 
 
 def _engine_auth():
@@ -351,8 +388,11 @@ def main() -> int:
     try:
         template = (config_dir / "pipeline.yaml").read_text(encoding="utf-8")
         text = inject_provider_block(template, args.provider)
-        preflight_llm(text)
-        preflight_copilot_model(text)
+        preflight_llm(text, provider=args.provider)
+        if args.provider == "copilot":
+            # The Copilot tier check probes GitHub's /models with the
+            # Copilot token; every other provider skips it.
+            preflight_copilot_model(text)
     except SmokePreflightError as e:
         fail(str(e))
 

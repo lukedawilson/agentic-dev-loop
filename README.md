@@ -57,7 +57,7 @@ Docker engine does:
 | --- | --- |
 | Python | >= 3.12 |
 | Docker engine | Engine API >= 1.43 (Engine 24). Any compliant engine works - Docker Desktop, OrbStack, Colima, Rancher Desktop, podman docker-compat. On Windows, run under WSL2: the repo must live on the WSL filesystem, not /mnt/c. |
-| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription (see [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/)). |
+| LLM API key | The env var named by your pipeline's `api_key_env` (e.g. `OPENAI_API_KEY`) must be set - a missing key fails fast, naming it. Alternatively, `agentic-dev-loop copilot-login` authenticates a Copilot subscription, and a Claude Pro or Max subscription runs on Anthropic's own endpoint after `claude login` (see [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/)). |
 
 ### Installation
 
@@ -130,7 +130,7 @@ policy, named LLM profiles - is in the
 | [Architecture](https://lukedawilson.github.io/agentic-dev-loop/architecture/) | The five layers, one full run end to end, and the host-boundary security model |
 | [CLI](https://lukedawilson.github.io/agentic-dev-loop/cli/) | Run flags, resuming, the live view, reports, container management, and onboarding commands |
 | [pipeline.yaml](https://lukedawilson.github.io/agentic-dev-loop/pipeline/) | The complete configuration reference: steps, isolation, secrets, networking, dependency policy |
-| [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/) | OpenAI-compatible endpoints (OpenAI, DeepSeek, and others) and the GitHub Copilot subscription |
+| [LLM providers](https://lukedawilson.github.io/agentic-dev-loop/llm-providers/) | OpenAI-compatible endpoints (OpenAI, DeepSeek, and others), the GitHub Copilot subscription, and the Claude subscription |
 | [Authoring a loop](https://lukedawilson.github.io/agentic-dev-loop/authoring/) | From `init` to a committed pipeline: agent files, stage lineup, adaptation checklist |
 | [Setup and troubleshooting](https://lukedawilson.github.io/agentic-dev-loop/setup/) | Docker engines, the dev image, caching, error codes |
 | [Browser sandbox](https://lukedawilson.github.io/agentic-dev-loop/browser-sandbox/) | Running a browser inside the sandbox |

@@ -15,7 +15,8 @@ from agentic_dev_loop.core.config import LlmConfig
 from agentic_dev_loop.engine import llm as engine_llm
 from agentic_dev_loop.engine.copilot_auth import COPILOT_BASE_URL
 from agentic_dev_loop.engine.provider_wire import (
-    WIRE_ADAPTERS, adapter_for, copilot_strings)
+    CLAUDE_BASE_URL, CLAUDE_BILLING_HEADER, WIRE_ADAPTERS, adapter_for,
+    claude_subscription, copilot_strings)
 
 KEY = "AGENT_ENGINE_TEST_KEY"
 
@@ -50,8 +51,102 @@ class TestAdapterRegistry:
     def test_none_url_has_no_adapter(self):
         assert adapter_for(None) is None
 
-    def test_registry_holds_exactly_the_copilot_url(self):
-        assert WIRE_ADAPTERS == {COPILOT_BASE_URL: copilot_strings}
+    def test_registry_holds_exactly_the_known_gateways(self):
+        assert WIRE_ADAPTERS == {
+            COPILOT_BASE_URL: copilot_strings,
+            CLAUDE_BASE_URL: claude_subscription,
+        }
+
+
+class TestClaudeSubscriptionPolicy:
+    """The Anthropic subscription endpoint (api.anthropic.com) is served by
+    litellm's native Anthropic provider path: no string serializer forcing,
+    no choice merging. The one Claude policy is the billing-header system
+    prefix, which the gateway demands as the first system block."""
+
+    def test_claude_url_maps_to_subscription_policy(self):
+        adapter = adapter_for(CLAUDE_BASE_URL)
+        assert adapter is claude_subscription
+        assert adapter.force_string_serializer is False
+        assert adapter.merge_choices is False
+        assert adapter.system_prefix == CLAUDE_BILLING_HEADER
+
+    def test_claude_trailing_slash_variant_maps_to_same_adapter(self):
+        assert adapter_for(CLAUDE_BASE_URL + "/") is claude_subscription
+
+    def test_claude_config_sets_system_prefix_only(self, monkeypatch):
+        monkeypatch.setenv(KEY, "test-key")
+        llm = engine_llm.build_llm(_cfg(
+            model="claude-opus-5-5",
+            base_url=CLAUDE_BASE_URL,
+        ))
+        assert llm._agentic_dev_loop_system_prefix == CLAUDE_BILLING_HEADER
+        assert llm.force_string_serializer is False
+        assert llm._agentic_dev_loop_merge_choices is False
+
+    def test_non_claude_config_has_no_system_prefix(self, monkeypatch):
+        monkeypatch.setenv(KEY, "test-key")
+        llm = engine_llm.build_llm(_cfg())
+        assert llm._agentic_dev_loop_system_prefix is None
+
+    def test_missing_base_url_has_no_system_prefix(self, monkeypatch):
+        monkeypatch.setenv(KEY, "test-key")
+        llm = engine_llm.build_llm(_cfg(model="claude-opus-5-5"))
+        assert llm._agentic_dev_loop_system_prefix is None
+
+
+class TestBillingPrefixWireShape:
+    """The billing prefix must land as the FIRST system dict of every
+    outgoing request, ahead of the pipeline's real system prompt (the
+    gateway 429s when the first system block does not carry the
+    ``x-anthropic-billing-header`` text). These are pinning tests for the
+    serializer seam."""
+
+    def test_prefix_prepended_when_flag_set(self):
+        llm = SDK_LLM(
+            model="claude-opus-5-5",
+            api_key="sk-ant-oat01-test",
+            base_url=CLAUDE_BASE_URL,
+        )
+        llm._agentic_dev_loop_system_prefix = CLAUDE_BILLING_HEADER
+        message = Message(role="user", content=[TextContent(text="hi")])
+
+        out = llm.format_messages_for_llm([message])
+
+        assert out[0] == {"role": "system", "content": CLAUDE_BILLING_HEADER}
+        assert out[1]["role"] == "user"
+        assert len(out) == 2
+
+    def test_prefix_stays_first_ahead_of_real_system_prompt(self):
+        llm = SDK_LLM(
+            model="claude-opus-5-5",
+            api_key="sk-ant-oat01-test",
+            base_url=CLAUDE_BASE_URL,
+        )
+        llm._agentic_dev_loop_system_prefix = CLAUDE_BILLING_HEADER
+        messages = [
+            Message(role="system", content=[TextContent(text="real prompt")]),
+            Message(role="user", content=[TextContent(text="hi")]),
+        ]
+
+        out = llm.format_messages_for_llm(messages)
+
+        assert out[0] == {"role": "system", "content": CLAUDE_BILLING_HEADER}
+        assert out[1]["content"] == [{"type": "text", "text": "real prompt"}]
+        assert out[2]["role"] == "user"
+
+    def test_no_prefix_without_flag(self):
+        llm = SDK_LLM(
+            model="claude-opus-5-5",
+            api_key="sk-ant-oat01-test",
+            base_url=CLAUDE_BASE_URL,
+        )
+        message = Message(role="user", content=[TextContent(text="hi")])
+
+        out = llm.format_messages_for_llm([message])
+
+        assert len(out) == 1
+        assert out[0]["role"] == "user"
 
 
 class TestBuildLlmPolicy:

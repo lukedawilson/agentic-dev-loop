@@ -7,8 +7,9 @@ ARRAY-encoded tool-result content (probe-proven 2026-11-06: string tool
 content is answered, array tool content is invisible to the model - see
 aidlc-docs/audit.md). The SDK's own remedy is its documented
 ``force_string_serializer`` field on LLM, so this module is POLICY ONLY:
-which gateway base URL requires which wire shape. ``build_llm`` applies the
-policy to every instance it builds. Nothing is monkeypatched.
+which gateway base URL requires which wire shape, plus the one Claude
+subscription policy (the billing-header system prefix). ``build_llm`` applies
+the policy to every instance it builds. Nothing is monkeypatched.
 """
 
 from __future__ import annotations
@@ -17,20 +18,54 @@ from dataclasses import dataclass
 
 from agentic_dev_loop.engine.copilot_auth import COPILOT_BASE_URL
 
+# The Anthropic subscription endpoint. An llm block points its base_url at
+# this exact value: litellm routes bare claude-* model names through its
+# native Anthropic provider path (Messages API, Bearer auth auto-detected
+# from a ``sk-ant-oat01-`` token), and the adapter keyed below engages.
+# No /v1 suffix: litellm appends /v1/messages to a base URL that does not
+# already end with it (a /v1 value would 404 on /v1/v1/messages).
+CLAUDE_BASE_URL = "https://api.anthropic.com"
+
+# Anthropic's gateway only accepts OAuth-subscription traffic that is shaped
+# like a Claude Code request. The gate is the FIRST system text block: it
+# must carry an ``x-anthropic-billing-header:`` entry, or the endpoint
+# answers 429 rate_limit_error regardless of every other header and body
+# field (probe-proven 2026-11-13 against the live endpoint: only the
+# system field moved the replay between 200 and 429). The field values are
+# unvalidated with one exception, cc_version: models that require a newer
+# Claude Code are refused with claude_code_version_too_old, so pin the
+# current CLI version and bump it when the gateway demands newer.
+CLAUDE_BILLING_HEADER = (
+    "x-anthropic-billing-header: cc_version=2.1.323.c04; "
+    "cc_entrypoint=sdk-cli; cc_turn_origin=cli;"
+)
+
 
 @dataclass(frozen=True)
 class WireAdapter:
-    """The wire shape a gateway requires for message content."""
+    """Provider policy ``build_llm`` applies to every instance it builds.
+
+    ``system_prefix`` (Claude subscription): a system message prepended
+    ahead of the pipeline's real system prompt on every outgoing request."""
 
     name: str
     force_string_serializer: bool
     merge_choices: bool = False
+    system_prefix: str | None = None
 
 
 copilot_strings = WireAdapter(name="copilot-strings", force_string_serializer=True,
                               merge_choices=True)
 
-WIRE_ADAPTERS: dict[str, WireAdapter] = {COPILOT_BASE_URL: copilot_strings}
+claude_subscription = WireAdapter(name="claude-subscription",
+                                  force_string_serializer=False,
+                                  merge_choices=False,
+                                  system_prefix=CLAUDE_BILLING_HEADER)
+
+WIRE_ADAPTERS: dict[str, WireAdapter] = {
+    COPILOT_BASE_URL: copilot_strings,
+    CLAUDE_BASE_URL: claude_subscription,
+}
 
 
 def adapter_for(base_url: str | None) -> WireAdapter | None:
@@ -44,6 +79,8 @@ def provider_name(base_url: str | None) -> str:
     """Display name of the LLM provider behind a base URL."""
     if base_url is not None and base_url.rstrip("/") == COPILOT_BASE_URL:
         return "Copilot"
+    if base_url is not None and base_url.rstrip("/") == CLAUDE_BASE_URL:
+        return "Claude"
     return "OpenAI"
 
 

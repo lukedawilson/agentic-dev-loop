@@ -48,6 +48,18 @@ def _reasoning_stripped_error(llm: LLM) -> RuntimeError:
     )
 
 
+def _with_billing_prefix(llm: LLM, out: list[dict]) -> list[dict]:
+    """Claude subscription policy (provider_wire.py): the gateway demands an
+    ``x-anthropic-billing-header`` entry in the FIRST system text block of
+    every request (else 429). The adapter-carried prefix lands as its own
+    system dict at index 0, ahead of the pipeline's real system prompt;
+    litellm preserves system-message order into the Messages API body."""
+    prefix = getattr(llm, "_agentic_dev_loop_system_prefix", None)
+    if prefix:
+        out.insert(0, {"role": "system", "content": prefix})
+    return out
+
+
 if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", False):
     def _config_gated_reasoning_serializer(self, messages: list) -> list[dict]:
         """The engine-owned reasoning passback serializer (054 D8).
@@ -68,7 +80,7 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
                 raise _reasoning_stripped_error(self)
             validate_string_tool_results(
                 messages, out, forced=bool(self.force_string_serializer))
-            return out
+            return _with_billing_prefix(self, out)
 
         last = None
         for msg, d in zip(messages, out):
@@ -87,7 +99,7 @@ if not getattr(_ORIGINAL_FORMAT_MESSAGES, "_agentic_dev_loop_reasoning_repair", 
                 d["reasoning_content"] = rc
         validate_string_tool_results(
             messages, out, forced=bool(self.force_string_serializer))
-        return out
+        return _with_billing_prefix(self, out)
 
     _config_gated_reasoning_serializer._agentic_dev_loop_reasoning_repair = True
     LLM.format_messages_for_llm = _config_gated_reasoning_serializer
@@ -161,10 +173,11 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
     # off. reasoning_effort is always passed (None when unset) so the SDK
     # "high" default cannot engage; absent effort = reasoning off.
     effort = reasoning_effort if reasoning_effort is not None else cfg.reasoning_effort
-    # Copilot gateway policy (provider_wire.py): the gateway silently drops
+    # Gateway policy (provider_wire.py): the Copilot gateway silently drops
     # ARRAY-encoded tool-result content, so Copilot-configured instances
-    # force the SDK's documented string content serializer. Every other
-    # gateway keeps the SDK default (None = auto-detect by model registry).
+    # force the SDK's documented string content serializer. The Claude
+    # subscription endpoint keeps the SDK default (None = auto-detect by
+    # model registry) and carries the billing-header system prefix instead.
     adapter = adapter_for(cfg.base_url)
     llm = LLM(
         model=cfg.model,
@@ -178,4 +191,6 @@ def build_llm(cfg: LlmConfig, reasoning_effort: str | None = None) -> LLM:
     llm._agentic_dev_loop_reasoning_effort = effort
     llm._agentic_dev_loop_merge_choices = (
         adapter.merge_choices if adapter else False)
+    llm._agentic_dev_loop_system_prefix = (
+        adapter.system_prefix if adapter else None)
     return llm

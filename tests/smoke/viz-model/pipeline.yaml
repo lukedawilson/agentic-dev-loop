@@ -1,0 +1,102 @@
+name: smoke-viz-model
+profile: python
+# Provider-free template: run_smoke.py injects the llm block for its
+# --provider argument (openhands, copilot, or claude). agents_dir and
+# additional_files are rewritten by tests/smoke/run_smoke.py to absolute
+# paths inside the disposable worktree.
+# Step shapes mirror agentic-dev-loop/pipeline.yaml (brief -> deps -> dev ->
+# test -> review) with the restore, qa, and commit steps omitted: this smoke
+# only proves the provider can carry the plan, not the supply-chain gates.
+# Current pins in run_smoke.py PROVIDER_BLOCKS: openhands = openai/deepseek-
+# v4-pro (default) + openai/deepseek-flash (flash); copilot = openai/claude-
+# opus-5.5 + openai/claude-sonnet-5.5; claude = claude-opus-5.5 + claude-
+# sonnet-5.5 against https://api.anthropic.com.
+agents_dir: agents
+additional_files: []
+deps_policy: open
+max_attempts: 3
+steps:
+  - name: brief
+    reasoning_effort: medium
+    # Native brief step (049): brief_inputs is the type discriminator; the
+    # prompt, capture file (attempt-brief.md), and iteration cap are
+    # engine-owned. include: resolves relative to the workspace root (the
+    # disposable worktree). The plan doc (plan.md) reaches the brief agent
+    # through the loader context (additional_files).
+    # Model/effort note: brief runs the DEFAULT pro model (no llm: line)
+    # at medium. dev stays on the flash profile with no step effort (the
+    # openhands flash profile carries medium). review runs the default pro
+    # at xhigh. These three steps are exactly the stations the plan's
+    # feature labels with a model name; deps and test (command steps) and
+    # the success/failure terminals stay blank.
+    brief_inputs:
+      include: [AGENTS.md, coding-standards-ddd.yaml]
+      sections: [Repo rules digest, Unit scope digest, Environment facts, Open risks]
+      env_facts:
+        - the workspace is an export with no .git; verify with find/ls, never git status
+        - the sandbox is network-off by default; never run package-manager fetches
+        - Python packages resolve from .venv-sandbox; run .venv-sandbox/bin/python
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
+    on_pass: deps
+
+  - name: deps
+    command: python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"
+    timeout: 600
+    mounts: [{ path: ".", mode: rw }]
+    network: true
+    egress: { presets: [package-registries] }
+    # No on_fail: a bootstrap that cannot install halts the run loudly.
+    on_pass: dev
+
+  - name: dev
+    agent: dev
+    llm: flash
+    # Model note: the llm: line above pins this step to the injected flash
+    # profile, so this station labels with the flash model (the only step
+    # that differs from the default).
+    max_iterations: 150
+    finalize_nudge_turns: 10
+    produces: implementation-summary.md
+    mounts: [{path: ".", mode: rw}]
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
+    on_pass: test
+
+  - name: test
+    command: .venv-sandbox/bin/python -m pytest tests/test_viz.py -q -m "not docker" -k model
+    timeout: 600
+    mounts: [{path: ".", mode: rw}]
+    on_pass: review
+    on_fail: { goto: dev, retry: true }
+
+  - name: review
+    agent: review
+    # Model note: no llm: line, so this step runs the default llm: block
+    # injected by run_smoke.py and labels with the default pro model.
+    reasoning_effort: xhigh
+    artifact: review-findings.md
+    verdicts: { pass: APPROVED, fail: NEEDS CHANGES }
+    mounts: [{path: ".", mode: ro}]
+    forbidden_commands:
+      - '\btools/publish\.py\b'
+      - '\btwine\s+upload\b'
+      - '\bgh\s+release\s+create\b'
+      - '\bgh\s+pr\s+(create|merge|close)\b'
+      - pip install
+      - uv add
+      - pip-compile
+    on_pass: success
+    on_fail: { goto: dev, retry: true }
