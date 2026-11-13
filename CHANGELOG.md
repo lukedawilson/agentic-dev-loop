@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0rc3] - 2026-11-13
+
+### Changed
+
+- Claude subscription support: sign in with `agentic-dev-loop claude-login` and point an `llm:` block at https://api.anthropic.com to run claude-opus-5-5 or claude-sonnet-5-5 on Claude Pro/Max subscription metering.
+
 ## [1.0.0rc2] - 2026-11-13
 
 ### Changed
