@@ -104,7 +104,7 @@ steps:
     custom_prompt: >-
       A restore or dependency-audit failure is a required fix, never
       pre-existing or unrelated: edit the manifest with the floor-pin
-      pattern (AUDIT GATE).
+      pattern (AUDIT GATE)
     # No setup hook: the deps step (pre-dev) builds .venv-sandbox once per
     # run; goto dev retries re-enter clean, nothing re-installs at step entry.
     # Banned-command deny-list: custom entries append after the engine

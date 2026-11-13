@@ -25,6 +25,35 @@ persisted today so the file schema does not change when it lands.
 This does not revive the unit-4/unit-10 driver surface (still WONTSHIP per
 058 D8); it is a login flow for an endpoint profile, same as copilot-login.
 
+## Blocking bug found on plan load
+
+Found 2026-11-13 running this plan through the loop: config load dies with
+`ValueError: step 'dev': 'custom_prompt' file not found: <the dev prompt
+text>` before any step runs. Root cause: `_custom_prompt_looks_like_path`
+(core/config.py, 040/D2) treats a value as path-shaped when it has a slash,
+a backslash, or a non-empty `Path(value).suffix`. pathlib is version
+dependent here: on Python 3.12 `Path("prose (AUDIT GATE).").suffix` is
+`""`, but on Python 3.14 it is `"."` (the trailing sentence period counts
+as the extension). The dev step's AUDIT GATE prompt ends in a period, so on
+3.14 it is misclassified as a filename and fails hard. The repo venv and CI
+are 3.12, which is why no test caught it; the operator's pipx install is
+3.14.
+
+The fix must be version independent: strip trailing dots before the suffix
+test, so a lone trailing period never counts as an extension while real
+extensions (`.md`, `.py`) keep the hard-error contract.
+
+**Task 0 (TDD):** RED test in `tests/test_config.py`: a prose custom_prompt
+ending in `.` resolves as literal text, and the path-shaped cases
+(`qa-plan.md`, `tests/qa-plan`) still hard-error. Note: the red is only
+observable on Python 3.14; on 3.12 the new test passes pre-fix (expected,
+documented in the test comment). GREEN: change the suffix test in
+`_custom_prompt_looks_like_path` to use `Path(value.rstrip(".")).suffix`.
+Operator workaround until the fix lands: remove the trailing period from
+the dev custom_prompt in `agentic-dev-loop/pipeline.yaml` (line 107,
+`pattern (AUDIT GATE).` -> `pattern (AUDIT GATE)`), which lets config load
+on 3.14 today.
+
 ## Verified facts
 
 All live-probed 2026-11-13 against the real endpoints unless noted.
@@ -92,6 +121,10 @@ curl runner for tests), `write_token(...)`, `login(...)`, and
 
 ## Tasks (TDD, red -> green -> refactor)
 
+0. **Blocking bug fix (see "Blocking bug found on plan load")**: red test in
+   `tests/test_config.py` for the trailing-period custom_prompt; green via
+   `Path(value.rstrip(".")).suffix` in `_custom_prompt_looks_like_path`;
+   keep the path-shaped hard-error cases green.
 1. RED: `tests/test_claude_auth.py` (mirrors tests/test_copilot_auth.py):
    - authorize URL pinned param by param: `code=true` first, UUID client_id,
      response_type, redirect_uri with the port, the exact 7-scope string,
