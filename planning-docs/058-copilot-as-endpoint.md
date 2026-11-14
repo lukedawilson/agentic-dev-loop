@@ -9,7 +9,8 @@ Unit-10 (multi-provider runtime) is WONTSHIP: its code was reverted (commit
 Copilot-subscription auth surface at all (verified against openai-codex
 0.163.0, the latest release: the app-server login types are apiKey | chatgpt
 | chatgptDeviceCode | chatgptAuthTokens | amazonBedrock only). The Claude path
-stays WONTSHIP too (units 4 and 10).
+stayed WONTSHIP too at the time (units 4 and 10); it later shipped as an
+endpoint profile, see D8.
 
 Copilot can still serve the original goal - developers with Copilot
 subscriptions get the loop with kernel-level sandboxing and viz - not as a
@@ -115,6 +116,16 @@ SDK, no extras.
 
 **D8 - Claude stays WONTSHIP.** Nothing here revives the Claude path (units
 4 and 10 remain WONTSHIP; the runtime abstraction stays in git history).
+
+> **Reversed 2026-11-14 (Claude subscription shipped).** The Claude
+> subscription path shipped as an endpoint profile, the exact pattern this
+> plan established for Copilot, not as a harness driver. The engine targets
+> https://api.anthropic.com through litellm's native Anthropic provider with
+> an OAuth access token as the credential (billing-header system block and
+> model pins, see docs/llm-providers.md), and `agentic-dev-loop
+> claude-login` (plan 066) owns the PKCE login flow. Units 4 and 10 stay
+> WONTSHIP: the harness driver surface and the runtime abstraction were not
+> revived; only the endpoint-profile route was taken.
 
 **D9 - The smoke test supports three llm backends via config dirs.**
 run_smoke.py stays llm-agnostic (it copies the config dir's pipeline.yaml
