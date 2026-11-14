@@ -43,6 +43,10 @@ SCOPES = (
     "user:plugins")
 
 CURL_TIMEOUT = 60
+# The token endpoint soft-blocks curl's default user agent (HTTP 429
+# rate_limit_error) and accepts this one, the same UA the Claude Code CLI
+# sends. Probed live 2026-11-14.
+EXCHANGE_USER_AGENT = "axios/1.15.2"
 CALLBACK_TIMEOUT = 300
 REQUIRED_TOKEN_FIELDS = ("access_token", "refresh_token", "expires_in")
 
@@ -133,6 +137,7 @@ def exchange_token(code: str, redirect_uri: str, code_verifier: str,
         "-X", "POST", token_endpoint,
         "-H", "Content-Type: application/json",
         "-H", "Accept: application/json",
+        "-A", EXCHANGE_USER_AGENT,
         "--data-binary", body,
         "-w", "\n%{http_code}",
     ]

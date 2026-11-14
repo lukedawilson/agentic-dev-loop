@@ -134,6 +134,8 @@ class TestExchange:
         assert claude_auth.TOKEN_ENDPOINT in argv
         assert "Content-Type: application/json" in argv
         assert "Accept: application/json" in argv
+        assert "-A" in argv
+        assert argv[argv.index("-A") + 1] == claude_auth.EXCHANGE_USER_AGENT
         assert "%{http_code}" in argv[argv.index("-w") + 1]
         body = json.loads(argv[argv.index("--data-binary") + 1])
         assert body == {
