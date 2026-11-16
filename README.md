@@ -76,6 +76,8 @@ details and troubleshooting live in the [setup guide](https://lukedawilson.githu
 ```bash
 cd <your-repo>
 agentic-dev-loop init --profile python                     # writes the pipeline + agents
+# or: --profile dotnet-node, rust
+# or any toolchain image: --profile ./my-profile.yaml --recipe ./my-recipe.yaml
 export OPENAI_API_KEY=...                                  # whatever api_key_env names
 agentic-dev-loop agentic-dev-loop/pipeline.yaml --dry-run  # validate - no LLM, no Docker
 agentic-dev-loop agentic-dev-loop/pipeline.yaml            # run it
@@ -83,7 +85,10 @@ agentic-dev-loop agentic-dev-loop/pipeline.yaml            # run it
 
 `init` scaffolds `agentic-dev-loop/pipeline.yaml` plus the agent files it
 names; `--dry-run` loads and validates with no LLM, no Docker, and no state
-writes. A minimal pipeline looks like:
+writes. Bundled profiles cover `python`, `dotnet-node`, and `rust`; for any
+other toolchain, pass your own profile and recipe files and point the
+profile's `isolation.image` at your image (see the
+[setup guide](https://lukedawilson.github.io/agentic-dev-loop/setup/)). A minimal pipeline looks like:
 
 ```yaml
 name: my-construction-loop

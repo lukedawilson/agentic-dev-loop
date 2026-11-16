@@ -27,6 +27,7 @@ __all__ = [
     "load_profile",
     "merge_profile",
     "parse_version",
+    "resolve_profile_ref",
 ]
 
 _VERSION_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?$")
@@ -147,6 +148,32 @@ def load_profile(reference: str, installed_version: str) -> Profile:
         profile = _validate(data, reference)
     check_engine_min(profile.engine_min, installed_version)
     return profile
+
+
+def _is_path_shaped(reference: str) -> bool:
+    """True when a reference carries filesystem path syntax."""
+    return (reference.startswith(".")
+            or "/" in reference
+            or "\\" in reference)
+
+
+def resolve_profile_ref(pipeline_dir: Path, reference: str) -> str:
+    """Anchor a path-shaped profile reference to the pipeline directory.
+
+    Bundled names pass through untouched. A reference with path syntax that
+    exists relative to the pipeline file's directory resolves to that
+    absolute path, so pipeline-relative ``profile:`` entries work from any
+    working directory. Anything else passes through unchanged, preserving
+    CWD-relative resolution for older pipelines; ``load_profile`` raises for
+    references that resolve nowhere.
+    """
+    candidate = Path(reference)
+    if not (candidate.is_absolute() or _is_path_shaped(reference)):
+        return reference
+    anchored = candidate if candidate.is_absolute() else pipeline_dir / candidate
+    if anchored.is_file():
+        return str(anchored.resolve())
+    return reference
 
 
 def _dedupe(items: list[str]) -> list[str]:

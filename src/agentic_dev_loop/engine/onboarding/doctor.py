@@ -13,7 +13,11 @@ from dataclasses import asdict
 from pathlib import Path
 
 from agentic_dev_loop.core.config import load_config
-from agentic_dev_loop.core.profiles import ProfileError, load_profile
+from agentic_dev_loop.core.profiles import (
+    ProfileError,
+    load_profile,
+    resolve_profile_ref,
+)
 
 from .checks import Check, HostProbes, collect_checks
 
@@ -72,7 +76,9 @@ def run_doctor(argv: list[str], *, workspace: Path | None = None,
                                "fix the pipeline config"))
         if pipeline is not None and pipeline.profile and installed:
             try:
-                profile = load_profile(pipeline.profile, installed)
+                reference = resolve_profile_ref(
+                    pipeline_path.parent, pipeline.profile)
+                profile = load_profile(reference, installed)
             except ProfileError as exc:
                 extra.append(Check("profile", "hard", False, str(exc),
                                    "upgrade the engine or fix the profile"))

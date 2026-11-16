@@ -944,11 +944,13 @@ def load_config(path: Path) -> PipelineConfig:
             ProfileError,
             load_profile,
             merge_profile,
+            resolve_profile_ref,
         )
 
         try:
             installed = importlib.metadata.version("agentic-dev-loop")
-            profile = load_profile(str(profile_ref), installed)
+            reference = resolve_profile_ref(path.parent, str(profile_ref))
+            profile = load_profile(reference, installed)
             data = merge_profile(data, profile)
         except ProfileError as exc:
             raise ValueError(f"pipeline {path}: {exc}") from exc

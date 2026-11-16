@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from agentic_dev_loop.engine.onboarding.recipes import (
@@ -120,3 +122,39 @@ def test_undeclared_tokens_finds_nested_tokens():
         "steps": [{"command": "__A__ and __B__", "env": {"K": ["__C__"]}}],
     }
     assert undeclared_tokens(doc) == {"__B__", "__C__"}
+
+
+def test_load_recipe_by_path(tmp_path: Path):
+    recipe = tmp_path / "go.yaml"
+    recipe.write_text(
+        "name: go\n"
+        "placeholders:\n"
+        "  __GOMOD__: .\n"
+        "steps:\n"
+        "  - name: test\n"
+        "    kind: command\n"
+        "    command: go test ./...\n"
+        "  - name: commit\n"
+        "    kind: action\n"
+        "    action: commit\n"
+        "    params: {message: done}\n",
+        encoding="utf-8")
+    doc = load_recipe(str(recipe))
+    assert doc["name"] == "go"
+    assert doc["steps"][0]["command"] == "go test ./..."
+    assert doc["steps"][-1]["kind"] == "action"
+
+
+def test_load_recipe_path_must_declare_steps(tmp_path: Path):
+    recipe = tmp_path / "bad.yaml"
+    recipe.write_text("name: bad\nplaceholders: {}\n", encoding="utf-8")
+    with pytest.raises(RecipeError) as exc:
+        load_recipe(str(recipe))
+    assert "steps list" in str(exc.value)
+
+
+def test_load_recipe_missing_path_lists_bundled_names():
+    with pytest.raises(RecipeError) as exc:
+        load_recipe("no/such/recipe.yaml")
+    assert "no/such/recipe.yaml" in str(exc.value)
+    assert "bundled recipes" in str(exc.value)

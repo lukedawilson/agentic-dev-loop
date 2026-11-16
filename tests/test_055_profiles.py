@@ -16,6 +16,7 @@ from agentic_dev_loop.core.profiles import (
     load_profile,
     merge_profile,
     parse_version,
+    resolve_profile_ref,
 )
 
 
@@ -168,3 +169,20 @@ def test_models_are_strict():
     with pytest.raises(Exception):
         Profile(name="p", engine_min="1.0.0",
                 isolation={"image": "i", "cpus": 1}, surprise=True)
+
+
+def test_resolve_profile_ref_anchors_path_shaped_refs(tmp_path: Path):
+    pipeline_dir = tmp_path / "agentic-dev-loop"
+    pipeline_dir.mkdir()
+    profile = tmp_path / "my.yaml"
+    profile.write_text(
+        "name: my\nengine_min: 0.9.2\n"
+        "isolation:\n  image: ghcr.io/x/y:1\n  cpus: 2\n",
+        encoding="utf-8")
+    assert resolve_profile_ref(pipeline_dir, "../my.yaml") == str(
+        profile.resolve())
+    assert resolve_profile_ref(pipeline_dir, str(profile.resolve())) == str(
+        profile.resolve())
+    assert resolve_profile_ref(pipeline_dir, "python") == "python"
+    assert resolve_profile_ref(pipeline_dir, "./missing.yaml") == \
+        "./missing.yaml"

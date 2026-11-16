@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.metadata
+import os
 import sys
 import textwrap
 from dataclasses import dataclass, field
@@ -395,8 +396,8 @@ def _init_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", default="python",
                         help="bundled profile name or path (default: python)")
     parser.add_argument("--recipe", default=None,
-                        help="recipe name (default: the profile name when it "
-                             "is bundled, else python)")
+                        help="bundled recipe name or path (default: the "
+                             "profile name when it is bundled, else python)")
     parser.add_argument("--yes", action="store_true",
                         help="accept defaults without prompting")
     parser.add_argument("--dir", default=".",
@@ -416,6 +417,13 @@ def run_init(argv: list[str]) -> int:
                 "hand, or move the directory aside and re-run init.")
         installed = _installed_version()
         profile = load_profile(args.profile, installed)
+        # Store a path-shaped profile ref relative to the pipeline directory
+        # so the committed pipeline.yaml resolves from any working directory.
+        profile_ref = args.profile
+        if Path(args.profile).is_file():
+            profile_ref = os.path.relpath(
+                Path(args.profile).resolve(),
+                (root / "agentic-dev-loop").resolve())
         bundled = bundled_recipe_names()
         recipe_name = args.recipe
         if recipe_name is None:
@@ -430,7 +438,7 @@ def run_init(argv: list[str]) -> int:
                 "recipe declares no value for token(s): "
                 + ", ".join(sorted(missing_tokens)))
         detection = detect(root)
-        answers = _answers(root, args.profile, args.yes)
+        answers = _answers(root, profile_ref, args.yes)
         pipeline, texts = _render(profile, recipe, detection, root, answers,
                                   installed)
         written = _write(root, profile, pipeline, texts, detection, installed)

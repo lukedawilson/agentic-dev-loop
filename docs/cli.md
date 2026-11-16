@@ -60,6 +60,7 @@ your commands to run: the CLI never runs them for you.
 ```bash
 agentic-dev-loop init --profile python        # or: --profile dotnet-node, rust
 agentic-dev-loop init --profile ./my-profile.yaml
+agentic-dev-loop init --profile ./my-profile.yaml --recipe ./my-recipe.yaml
 ```
 
 `init` writes the onboarding surface from a bundled toolchain profile:
@@ -69,7 +70,11 @@ missing premise files, gitignore additions, and an env-file template. It
 detects solution files, `package.json` directories, lockfiles, README, and
 AGENTS.md, asks only what detection cannot answer, and refuses to overwrite
 an existing `agentic-dev-loop/` directory. A consumer-authored profile file
-can be passed by path instead of a bundled name.
+can be passed by path instead of a bundled name, and `--recipe` accepts a
+consumer recipe file path the same way, so a toolchain this engine does not
+ship can onboard with its own image and its own steps. A path profile is
+stored in the pipeline relative to `agentic-dev-loop/`, so the committed
+pipeline resolves from any working directory.
 
 ```bash
 agentic-dev-loop doctor --fast     # per-run gate: hard failures abort

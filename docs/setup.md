@@ -57,8 +57,9 @@ The override wins over the pinned digest and over any per-pipeline
 A new consumer repo starts with one command:
 
 ```bash
-agentic-dev-loop init --profile python        # or: --profile dotnet-node
+agentic-dev-loop init --profile python        # or: --profile dotnet-node, rust
 agentic-dev-loop init --profile ./my-profile.yaml --recipe python
+agentic-dev-loop init --profile ./my-profile.yaml --recipe ./my-recipe.yaml
 ```
 
 `init` detects solution files, `package.json` directories, lockfiles, README,
@@ -68,6 +69,59 @@ writes `agentic-dev-loop/pipeline.yaml`, the agent files,
 additions, and an env-file template. It refuses to overwrite an existing
 `agentic-dev-loop/` directory. See [Authoring a loop](authoring.md) for what
 the generated layout looks like.
+
+### Custom images and unsupported toolchains
+
+The engine ships profiles for a few toolchains; everything else is a
+consumer profile and, when the built-in step shapes do not fit, a consumer
+recipe. Both are plain YAML files passed to `init` by path.
+
+A profile carries the toolchain's environment (image, caches, premise files,
+gitignore additions, doctor checks). Point it at any image:
+
+```yaml
+name: my-go
+engine_min: 0.9.2
+description: Go project
+isolation:
+  image: ghcr.io/acme/go-dev:1.24
+  cpus: 2
+caches:
+  - .go-build
+```
+
+A recipe carries the step workflow (`brief`/`dev`/`restore`/`test`/... plus
+the final `commit`), with `__TOKEN__` placeholders that detection or prompts
+fill in. Write one when the toolchain's install and test commands differ from
+the bundled recipes:
+
+```yaml
+name: go
+placeholders:
+  __GOMOD__: .
+steps:
+  - name: dev
+    kind: agent
+    agent: dev
+    setup: cd __GOMOD__ && go mod download
+    mounts: [{path: ".", mode: rw}]
+  - name: test
+    kind: command
+    command: cd __GOMOD__ && go test ./...
+    mounts: [{path: ".", mode: rw}]
+  - name: commit
+    kind: action
+    action: commit
+    params: {message: "feat: construct {subject} (agent dev loop)"}
+```
+
+`init --profile ./my-profile.yaml --recipe ./my-recipe.yaml` renders the
+pipeline from both. `init` stores a path profile relative to the pipeline
+directory, so the committed pipeline resolves from any working directory.
+For an existing pipeline, two quicker knobs: `isolation.image:` in
+`pipeline.yaml` (see [pipeline.md](pipeline.md#isolation)) overrides just
+the image, and the `AGENTIC_DEV_LOOP_DEV_IMAGE` environment variable
+(section 2) wins over everything, per run.
 
 `doctor` probes the host and repo before every run. Run it yourself: the CLI
 never runs doctor or upgrade for you.

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from importlib import resources
+from pathlib import Path
 
 import yaml
 
@@ -39,21 +40,36 @@ def bundled_recipe_names() -> list[str]:
 
 
 def load_recipe(name: str) -> dict:
-    names = bundled_recipe_names()
-    if name not in names:
-        raise RecipeError(
-            f"unknown recipe '{name}'; bundled recipes: " + ", ".join(names))
-    entry = _recipes_dir().joinpath(f"{name}.yaml")
-    try:
-        doc = yaml.safe_load(entry.read_text(encoding="utf-8"))
-    except yaml.YAMLError as exc:
-        raise RecipeError(f"recipe {name!r}: invalid YAML: {exc}") from exc
+    """Load a bundled recipe by name or a consumer recipe by path.
+
+    Existence decides: a filesystem path that exists is read as a consumer
+    recipe; anything else must name a bundled recipe.
+    """
+    candidate = Path(name)
+    if candidate.is_file():
+        source = name
+        try:
+            doc = yaml.safe_load(candidate.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise RecipeError(f"recipe {source!r}: invalid YAML: {exc}") from exc
+    else:
+        names = bundled_recipe_names()
+        if name not in names:
+            raise RecipeError(
+                f"unknown recipe '{name}'; bundled recipes: " + ", ".join(names))
+        source = name
+        entry = _recipes_dir().joinpath(f"{name}.yaml")
+        try:
+            doc = yaml.safe_load(entry.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise RecipeError(f"recipe {source!r}: invalid YAML: {exc}") from exc
     if not isinstance(doc, dict):
-        raise RecipeError(f"recipe {name!r} must be a mapping")
+        raise RecipeError(f"recipe {source!r} must be a mapping")
     if not isinstance(doc.get("steps"), list) or not doc["steps"]:
-        raise RecipeError(f"recipe {name!r} must declare a non-empty steps list")
+        raise RecipeError(
+            f"recipe {source!r} must declare a non-empty steps list")
     if not isinstance(doc.get("placeholders", {}), dict):
-        raise RecipeError(f"recipe {name!r}: placeholders must be a mapping")
+        raise RecipeError(f"recipe {source!r}: placeholders must be a mapping")
     return doc
 
 

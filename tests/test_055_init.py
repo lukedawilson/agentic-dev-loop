@@ -191,3 +191,68 @@ def test_fresh_repo_without_agents_md_renders_valid_brief_inputs(tmp_path: Path)
     assert "AGENTS.md" not in brief.brief_inputs.include
     for step in cfg.steps:
         validate_brief_inputs(tmp_path, step)
+
+
+def _custom_go_profile(root: Path) -> Path:
+    profile = root / "my-go.yaml"
+    profile.write_text(
+        "name: my-go\n"
+        "engine_min: 0.9.2\n"
+        "description: Go project\n"
+        "isolation:\n"
+        "  image: ghcr.io/acme/go-dev:1.24\n"
+        "  cpus: 2\n",
+        encoding="utf-8")
+    return profile
+
+
+def _custom_go_recipe(root: Path) -> Path:
+    recipe = root / "go-recipe.yaml"
+    recipe.write_text(
+        "name: go\n"
+        "placeholders:\n"
+        "  __GOMOD__: .\n"
+        "steps:\n"
+        "  - name: dev\n"
+        "    kind: agent\n"
+        "    agent: dev\n"
+        "    setup: cd __GOMOD__ && go mod download\n"
+        "    produces: implementation-summary.md\n"
+        "    mounts: [{path: \".\", mode: rw}]\n"
+        "    on_pass: test\n"
+        "  - name: test\n"
+        "    kind: command\n"
+        "    command: cd __GOMOD__ && go test ./...\n"
+        "    timeout: 600\n"
+        "    mounts: [{path: \".\", mode: rw}]\n"
+        "    on_pass: commit\n"
+        "  - name: commit\n"
+        "    kind: action\n"
+        "    action: commit\n"
+        "    params: {message: \"feat: construct {subject} (agent dev loop)\"}\n",
+        encoding="utf-8")
+    return recipe
+
+
+def test_init_custom_profile_and_recipe_paths(tmp_path: Path, monkeypatch):
+    (tmp_path / "README.md").write_text("# Fixture\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+    profile = _custom_go_profile(tmp_path)
+    recipe = _custom_go_recipe(tmp_path)
+    assert run_init(["--profile", str(profile), "--recipe", str(recipe),
+                     "--yes", "--dir", str(tmp_path)]) == 0
+    path = tmp_path / "agentic-dev-loop" / "pipeline.yaml"
+    raw = yaml.safe_load(path.read_text())
+    assert raw["profile"] == "../my-go.yaml"
+    names = [s["name"] for s in raw["steps"]]
+    assert names == ["dev", "test", "commit"]
+    assert raw["steps"][0]["setup"] == "cd . && go mod download"
+    assert raw["steps"][1]["command"] == "cd . && go test ./..."
+    cfg = load_config(path)
+    assert cfg.isolation.image == "ghcr.io/acme/go-dev:1.24"
+    # the path-based profile resolves from any working directory
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)
+    again = load_config(path)
+    assert again.isolation.image == "ghcr.io/acme/go-dev:1.24"
