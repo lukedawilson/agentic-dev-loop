@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Step `env:` values now expand the `{export}` token to the sandbox's container-side export root, so recipes can point absolute-path tool env vars (CARGO_HOME, GOPATH, ...) at bind-mounted cache directories.
 - Custom toolchains: `init --recipe` (and `load_recipe`) now accept a consumer recipe file path, mirroring `--profile`. Path-shaped `profile:` refs are stored pipeline-relative by `init` and resolved relative to the pipeline file's directory at load time, so path-based profiles work from any working directory.
 
+## [1.0.0rc5] - 2026-11-16
+
+### Changed
+
+- Rust toolchain support: a bundled rust profile and onboarding recipe (Cargo.toml detection, cargo fetch restore, cargo test gate) on the new dev-rust:1.100 sandbox image. Custom toolchains: init --profile and --recipe now accept your own profile and recipe file paths, so any toolchain image works, with path refs stored relative to the pipeline directory.
+
 ## [1.0.0rc4] - 2026-11-14
 
 ### Changed
