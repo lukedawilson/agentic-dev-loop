@@ -149,6 +149,23 @@ class TestResolveSandboxEnv:
         env = resolve_sandbox_env(None, host_env={"SECRET": "s3cr3t", "PATH": "/x"})
         assert "SECRET" not in env
 
+    def test_export_token_expanded_when_root_given(self):
+        env = resolve_sandbox_env(
+            {"CARGO_HOME": "{export}/.cargo-cache"}, export_root="/exports/abc")
+        assert env["CARGO_HOME"] == "/exports/abc/.cargo-cache"
+
+    def test_export_token_literal_without_root(self):
+        env = resolve_sandbox_env({"CARGO_HOME": "{export}/.cargo-cache"})
+        assert env["CARGO_HOME"] == "{export}/.cargo-cache"
+
+    def test_export_token_never_touches_base_or_secrets(self):
+        env = resolve_sandbox_env(
+            {"CARGO_HOME": "{export}/x"},
+            export_root="/exports/abc",
+            secrets={"SECRET": "{export}/s"})
+        assert env["HOME"] == "/tmp"
+        assert env["SECRET"] == "{export}/s"
+
 
 class TestIsGitMutation:
     @pytest.mark.parametrize("argv", [

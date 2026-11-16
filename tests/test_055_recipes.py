@@ -13,7 +13,7 @@ from agentic_dev_loop.engine.onboarding.recipes import (
 
 
 def test_bundled_recipe_names():
-    assert bundled_recipe_names() == ["dotnet-node", "python"]
+    assert bundled_recipe_names() == ["dotnet-node", "python", "rust"]
 
 
 def test_both_recipes_load_and_have_steps():
@@ -75,6 +75,38 @@ def test_dotnet_node_recipe_gate_set_and_commands():
     for name in ("brief", "dev", "review"):
         assert steps[name]["forbidden_commands"] == ['npm install', 'npm ci', 'dotnet add package', 'dotnet restore', 'dotnet add', 'npx playwright', 'playwright']
     assert "forbidden_commands" not in steps["qa"]
+
+
+def test_rust_recipe_gate_set_and_commands():
+    doc = load_recipe("rust")
+    steps = {s["name"]: s for s in doc["steps"]}
+    assert list(steps) == ["brief", "dev", "restore", "test", "review", "qa",
+                           "commit"]
+    assert doc["placeholders"]["__CARGO_DIR__"] == "DETECTED"
+    assert steps["dev"]["setup"] == 'cd __CARGO_DIR__ && cargo fetch'
+    assert steps["restore"]["command"] == 'cd __CARGO_DIR__ && cargo fetch'
+    assert steps["restore"]["network"] is True
+    assert steps["restore"]["egress"] == {"presets": ["package-registries"]}
+    assert steps["test"]["command"] == (
+        'cd __CARGO_DIR__ && cargo test --locked --offline')
+    assert "network" not in steps["test"]
+    for name in ("dev", "restore", "test"):
+        assert steps[name]["env"]["CARGO_HOME"] == "{export}/.cargo-cache"
+    assert steps["review"]["mounts"] == [{"path": ".", "mode": "ro"}]
+    assert steps["qa"]["max_iterations"] == 150
+    assert steps["qa"]["finalize_nudge_turns"] == 10
+    assert "env" in steps["qa"]["verdicts"]
+    assert "on_env" not in steps["qa"]
+    for name in ("brief", "dev", "review"):
+        assert steps[name]["forbidden_commands"] == [
+            'cargo add', 'cargo install', 'cargo update', 'rustup']
+    assert "forbidden_commands" not in steps["qa"]
+
+
+def test_package_registries_preset_covers_cargo_sparse_index():
+    from agentic_dev_loop.engine.presets import EGRESS_PRESETS
+    assert "index.crates.io" in EGRESS_PRESETS["package-registries"]
+    assert "static.crates.io" in EGRESS_PRESETS["package-registries"]
 
 
 def test_unknown_recipe_raises():

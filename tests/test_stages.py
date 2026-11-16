@@ -889,8 +889,9 @@ class TestProvisionStep:
         calls = []
         sandbox = SimpleNamespace(
             provision=lambda cmd, env=None: calls.append((cmd, env)))
-        _provision_step(SimpleNamespace(sandbox=sandbox),
-                        self._step("agent", "make warm", {"K": "v"}))
+        _provision_step(
+            SimpleNamespace(sandbox=sandbox, sandbox_cwd=None, workspace="/w"),
+            self._step("agent", "make warm", {"K": "v"}))
         assert len(calls) == 1
         assert calls[0][0] == "make warm"
         assert calls[0][1]["K"] == "v"
@@ -899,8 +900,9 @@ class TestProvisionStep:
         calls = []
         sandbox = SimpleNamespace(
             provision=lambda cmd, env=None: calls.append((cmd, env)))
-        _provision_step(SimpleNamespace(sandbox=sandbox),
-                        self._step("agent", None))
+        _provision_step(
+            SimpleNamespace(sandbox=sandbox, sandbox_cwd=None, workspace="/w"),
+            self._step("agent", None))
         assert calls == []
 
     def test_noop_for_brief_and_action(self):
@@ -908,8 +910,10 @@ class TestProvisionStep:
         sandbox = SimpleNamespace(
             provision=lambda cmd, env=None: calls.append((cmd, env)))
         for kind in ("brief", "action"):
-            _provision_step(SimpleNamespace(sandbox=sandbox),
-                            self._step(kind, "make warm"))
+            _provision_step(
+                SimpleNamespace(sandbox=sandbox, sandbox_cwd=None,
+                                workspace="/w"),
+                self._step(kind, "make warm"))
         assert calls == []
 
     def test_failure_propagates(self):
@@ -918,7 +922,8 @@ class TestProvisionStep:
 
         with pytest.raises(SandboxError, match="AE-SBX-009"):
             _provision_step(
-                SimpleNamespace(sandbox=SimpleNamespace(provision=boom)),
+                SimpleNamespace(sandbox=SimpleNamespace(provision=boom),
+                                sandbox_cwd=None, workspace="/w"),
                 self._step("command", "make warm"))
 
 

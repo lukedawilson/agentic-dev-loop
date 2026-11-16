@@ -51,7 +51,7 @@ def test_check_engine_min_allows_equal_and_newer():
 
 
 def test_bundled_profile_names():
-    assert bundled_profile_names() == ["dotnet-node", "python"]
+    assert bundled_profile_names() == ["dotnet-node", "python", "rust"]
 
 
 def test_bundled_python_profile_loads():
@@ -72,6 +72,19 @@ def test_bundled_dotnet_node_profile_loads():
     assert [p.path for p in profile.premise_files] == ["NuGet.Config"]
     assert "globalPackagesFolder" in profile.premise_files[0].content
     assert "bin/" in profile.gitignore_additions
+
+
+def test_bundled_rust_profile_loads():
+    profile = load_profile("rust", "0.10.0")
+    assert profile.name == "rust"
+    assert profile.isolation.cpus == 2
+    assert profile.isolation.seccomp_profile is None
+    assert profile.isolation.image.startswith(
+        "ghcr.io/lukedawilson/agentic-dev-loop/dev-rust@sha256:")
+    assert profile.caches == [".cargo-cache"]
+    assert profile.premise_files == []
+    assert "target/" in profile.gitignore_additions
+    assert ".cargo-cache/" in profile.gitignore_additions
 
 
 def test_path_profile_loads(tmp_path: Path):
@@ -98,6 +111,7 @@ def test_unknown_bundled_profile_lists_names():
     message = str(exc.value)
     assert "unknown profile 'nope'" in message
     assert "dotnet-node" in message and "python" in message
+    assert "rust" in message
 
 
 def test_bundled_profile_name_must_match_filename(tmp_path: Path, monkeypatch):

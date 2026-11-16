@@ -344,7 +344,10 @@ def _provision_step(runtime: Runtime, step: StepConfig) -> None:
         return
     if step.kind not in ("agent", "command"):
         return
-    runtime.sandbox.provision(step.setup, env=resolve_sandbox_env(step.env))
+    runtime_root = runtime.sandbox_cwd or runtime.workspace
+    runtime.sandbox.provision(
+        step.setup,
+        env=resolve_sandbox_env(step.env, export_root=str(runtime_root)))
 
 
 @dataclass
@@ -1061,7 +1064,8 @@ def make_command_node(runtime: Runtime, step: StepConfig):
                  if runtime.engine_allowlist is not None else None)
     if sandbox is not None:
         env = resolve_sandbox_env(
-            step.env, secrets=step_secret_env(runtime.cfg, step, runtime.secrets))
+            step.env, secrets=step_secret_env(runtime.cfg, step, runtime.secrets),
+            export_root=str(runtime.sandbox_cwd or runtime.workspace))
     else:
         env = child_env(runtime.cfg.env_allowlist, runtime.cfg.llm.api_key_env)
 
@@ -1152,7 +1156,8 @@ def make_action_node(runtime: Runtime, step: StepConfig):
             f"sandbox action {step.action!r} requires a sandbox - consumer "
             "actions must execute inside the sandbox, never the host")
     timeout = DEFAULT_COMMAND_TIMEOUT
-    env = resolve_sandbox_env(step.env)
+    env = resolve_sandbox_env(
+        step.env, export_root=str(runtime.sandbox_cwd or runtime.workspace))
     cwd, mount_set, egress_policy = _step_sandbox(runtime, step)
     allowlist = (tuple(runtime.engine_allowlist)
                  if runtime.engine_allowlist is not None else None)

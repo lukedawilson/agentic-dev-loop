@@ -17,6 +17,11 @@ def _fixture(tmp_path: Path, profile: str) -> Path:
             "[project]\nname = 'fixture'\nversion = '0.1.0'\n",
             encoding="utf-8")
         (tmp_path / "README.md").write_text("# Fixture\n", encoding="utf-8")
+    elif profile == "rust":
+        (tmp_path / "Cargo.toml").write_text(
+            "[package]\nname = 'fixture'\nversion = '0.1.0'\n",
+            encoding="utf-8")
+        (tmp_path / "README.md").write_text("# Fixture\n", encoding="utf-8")
     else:
         (tmp_path / "src").mkdir()
         (tmp_path / "src" / "App.sln").write_text("\n", encoding="utf-8")

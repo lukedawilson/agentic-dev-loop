@@ -356,7 +356,8 @@ def mount_set_docker_flags(export_root: str, mount_set: MountSet) -> list[str]:
 
 def resolve_sandbox_env(step_env: dict[str, str | None] | None, *,
                         host_env: Mapping[str, str] | None = None,
-                        secrets: Mapping[str, str] | None = None) -> dict[str, str]:
+                        secrets: Mapping[str, str] | None = None,
+                        export_root: str | None = None) -> dict[str, str]:
     """Fixed safe base (PATH/HOME/LANG/LC_ALL/TERM) + the step's declared
     ``env:`` mapping only. A declared value of ``None`` inherits the host
     value; the global ``env_allowlist`` is never consulted and the LLM key is
@@ -365,10 +366,19 @@ def resolve_sandbox_env(step_env: dict[str, str | None] | None, *,
     ``secrets`` (019) carries the per-step resolved secret env - injected last,
     so a declared ref is authoritative over any same-named ``env:`` entry. It
     arrives only from ``step_secret_env``, which maps only the refs the step
-    declared, so no secret ever reaches an undeclaring step."""
+    declared, so no secret ever reaches an undeclaring step.
+
+    ``export_root`` is the container-side path of the mounted workspace/export
+    root. When given, the literal token ``{export}`` in declared values (never
+    in the base env, never in secrets) is replaced with it, so recipes can
+    point absolute-path env vars (CARGO_HOME, GOPATH, ...) at bind-mounted
+    locations without knowing the host path. The token survives verbatim when
+    no root is available (e.g. host-run steps)."""
     source = os.environ if host_env is None else host_env
     env = dict(SANDBOX_ENV_BASE)
+    declared: set[str] = set()
     for name, value in (step_env or {}).items():
+        declared.add(name)
         if value is None:
             if name in source:
                 env[name] = source[name]
@@ -376,6 +386,11 @@ def resolve_sandbox_env(step_env: dict[str, str | None] | None, *,
             env[name] = value
     for name, value in (secrets or {}).items():
         env[name] = value
+    if export_root is not None:
+        for name in declared:
+            value = env.get(name)
+            if isinstance(value, str) and "{export}" in value:
+                env[name] = value.replace("{export}", export_root)
     return env
 
 

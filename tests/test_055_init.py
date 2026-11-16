@@ -33,6 +33,20 @@ def _dotnet_repo(root: Path, conformance: bool = True) -> Path:
     return root
 
 
+def _rust_repo(root: Path, workspace: bool = False) -> Path:
+    (root / "Cargo.toml").write_text(
+        "[package]\nname = 'fixture'\nversion = '0.1.0'\nedition = '2021'\n",
+        encoding="utf-8")
+    if workspace:
+        (root / "crates" / "member").mkdir(parents=True)
+        (root / "crates" / "member" / "Cargo.toml").write_text(
+            "[package]\nname = 'member'\nversion = '0.1.0'\n",
+            encoding="utf-8")
+    (root / "README.md").write_text("# Fixture\n", encoding="utf-8")
+    (root / "AGENTS.md").write_text("# Rules\n", encoding="utf-8")
+    return root
+
+
 def test_detect_python_repo(tmp_path: Path):
     _python_repo(tmp_path)
     result = detect(tmp_path)
@@ -95,6 +109,50 @@ def test_dotnet_init_renders_nine_steps_and_facts(tmp_path: Path):
     gitignore = (tmp_path / ".gitignore").read_text()
     for entry in ("bin/", "obj/", ".nuget-packages/", "qa/.browsers/"):
         assert entry in gitignore.splitlines()
+
+
+def test_detect_rust_repo(tmp_path: Path):
+    _rust_repo(tmp_path)
+    (tmp_path / "Cargo.lock").write_text("\n", encoding="utf-8")
+    result = detect(tmp_path)
+    assert result.solutions == []
+    assert result.frontend_dirs == []
+    assert result.cargo_manifests == ["."]
+    assert "Cargo.lock" in result.lockfiles
+    assert result.readme == "README.md"
+
+
+def test_detect_rust_workspace_prefers_roots(tmp_path: Path):
+    _rust_repo(tmp_path, workspace=True)
+    result = detect(tmp_path)
+    assert result.cargo_manifests == ["."]
+
+
+def test_rust_init_renders_loadable_pipeline(tmp_path: Path):
+    _rust_repo(tmp_path)
+    (tmp_path / "Cargo.lock").write_text("\n", encoding="utf-8")
+    assert run_init(["--profile", "rust", "--yes",
+                     "--dir", str(tmp_path)]) == 0
+    path = tmp_path / "agentic-dev-loop" / "pipeline.yaml"
+    raw = yaml.safe_load(path.read_text())
+    names = [s["name"] for s in raw["steps"]]
+    assert names == ["brief", "dev", "restore", "test", "review", "qa",
+                     "commit"]
+    steps = {s["name"]: s for s in raw["steps"]}
+    assert steps["dev"]["setup"] == 'cd . && cargo fetch'
+    assert steps["test"]["command"] == 'cd . && cargo test --locked --offline'
+    for name in ("dev", "restore", "test"):
+        assert steps[name]["env"]["CARGO_HOME"] == "{export}/.cargo-cache"
+    assert raw["deps_policy"] == "locked"
+    assert "Cargo.lock" in raw["lockfiles"]
+    gitignore = (tmp_path / ".gitignore").read_text()
+    for entry in ("target/", ".cargo-cache/"):
+        assert entry in gitignore.splitlines()
+    cfg = load_config(path)
+    assert cfg.profile == "rust"
+    assert cfg.isolation.image.startswith(
+        "ghcr.io/lukedawilson/agentic-dev-loop/dev-rust@sha256:")
+    assert cfg.caches == [".cargo-cache"]
 
 
 def test_optional_gate_absent_reconnects_chain(tmp_path: Path):

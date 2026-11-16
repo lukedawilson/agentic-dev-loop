@@ -33,10 +33,11 @@ from .templates import TemplateError, load_template, render_dev_template
 __all__ = ["Detection", "InitError", "detect", "run_init"]
 
 KNOWN_LOCKFILES = ("uv.lock", "package-lock.json", "packages.lock.json",
-                   "poetry.lock")
+                   "poetry.lock", "Cargo.lock")
 DETECTED_SOURCES = {
     "__SOLUTION__": "solutions",
     "__FRONTEND_DIR__": "frontend_dirs",
+    "__CARGO_DIR__": "cargo_manifests",
 }
 DEFAULT_LLM = {
     "model": "openai/deepseek-v4-pro",
@@ -57,11 +58,34 @@ class InitError(ValueError):
 class Detection:
     solutions: list[str] = field(default_factory=list)
     frontend_dirs: list[str] = field(default_factory=list)
+    cargo_manifests: list[str] = field(default_factory=list)
     lockfiles: list[str] = field(default_factory=list)
     gitignore_lines: list[str] = field(default_factory=list)
     readme: str | None = None
     agents_md: bool = False
     conformance: bool = False
+
+
+def _cargo_manifest_dirs(root: Path) -> list[str]:
+    """Workspace-root Cargo.toml directories (workspace members excluded).
+
+    A manifest nested under another manifest's directory belongs to that
+    workspace; only the outermost manifest per tree is a candidate, so a root
+    Cargo.toml always wins over its member crates and ``--yes`` never has to
+    choose between a workspace and its own members. ``target/`` trees are
+    ignored (build outputs, never manifests that matter)."""
+    manifests = sorted(
+        p.parent.relative_to(root).as_posix()
+        for p in root.rglob("Cargo.toml")
+        if "target" not in p.relative_to(root).parts)
+
+    def nested(inner: str, outer: str) -> bool:
+        if outer == ".":
+            return inner != "."
+        return inner != outer and inner.startswith(outer + "/")
+
+    return [d for d in manifests
+            if not any(nested(d, other) for other in manifests)]
 
 
 def detect(root: Path) -> Detection:
@@ -87,6 +111,7 @@ def detect(root: Path) -> Detection:
     return Detection(
         solutions=solutions,
         frontend_dirs=frontend_dirs,
+        cargo_manifests=_cargo_manifest_dirs(root),
         lockfiles=lockfiles,
         gitignore_lines=lines,
         readme=readme,

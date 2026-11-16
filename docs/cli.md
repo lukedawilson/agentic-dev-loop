@@ -58,7 +58,7 @@ Exit code is `0` on pipeline success, `1` otherwise.
 your commands to run: the CLI never runs them for you.
 
 ```bash
-agentic-dev-loop init --profile python        # or: --profile dotnet-node
+agentic-dev-loop init --profile python        # or: --profile dotnet-node, rust
 agentic-dev-loop init --profile ./my-profile.yaml
 ```
 

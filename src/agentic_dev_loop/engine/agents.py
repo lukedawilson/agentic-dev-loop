@@ -228,7 +228,7 @@ def register_sandbox_terminal(sandbox: "Sandbox", *, env: dict[str, str | None] 
     terminal's exec env only for steps that declared the refs."""
     from openhands.sdk.tool import register_tool
 
-    resolved_env = resolve_sandbox_env(env, secrets=secrets)
+    resolved_env = resolve_sandbox_env(env, secrets=secrets, export_root=workspace)
 
     def factory(conv_state, **params):
         return TerminalTool.create(

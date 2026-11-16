@@ -1,0 +1,11 @@
+name: rust
+engine_min: 0.9.2
+description: Rust project; cargo build and test in a rust-toolchain sandbox
+isolation:
+  image: ghcr.io/lukedawilson/agentic-dev-loop/dev-rust@sha256:e78fe7fcd3254fb1fb0550f57d3c228e74a9f59edfb017addab672b488ff80e9
+  cpus: 2
+caches:
+  - .cargo-cache
+gitignore_additions:
+  - target/
+  - .cargo-cache/

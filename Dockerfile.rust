@@ -1,0 +1,44 @@
+# Custom sandbox image for Rust construction loops.
+#
+# Same lineage as the default dev image (python:3.12-slim, Debian trixie)
+# plus the pieces a Rust pipeline needs in-sandbox:
+#   - build-essential / pkg-config / libssl-dev: native build deps for the
+#     common -sys crates (openssl-sys, ring, etc.). The sandbox runs non-root
+#     with a read-only rootfs and no network, so the agent cannot apt-get
+#     anything: every system dep a crate could need must be baked here.
+#   - Rust toolchain 1.100.0 (pin = the current stable release, see
+#     https://static.rust-lang.org/dist/channel-rust-stable.toml), installed
+#     system-wide via rustup at RUSTUP_HOME=/usr/local/rustup with
+#     CARGO_HOME=/usr/local/cargo, plus the rustfmt and clippy components for
+#     in-loop style/lint passes.
+#   - cargo and rustc symlinked into /usr/local/bin because the engine fixes
+#     the sandbox PATH to /usr/local/bin:/usr/bin:/bin, overriding the image
+#     PATH.
+#
+# The per-run registry cache is NOT baked here: the engine bind-mounts the
+# declared .cargo-cache cache and the rust recipe points CARGO_HOME at it, so
+# network-on fetches (setup hooks, restore) are visible to the network-off
+# exec container. The baked CARGO_HOME is only the fallback default.
+#
+# Network is per-stage in the engine; this image itself makes no network
+# assumptions at runtime.
+
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git coreutils ca-certificates curl \
+        build-essential pkg-config libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/bin
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --profile minimal --default-toolchain 1.100.0 \
+    && rustup component add rustfmt clippy \
+    && ln -s /usr/local/cargo/bin/cargo /usr/local/bin/cargo \
+    && ln -s /usr/local/cargo/bin/rustc /usr/local/bin/rustc \
+    && ln -s /usr/local/cargo/bin/rustup /usr/local/bin/rustup
+
+CMD ["sleep", "infinity"]

@@ -89,7 +89,7 @@ steps:
 | `env:` / `setup:` / `network:` | `env:` declares step vars (fixed safe base + declared vars only); `setup:` runs fresh at every step boundary in a one-shot provision container targeting the export (command or agent steps; network ON); `network: true` grants egress scoped by `egress:` (default off) - see [per-stage networking](#per-stage-networking). |
 | `mounts:` / `egress:` | Per-step workspace isolation. `mounts:` lists `{path, mode}` entries (`rw`/`ro`, default `ro`), strict-by-default: empty/missing mounts nothing, and only declared-rw paths sync back to the repo. `egress:` names the hosts a networked step may reach (`{class, presets, targets}`). See [mounts and egress](#mounts-and-egress). |
 | `secrets:` (top-level) / step `secrets:` | Declares secret **refs only - never values**; each step opts in to the refs it needs. Resolved host-side and injected into that step's exec env only. See [secrets](#secrets). |
-| `profile:` (top-level) | Names a bundled toolchain profile (`python`, `dotnet-node`) or a consumer profile file path, merged at load time: isolation key-wise with the pipeline winning, caches unioned profile-first. |
+| `profile:` (top-level) | Names a bundled toolchain profile (`python`, `dotnet-node`, `rust`) or a consumer profile file path, merged at load time: isolation key-wise with the pipeline winning, caches unioned profile-first. |
 | `isolation:` (optional) | Configures the sandbox - image override, resource caps, `allow_git_mutations`, `seccomp_profile`. It can never disable it. See [isolation](#isolation). |
 | `terminal_timeout:` | Optional agent-step per-action timeout in seconds; overrides the SDK tool default. |
 | `finalize_nudge_turns:` | Optional agent-step final-response nudge; requires `max_iterations:` and must be less than it. |
@@ -116,6 +116,10 @@ isolation:
   inherits the host value. The sandbox env is the fixed safe base
   (`PATH`/`HOME`/`LANG`/`LC_ALL`/`TERM`) **plus declared vars only** - the
   global `env_allowlist` never leaks in and the LLM key is never auto-added.
+  Inside sandbox steps, the literal token `{export}` in a declared value is
+  replaced with the container-side path of the export/workspace root, so
+  recipes can point absolute-path tool env vars (e.g.
+  `CARGO_HOME: '{export}/.cargo-cache'`) at bind-mounted cache directories.
 - **`setup:` (command and agent steps)** - a trusted author command (e.g.
   `python -m venv .venv-sandbox && .venv-sandbox/bin/pip install -e ".[dev]"`)
   that runs fresh at the step boundary in a **one-shot provision container

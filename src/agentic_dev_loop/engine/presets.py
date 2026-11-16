@@ -24,6 +24,7 @@ EGRESS_PRESETS: dict[str, tuple[str, ...]] = {
         "api.nuget.org",
         "crates.io",
         "static.crates.io",
+        "index.crates.io",
         "github.com",
         "codeload.github.com",
         "objects.githubusercontent.com",
