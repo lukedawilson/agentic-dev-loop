@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Step `env:` values now expand the `{export}` token to the sandbox's container-side export root, so recipes can point absolute-path tool env vars (CARGO_HOME, GOPATH, ...) at bind-mounted cache directories.
 - Custom toolchains: `init --recipe` (and `load_recipe`) now accept a consumer recipe file path, mirroring `--profile`. Path-shaped `profile:` refs are stored pipeline-relative by `init` and resolved relative to the pipeline file's directory at load time, so path-based profiles work from any working directory.
 
+## [1.0.0rc6] - 2026-11-23
+
+### Changed
+
+- New `fanout` subcommand: launch one pipeline run per document source (repeatable, mixable --plan / --aidlc-unit / custom loader flags), each in its own git worktree on a loop/fanout/<slug> branch, with per-child viz URLs streamed to the parent and a final summary table; --dry-run prints the computed plan without touching git. Also fixes a container-registry race that could drop entries when two runs started concurrently.
+
 ## [1.0.0rc5] - 2026-11-16
 
 ### Changed

@@ -1,6 +1,6 @@
 # Plan 067: Fanout CLI command
 
-> **Status: DRAFT**
+> **Status: COMPLETED**
 
 ## Goal
 
