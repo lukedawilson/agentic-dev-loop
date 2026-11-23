@@ -44,6 +44,24 @@ Exit code is `0` on pipeline success, `1` otherwise.
   whose owner process is dead. A SIGTERM to a running pipeline still closes
   the sandbox; SIGKILLed runs are reclaimed by the startup reaper on the next
   run or by `containers --reap`.
+- `agentic-dev-loop fanout [PIPELINE] [flags]` runs one pipeline per
+  document source, all in parallel, each in its own git worktree. Repeat
+  the document flags to add entries (`--plan <doc>`, `--aidlc-unit <slug>`,
+  or a fanout-capable custom loader flag) and mix them freely; at least two
+  entries are required, and a single-entry invocation points you at the
+  plain single-run form instead. `PIPELINE` must come before the document
+  flags, must live inside the repository, and must be tracked in the base
+  commit. Each entry gets a worktree under `../fanout` next to the repo
+  root (`--worktree-root` overrides) on branch `loop/fanout/<slug>`, forked
+  from `--base-ref` (default `HEAD`), and runs the complete unchanged
+  pipeline. Child output streams with a per-entry prefix, live viz URLs are
+  collected into a final summary table (PASSED / FAILED / ABORTED /
+  SKIPPED), and children keep serving their viz after finishing until one
+  ctrl+c stops the whole group; the exit code is `0` only when every entry
+  passed, `1` otherwise, and `2` for usage errors. `--dry-run` prints the
+  computed plan without touching git; `--max-attempts`, `--env`, and
+  `--no-viz` are forwarded to every child. Fanout never merges or pushes:
+  each branch is merged by hand.
 - `agentic-dev-loop claude-login` authenticates a Claude Pro or Max
   subscription (OAuth PKCE flow) and writes the token file the engine
   reads.
