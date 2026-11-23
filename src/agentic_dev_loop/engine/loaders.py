@@ -63,9 +63,35 @@ class PlanDocumentLoader:
     name = "plan"
     defaultable = False  # needs a path - never autodetects
 
-    def add_cli_args(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--plan", type=Path, default=None,
-                            help="Path to a single plan doc")
+    def add_cli_args(self, parser: argparse.ArgumentParser, *,
+                     multi: bool = False) -> None:
+        if multi:
+            parser.add_argument("--plan", type=Path, action="append",
+                                default=None,
+                                help="Path to a plan doc (repeatable for "
+                                     "fanout)")
+        else:
+            parser.add_argument("--plan", type=Path, default=None,
+                                help="Path to a single plan doc")
+
+    def fanout_entries(self, args: argparse.Namespace):
+        """One fanout entry per repeated --plan value (None when absent).
+        The child reads the doc host-side, so the path may live anywhere."""
+        from .fanout import FanoutEntry, default_slug
+        values = getattr(args, "plan", None)
+        if not values:
+            return None
+        if not isinstance(values, list):
+            values = [values]
+        entries = []
+        for value in values:
+            path = Path(value)
+            entries.append(FanoutEntry(
+                slug=default_slug(path.stem),
+                label=f"plan {path.name}",
+                invocation=("--plan", str(path.resolve())),
+            ))
+        return entries
 
     def resolve(self, args: argparse.Namespace) -> tuple[dict[str, str], str]:
         docs = resolve_plan_docs(args.plan)

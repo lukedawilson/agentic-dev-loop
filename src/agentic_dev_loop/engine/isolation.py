@@ -15,6 +15,7 @@ code cannot reach them. Setup hooks run fresh, per step entry, into the export.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import ipaddress
 import json
@@ -29,6 +30,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -1506,6 +1508,25 @@ def _is_transient_pull_error(res: CmdResult) -> bool:
 # ---------------------------------------------------------------------------
 
 
+@contextmanager
+def _file_lock(path: Path):
+    """Serialize one file's read-modify-write cycle across concurrent runs.
+
+    Fanout starts several pipelines at once against the same isolation state
+    dir, so an unlocked read-filter-replace can drop an entry another process
+    appended. The lock lives on a sibling ``.lock`` file: the registry itself
+    is replaced (new inode), which would defeat a lock held on it."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def append_audit_record(state_dir: Path, record: dict) -> None:
     """One JSON record per sandboxed execution, appended to
     sandbox-audit.jsonl. Rotates to sandbox-audit.jsonl.1 (overwrite) at 5 MB.
@@ -1513,10 +1534,11 @@ def append_audit_record(state_dir: Path, record: dict) -> None:
     state_dir = Path(state_dir)
     state_dir.mkdir(parents=True, exist_ok=True)
     path = state_dir / "sandbox-audit.jsonl"
-    if path.exists() and path.stat().st_size > AUDIT_MAX_BYTES:
-        os.replace(path, state_dir / "sandbox-audit.jsonl.1")
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(record, sort_keys=True) + "\n")
+    with _file_lock(path):
+        if path.exists() and path.stat().st_size > AUDIT_MAX_BYTES:
+            os.replace(path, state_dir / "sandbox-audit.jsonl.1")
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def merge_egress_events(state_dir: Path, events_path: Path) -> int:
@@ -1601,8 +1623,9 @@ def _append_registry_record(state_dir: Path, record: dict) -> None:
     path = Path(state_dir) / CONTAINER_REGISTRY
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, sort_keys=True) + "\n")
+        with _file_lock(path):
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, sort_keys=True) + "\n")
     except OSError:
         pass
 
@@ -1662,9 +1685,19 @@ def reap_orphaned_containers(state_dir: str | Path,
     startup reaper retries; only a daemon-confirmed absence prunes it (050
     D1). Best-effort: never raises."""
     runner = runner or _default_runner
-    entries = _read_registry(Path(state_dir))
-    if not entries:
-        return []
+    state = Path(state_dir)
+    with _file_lock(state / CONTAINER_REGISTRY):
+        entries = _read_registry(state)
+        if not entries:
+            return []
+        remaining, reaped = _reap_entries(entries, runner, announce)
+        _write_registry(state, remaining)
+    return reaped
+
+
+def _reap_entries(entries: list[dict], runner: CommandRunner,
+                  announce: bool) -> tuple[list[dict], list[str]]:
+    """Read-filter the registry entries (the lock is held by the caller)."""
     remaining: list[dict] = []
     reaped: list[str] = []
     for entry in entries:
@@ -1704,8 +1737,7 @@ def reap_orphaned_containers(state_dir: str | Path,
         if announce:
             _announce(f"reaped orphaned sandbox container {name}")
         reaped.append(name)
-    _write_registry(Path(state_dir), remaining)
-    return reaped
+    return remaining, reaped
 
 
 # ---------------------------------------------------------------------------

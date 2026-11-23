@@ -125,13 +125,35 @@ class AidlcDocumentLoader:
     def __init__(self, docs_dir: Path | str = "aidlc-docs"):
         self.docs_dir = Path(docs_dir)
 
-    def add_cli_args(self, parser: argparse.ArgumentParser) -> None:
-        parser.add_argument("--aidlc-unit", metavar="SLUG", default=None,
-                        help="AI-DLC unit: the unit directory name under "
-                             "aidlc-docs/construction/ (e.g. unit-3 or "
-                             "support-for-windows), matched verbatim; "
-                             "defaults to the current unit in "
-                             "aidlc-docs/aidlc-state.md")
+    def add_cli_args(self, parser: argparse.ArgumentParser, *,
+                     multi: bool = False) -> None:
+        help_text = ("AI-DLC unit: the unit directory name under "
+                     "aidlc-docs/construction/ (e.g. unit-3 or "
+                     "support-for-windows), matched verbatim; "
+                     "defaults to the current unit in "
+                     "aidlc-docs/aidlc-state.md")
+        if multi:
+            parser.add_argument("--aidlc-unit", metavar="SLUG",
+                                action="append", default=None,
+                                help=help_text + "; repeatable for fanout")
+        else:
+            parser.add_argument("--aidlc-unit", metavar="SLUG", default=None,
+                                help=help_text)
+
+    def fanout_entries(self, args: argparse.Namespace):
+        """One fanout entry per repeated --aidlc-unit value (None when
+        absent). The child resolves unit docs inside its own worktree."""
+        from agentic_dev_loop.engine.fanout import FanoutEntry, default_slug
+        values = getattr(args, "aidlc_unit", None)
+        if not values:
+            return None
+        if not isinstance(values, list):
+            values = [values]
+        return [
+            FanoutEntry(slug=default_slug(value), label=f"unit {value}",
+                        invocation=("--aidlc-unit", value))
+            for value in values
+        ]
 
     def resolve(self, args: argparse.Namespace) -> tuple[dict[str, str], str]:
         unit = args.aidlc_unit or get_current_unit(self.docs_dir)

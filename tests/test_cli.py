@@ -392,6 +392,19 @@ class TestCliLightweightImports:
         ) == ["False", "False", "False", "False"]
 
 
+class TestFanoutDispatch:
+    def test_fanout_subcommand_delegates_without_loading_a_pipeline(
+            self, monkeypatch):
+        import agentic_dev_loop.engine.fanout as fanout_mod
+
+        seen = []
+        monkeypatch.setattr(fanout_mod, "run_fanout",
+                            lambda argv: (seen.append(argv) or 0))
+
+        assert main(["fanout", "--dry-run"]) == 0
+        assert seen == [["--dry-run"]]
+
+
 class TestSigtermHandler:
     def test_first_sigterm_raises_system_exit_143(self, monkeypatch):
         import agentic_dev_loop.engine.cli as cli_mod
@@ -436,13 +449,15 @@ class TestSigtermHandler:
         assert len(restored) == 1
 
 
-TOP_HELP_COMMANDS = ["containers", "copilot-login", "copilot-models", "report",
-                     "run-status", "init", "doctor", "upgrade", "help"]
+TOP_HELP_COMMANDS = ["containers", "copilot-login", "copilot-models", "fanout",
+                     "report", "run-status", "init", "doctor", "upgrade",
+                     "help"]
 
 SUBCOMMAND_PARSERS = [
     ("containers", "agentic_dev_loop.engine.cli", "_containers_parser"),
     ("copilot-login", "agentic_dev_loop.engine.cli", "_copilot_login_parser"),
     ("copilot-models", "agentic_dev_loop.engine.cli", "_copilot_models_parser"),
+    ("fanout", "agentic_dev_loop.engine.fanout", "_fanout_parser"),
     ("report", "agentic_dev_loop.engine.cli", "_report_parser"),
     ("run-status", "agentic_dev_loop.engine.run_status", "_run_status_parser"),
     ("init", "agentic_dev_loop.engine.onboarding.init", "_init_parser"),

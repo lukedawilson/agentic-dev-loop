@@ -25,7 +25,7 @@ from agentic_dev_loop.engine.isolation import (
     PROXY_BIND_TIMEOUT,
     DEFAULT_DEV_IMAGE_REF, DockerBackend, EffectiveProfile, ProbeResult,
     SandboxError, SandboxExecutionRequest, SandboxExecutionResult,
-    append_audit_record, classify_infra_failure,
+    _append_registry_record, append_audit_record, classify_infra_failure,
     container_profile_key, docker_create_payload, docker_provision_payload,
     docker_proxy_payload, egress_events_path, exec_container_name,
     is_git_mutation, merge_egress_events, mount_set_docker_flags,
@@ -2271,3 +2271,94 @@ class TestRemovedApparatusGuards:
                     continue
                 offenders.append(f"{py}:{i}: {stripped}")
         assert offenders == []
+
+
+class TestRegistryConcurrency:
+    """Fanout starts several pipelines against one shared isolation state dir.
+    The registry's read-filter-replace cycle and the audit append/rotate cycle
+    must be serialized across processes, or a concurrent append is lost."""
+
+    def _state(self, tmp_path):
+        state = tmp_path / "state"
+        state.mkdir()
+        return state
+
+    def _env(self):
+        root = Path(__file__).resolve().parents[1]
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            [str(root / "src"), env.get("PYTHONPATH", "")])
+        return env
+
+    def _read(self, state):
+        path = state / CONTAINER_REGISTRY
+        if not path.is_file():
+            return []
+        return [json.loads(line) for line in path.read_text().splitlines()
+                if line.strip()]
+
+    def test_append_during_reaper_window_is_not_lost(self, tmp_path):
+        state = self._state(tmp_path)
+        dead = subprocess.Popen([sys.executable, "-c", "pass"])
+        dead.wait()
+        dead_name = "a" * 32 + "-exec"
+        (state / CONTAINER_REGISTRY).write_text(
+            json.dumps({"run_id": "r", "name": dead_name, "pid": dead.pid,
+                        "process_start": None, "created_at": "now"}) + "\n")
+
+        live_name = "b" * 32 + "-exec"
+        code = (
+            "import sys, time\n"
+            "from pathlib import Path\n"
+            "from agentic_dev_loop.engine.isolation import "
+            "_append_registry_record\n"
+            "time.sleep(0.2)\n"
+            "_append_registry_record(Path(sys.argv[1]), {\n"
+            "    'run_id': 'r2', 'name': sys.argv[2], 'pid': 999999,\n"
+            "    'process_start': None, 'created_at': 'now'})\n"
+        )
+        child = subprocess.Popen(
+            [sys.executable, "-c", code, str(state), live_name],
+            env=self._env())
+
+        class SlowRunner:
+            def __init__(self):
+                self.calls = []
+
+            def run(self, argv, *, timeout=None, check=False, input=None):
+                self.calls.append(argv)
+                import time
+                time.sleep(1.0)
+                return ok("")
+
+        try:
+            reaped = reap_orphaned_containers(state, SlowRunner())
+        finally:
+            child.wait(timeout=30)
+
+        assert reaped == [dead_name]
+        assert [entry["name"] for entry in self._read(state)] == [live_name]
+
+    def test_concurrent_appends_keep_every_record(self, tmp_path):
+        state = self._state(tmp_path)
+        code = (
+            "import sys\n"
+            "from pathlib import Path\n"
+            "from agentic_dev_loop.engine.isolation import "
+            "_append_registry_record\n"
+            "for i in range(100):\n"
+            "    _append_registry_record(Path(sys.argv[1]), {\n"
+            "        'run_id': sys.argv[2], 'name': f'{sys.argv[2]}-{i}'})\n"
+        )
+        procs = [
+            subprocess.Popen(
+                [sys.executable, "-c", code, str(state), f"run{n}"],
+                env=self._env())
+            for n in range(2)
+        ]
+        for proc in procs:
+            assert proc.wait(timeout=60) == 0
+        names = sorted(entry["name"] for entry in self._read(state))
+        assert len(names) == 200
+        assert names[0] == "run0-0"
+        assert names[-1] == "run1-99"

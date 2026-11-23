@@ -42,6 +42,7 @@ commands:
   containers       Inspect engine sandbox containers and networks.
   copilot-login    Run the GitHub device flow and store the Copilot OAuth token.
   copilot-models   List the Copilot models available to this token's tier.
+  fanout           Launch one run per document source in its own worktree.
   report           Serve the run-history browser view (--markdown for text).
   run-status       Report the latest agentic-dev-loop run.
   init             Write agentic-dev-loop pipeline and agent files.
@@ -460,6 +461,9 @@ def main(argv: list[str] | None = None, *, keep_alive: bool = True) -> int:
         return _run_copilot_login(argv[1:])
     if argv and argv[0] == "copilot-models":
         return _run_copilot_models(argv[1:])
+    if argv and argv[0] == "fanout":
+        from .fanout import run_fanout
+        return run_fanout(argv[1:])
     if argv and argv[0] == "report":
         return _run_report(argv[1:])
     if argv and argv[0] == "run-status":

@@ -71,6 +71,31 @@ class TestPlanDocumentLoader:
         assert [l.name for l in reg.document_loaders] == ["plan"]
 
 
+class TestPlanLoaderFanoutCapability:
+    def test_multi_registers_repeatable_flag(self):
+        parser = argparse.ArgumentParser()
+        PlanDocumentLoader().add_cli_args(parser, multi=True)
+
+        args = parser.parse_args(["--plan", "a.md", "--plan", "b.md"])
+
+        assert args.plan == [Path("a.md"), Path("b.md")]
+
+    def test_fanout_entries_one_per_repeated_value(self, tmp_path):
+        first = tmp_path / "one.md"
+        second = tmp_path / "two.md"
+        first.write_text("# One")
+        second.write_text("# Two")
+
+        entries = PlanDocumentLoader().fanout_entries(
+            _args(plan=[first, second]))
+
+        assert [e.slug for e in entries] == ["one", "two"]
+        assert entries[1].invocation == ("--plan", str(second.resolve()))
+
+    def test_absent_flag_returns_none(self):
+        assert PlanDocumentLoader().fanout_entries(_args(plan=None)) is None
+
+
 class TestSelectLoader:
     def _registry_with(self, *loaders):
         reg = Registry()

@@ -18,6 +18,30 @@ from agentic_dev_loop.engine.extensions.aidlc import (
 from agentic_dev_loop.engine.registry import Registry
 
 
+
+class TestAidlcFanoutCapability:
+    def test_multi_registers_repeatable_flag(self):
+        parser = argparse.ArgumentParser()
+        AidlcDocumentLoader().add_cli_args(parser, multi=True)
+
+        args = parser.parse_args(["--aidlc-unit", "unit-8",
+                                  "--aidlc-unit", "unit-9"])
+
+        assert args.aidlc_unit == ["unit-8", "unit-9"]
+
+    def test_fanout_entries_keep_verbatim_invocation(self):
+        entries = AidlcDocumentLoader().fanout_entries(
+            argparse.Namespace(aidlc_unit=["unit-8", "support for windows"]))
+
+        assert [e.slug for e in entries] == ["unit-8", "support-for-windows"]
+        assert entries[0].invocation == ("--aidlc-unit", "unit-8")
+        assert entries[1].label == "unit support for windows"
+
+    def test_absent_flag_returns_none(self):
+        assert AidlcDocumentLoader().fanout_entries(
+            argparse.Namespace(aidlc_unit=None)) is None
+
+
 class TestResolveUnitDocs:
     def test_loads_docs_for_unit(self, tmp_path):
         unit_dir = tmp_path / "construction" / "unit-2"

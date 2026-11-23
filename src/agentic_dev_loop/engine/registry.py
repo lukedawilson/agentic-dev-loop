@@ -23,12 +23,23 @@ from typing import Protocol
 
 class DocumentLoader(Protocol):
     """Supplies the pipeline's doc bundle + subject. Selected by its CLI
-    flag at invocation; `defaultable` loaders may also run with no flag."""
+    flag at invocation; `defaultable` loaders may also run with no flag.
+
+    Fanout capability is opt-in, via a keyword-only ``multi`` registration
+    mode and a ``fanout_entries`` factory. A loader that accepts neither is
+    non-capable: the fanout CLI registers nothing for it and refuses a
+    fanout invocation that names one of its flags."""
 
     name: str
     defaultable: bool
 
-    def add_cli_args(self, parser: argparse.ArgumentParser) -> None: ...
+    def add_cli_args(self, parser: argparse.ArgumentParser, *,
+                     multi: bool = False) -> None: ...
+
+    def fanout_entries(self, args: argparse.Namespace):
+        """One fanout entry per parsed value, or None for a loader whose
+        flags were not passed."""
+        ...
 
     def resolve(self, args: argparse.Namespace) -> tuple[dict[str, str], str]:
         """Return (docs, subject). Empty docs fail fast at the call site."""
