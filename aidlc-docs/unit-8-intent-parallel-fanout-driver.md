@@ -1,6 +1,6 @@
 # Unit 8 Intent (draft) - Parallel Fan-out Driver (deterministic multi-run orchestration)
 
-> **Status: INTENT ONLY** - draft, not started. Written 2026-10-31 following the agent-parallelism brainstorming session. No code written, no AI-DLC workflow started, no decisions committed. Revisit before proceeding.
+> **Status: SUPERSEDED** - this intent was never started (no code, no AI-DLC workflow). Superseded on 2026-11-23 by planning-docs/067-fanout-cli-command.md, which captures the subset of this intent that the operator chose to pursue: a native `fanout` CLI subcommand running unchanged unit pipelines concurrently, each on its own worktree and branch. Out of scope for 067: auto-rebasing, dependency ordering, budgets, and the fanout.yaml manifest (see 067's Scope and Relationship sections). Historical record kept for the evidence base and rejected approaches.
 
 **Assumption:** this unit builds on units 1-5 (complete) and the plan work 001-042. It does not depend on unit-6 (cloud deployment) or unit-7 (Linux-native sandboxing); ordering relative to them is open.
 
