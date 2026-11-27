@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Step `env:` values now expand the `{export}` token to the sandbox's container-side export root, so recipes can point absolute-path tool env vars (CARGO_HOME, GOPATH, ...) at bind-mounted cache directories.
 - Custom toolchains: `init --recipe` (and `load_recipe`) now accept a consumer recipe file path, mirroring `--profile`. Path-shaped `profile:` refs are stored pipeline-relative by `init` and resolved relative to the pipeline file's directory at load time, so path-based profiles work from any working directory.
 
+## [1.0.0rc8] - 2026-11-27
+
+### Changed
+
+- fanout worktrees now land as sibling directories named fanout-<slug> in the repo's parent directory (was ../fanout/<slug>), so pipeline-relative tooling paths (agents_dir, additional_files) resolve identically in single runs and fanout children; --worktree-root overrides the parent directory
+
 ## [1.0.0rc7] - 2026-11-23
 
 ### Changed
