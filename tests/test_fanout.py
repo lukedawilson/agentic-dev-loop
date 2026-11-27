@@ -233,8 +233,8 @@ class TestPlanner:
         assert plan.base_commit == head
         first = plan.entries[0]
         assert first.branch == "loop/fanout/a"
-        assert first.worktree == tmp_path / "wt" / "a"
-        assert first.pipeline == (tmp_path / "wt" / "a"
+        assert first.worktree == tmp_path / "wt" / "fanout-a"
+        assert first.pipeline == (tmp_path / "wt" / "fanout-a"
                                   / "agentic-dev-loop" / "pipeline.yaml")
         assert first.argv[:3] == (sys.executable, "-m", "agentic_dev_loop")
         assert first.argv[3] == str(first.pipeline)
@@ -305,10 +305,10 @@ class TestTable:
     def _rows(self):
         return [
             FanoutStatus("unit-8", "loop/fanout/unit-8",
-                         Path("/repo/../fanout/unit-8"),
+                         Path("/repo/../fanout-unit-8"),
                          "http://127.0.0.1:9000", "PASSED"),
             FanoutStatus("foo", "loop/fanout/foo",
-                         Path("/repo/../fanout/foo"), None, "FAILED"),
+                         Path("/repo/../fanout-foo"), None, "FAILED"),
         ]
 
     def test_renders_every_column_and_outcome(self):
@@ -318,7 +318,7 @@ class TestTable:
                                     "URL", "outcome"] or \
             lines[0].split() == ["slug", "branch", "worktree", "viz URL",
                                  "outcome"]
-        assert "../fanout/unit-8" in text
+        assert "../fanout-unit-8" in text
         assert "http://127.0.0.1:9000" in text
         assert "PASSED" in text and "FAILED" in text
         assert all(len(line) for line in lines)
@@ -486,6 +486,22 @@ class TestRunFanoutUsage:
                            "agentic-dev-loop/pipeline.yaml", "--dry-run"])
         assert code == 2
         assert "before fanout options" in capsys.readouterr().err
+
+    def test_dry_run_default_worktree_root_is_sibling_fanout_slug(
+            self, repo, monkeypatch, capsys):
+        monkeypatch.chdir(repo)
+        code = run_fanout([
+            "agentic-dev-loop/pipeline.yaml",
+            "--plan", "plan-a.md", "--plan", "plan-b.md", "--dry-run"])
+
+        assert code == 0
+        out = capsys.readouterr().out
+        assert "fanout plan: 2 entries" in out
+        assert "../fanout-plan-a" in out
+        assert "../fanout-plan-b" in out
+        assert str(repo.parent) in out
+        assert not (repo.parent / "fanout-plan-a").exists()
+        assert not (repo.parent / "fanout-plan-b").exists()
 
 
 class TestMainEntryPoint:

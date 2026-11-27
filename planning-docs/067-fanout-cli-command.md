@@ -189,10 +189,10 @@ Per entry:
   fanout start (`--base-ref`, default HEAD of the main checkout). One shared
   base means all worktrees fork the same commit even if the main checkout
   moves mid-launch.
-- Worktree directory: `<worktree-root>/<slug>`, where `--worktree-root`
-  defaults to the repo root's sibling `fanout/` (i.e. `../fanout` relative to
-  the repo root).
-- Creation is `git worktree add <worktree-root>/<slug> -b loop/fanout/<slug>
+- Worktree directory: `<worktree-root>/fanout-<slug>`, where
+  `--worktree-root` defaults to the repo root's parent directory (i.e. a
+  `../fanout-<slug>` sibling of the repo).
+- Creation is `git worktree add <worktree-root>/fanout-<slug> -b loop/fanout/<slug>
   <base-commit>` from the main checkout. An existing branch or worktree path
   fails that entry loudly; other entries continue.
 
@@ -308,8 +308,14 @@ the planner.
    parent detects completion by matching the two stable terminal lines rather
    than exit codes; children spawned with --no-viz still exit on their own
    and are handled by the dead-process fallback.
-6. Branch namespace `loop/fanout/<slug>`, worktrees under `<repo-root>/../fanout/<slug>`.
-   Both overridable (`--base-ref`, `--worktree-root`).
+6. Branch namespace `loop/fanout/<slug>`, worktrees at
+   `<repo-root>/../fanout-<slug>` (a sibling of the repo root). Both
+   overridable (`--base-ref`, `--worktree-root`). Amended after the first
+   implementation: the worktree moved from `<repo-root>/../fanout/<slug>` to
+   `<repo-root>/../fanout-<slug>` so the pipeline dir sits at the same depth
+   as in the main checkout; pipeline-relative tooling paths (`agents_dir`,
+   `additional_files` entries like `../../docs/...`) then resolve identically
+   in single runs and fanout children.
 7. All worktrees are created before any child spawns.
 8. Fanout-capability of a loader is opt-in and failures are loud, never a
    silent last-wins or a dropped value.

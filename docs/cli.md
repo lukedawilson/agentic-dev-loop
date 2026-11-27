@@ -51,9 +51,10 @@ Exit code is `0` on pipeline success, `1` otherwise.
   entries are required, and a single-entry invocation points you at the
   plain single-run form instead. `PIPELINE` must come before the document
   flags, must live inside the repository, and must be tracked in the base
-  commit. Each entry gets a worktree under `../fanout` next to the repo
-  root (`--worktree-root` overrides) on branch `loop/fanout/<slug>`, forked
-  from `--base-ref` (default `HEAD`), and runs the complete unchanged
+  commit. Each entry gets a worktree named `fanout-<slug>` in the repo's
+  parent directory (`--worktree-root` overrides the parent directory) on
+  branch `loop/fanout/<slug>`, forked from `--base-ref` (default `HEAD`),
+  and runs the complete unchanged
   pipeline. Child output streams with a per-entry prefix, live viz URLs are
   collected into a final summary table (PASSED / FAILED / ABORTED /
   SKIPPED), and children keep serving their viz after finishing until one

@@ -192,7 +192,7 @@ def plan_fanout(entries: Sequence[FanoutEntry], *, pipeline: Path,
     root = root.resolve()
     planned: list[FanoutPlanEntry] = []
     for entry in entries:
-        worktree = root / entry.slug
+        worktree = root / f"fanout-{entry.slug}"
         child_pipeline = worktree / pipeline_rel
         argv = (sys.executable, "-m", "agentic_dev_loop",
                 str(child_pipeline), *entry.invocation, *shared_flags)
@@ -496,7 +496,7 @@ def _run_fanout(argv: list[str]) -> int:
     validate_entries(entries)
 
     repo_root = resolve_repo_root(Path.cwd())
-    worktree_root = args.worktree_root or (repo_root.parent / "fanout")
+    worktree_root = args.worktree_root or repo_root.parent
     plan = plan_fanout(entries, pipeline=pipeline, repo_root=repo_root,
                        base_ref=args.base_ref, worktree_root=worktree_root,
                        shared_flags=_shared_flags(args))
@@ -519,7 +519,8 @@ def _fanout_parser() -> argparse.ArgumentParser:
                              "(default: HEAD)")
     parser.add_argument("--worktree-root", type=Path, default=None,
                         help="parent directory for the per-entry worktrees "
-                             "(default: ../fanout next to the repo root)")
+                             "(each named fanout-<slug>; default: the repo "
+                             "root's parent directory)")
     parser.add_argument("--dry-run", action="store_true",
                         help="print the computed plan without touching git or "
                              "spawning any child")
